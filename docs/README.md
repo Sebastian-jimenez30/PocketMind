@@ -8,6 +8,9 @@ aquí debe actualizarse en el mismo cambio que la implemente.
 
 - [Plan de implementación](PLAN_IMPLEMENTACION.md): visión, alcance, reglas
   obligatorias, arquitectura objetivo, fases y estrategia de calidad.
+- [Especificación de producto](ESPECIFICACION_PRODUCTO.md): oportunidad,
+  requisitos, casos de uso, historias de usuario, arquitectura e inventario de
+  pruebas.
 
 ## Convenciones
 
