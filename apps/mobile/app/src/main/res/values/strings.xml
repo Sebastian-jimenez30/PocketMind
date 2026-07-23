@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">PocketMind</string>
+    <string name="home_welcome">Hola, bienvenido a PocketMind</string>
+    <string name="home_financial_overview">Tu panorama financiero de este mes</string>
+    <string name="home_available_balance">Disponible</string>
+    <string name="home_income">Ingresos</string>
+    <string name="home_expenses">Gastos</string>
+    <string name="home_preview_notice">Estos datos son de ejemplo. En la siguiente entrega vendrán de tu almacenamiento local.</string>
+</resources>
