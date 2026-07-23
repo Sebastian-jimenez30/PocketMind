@@ -1,0 +1,4 @@
+interface:
+  display_name: "PocketMind Design System"
+  short_description: "Aplica la identidad visual de PocketMind"
+  default_prompt: "Usa $pocketmind-design-system para diseñar esta experiencia de PocketMind de forma consistente."

@@ -259,6 +259,12 @@ Pantallas MVP en ambas plataformas: autenticación, onboarding, dashboard,
 historial, búsqueda/filtros, detalle/edición y configuración. El permiso y
 estado de notificaciones bancarias aparece solo en Android.
 
+La dirección visual, los tokens, componentes, patrones de pantalla y criterios
+de revisión están definidos en
+[Identidad visual y experiencia de usuario](IDENTIDAD_VISUAL.md). Ese documento
+es obligatorio para cualquier trabajo de UI/UX y se aplica mediante la skill
+local `pocketmind-design-system`.
+
 Reglas:
 
 - Material 3 y tokens Android; SwiftUI y tokens equivalentes iOS. No se usan
@@ -400,6 +406,7 @@ monitorizando crashes, ANR, batería y exactitud del parser.
 Después de cerrar las decisiones de arquitectura, se crearán skills locales que
 automaticen y preserven convenciones reales del proyecto:
 
+- `pocketmind-design-system` — creada; preserva la identidad visual y UX.
 - `pocketmind-architecture`
 - `pocketmind-notification-parsers`
 - `pocketmind-data-sync`
