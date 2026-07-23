@@ -2,8 +2,8 @@ package com.pocketmind.presentation.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.pocketmind.domain.model.DashboardSummary
-import com.pocketmind.domain.usecase.ObserveDashboardSummaryUseCase
+import com.pocketmind.shared.domain.model.DashboardSummary
+import com.pocketmind.shared.domain.usecase.ObserveDashboardSummaryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted

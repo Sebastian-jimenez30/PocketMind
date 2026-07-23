@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "PocketMind"
 include(":app")
+include(":shared")

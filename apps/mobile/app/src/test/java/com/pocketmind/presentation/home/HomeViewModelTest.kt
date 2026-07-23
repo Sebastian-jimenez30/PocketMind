@@ -1,8 +1,8 @@
 package com.pocketmind.presentation.home
 
-import com.pocketmind.domain.model.DashboardSummary
-import com.pocketmind.domain.repository.DashboardRepository
-import com.pocketmind.domain.usecase.ObserveDashboardSummaryUseCase
+import com.pocketmind.shared.domain.model.DashboardSummary
+import com.pocketmind.shared.domain.repository.DashboardRepository
+import com.pocketmind.shared.domain.usecase.ObserveDashboardSummaryUseCase
 import kotlinx.coroutines.flow.emptyFlow
 import org.junit.Assert.assertEquals
 import org.junit.Test

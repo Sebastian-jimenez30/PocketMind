@@ -1,9 +1,11 @@
 package com.pocketmind.di
 
 import com.pocketmind.data.repository.PreviewDashboardRepository
-import com.pocketmind.domain.repository.DashboardRepository
+import com.pocketmind.shared.domain.repository.DashboardRepository
+import com.pocketmind.shared.domain.usecase.ObserveDashboardSummaryUseCase
 import dagger.Binds
 import dagger.Module
+import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
@@ -17,4 +19,11 @@ abstract class RepositoryModule {
     abstract fun bindDashboardRepository(
         implementation: PreviewDashboardRepository,
     ): DashboardRepository
+
+    companion object {
+        @Provides
+        fun provideObserveDashboardSummaryUseCase(
+            dashboardRepository: DashboardRepository,
+        ): ObserveDashboardSummaryUseCase = ObserveDashboardSummaryUseCase(dashboardRepository)
+    }
 }
