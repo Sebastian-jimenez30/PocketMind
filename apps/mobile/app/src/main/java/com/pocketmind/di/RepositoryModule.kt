@@ -4,6 +4,8 @@ import com.pocketmind.data.repository.RoomDashboardRepository
 import com.pocketmind.data.repository.RoomTransactionRepository
 import com.pocketmind.data.auth.AuthRepository
 import com.pocketmind.data.auth.SupabaseAuthRepository
+import com.pocketmind.data.profile.ProfileRepository
+import com.pocketmind.data.profile.SupabaseProfileRepository
 import com.pocketmind.shared.domain.repository.DashboardRepository
 import com.pocketmind.shared.domain.repository.TransactionRepository
 import com.pocketmind.shared.domain.usecase.ObserveDashboardSummaryUseCase
@@ -31,6 +33,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindAuthRepository(implementation: SupabaseAuthRepository): AuthRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindProfileRepository(implementation: SupabaseProfileRepository): ProfileRepository
 
     companion object {
         @Provides
