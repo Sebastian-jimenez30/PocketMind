@@ -59,9 +59,9 @@ private fun DashboardContent(paddingValues: PaddingValues, state: HomeUiState.Co
     ) {
         Text(stringResource(R.string.home_welcome), style = MaterialTheme.typography.headlineSmall)
         Text(stringResource(R.string.home_financial_overview), style = MaterialTheme.typography.bodyLarge)
-        BalanceCard(stringResource(R.string.home_available_balance), summary.availableBalanceCop, Modifier.fillMaxWidth())
-        BalanceCard(stringResource(R.string.home_income), summary.monthlyIncomeCop, Modifier.fillMaxWidth())
-        BalanceCard(stringResource(R.string.home_expenses), summary.monthlyExpenseCop, Modifier.fillMaxWidth())
+        BalanceCard(stringResource(R.string.home_available_balance), summary.availableBalance.minorUnits, Modifier.fillMaxWidth())
+        BalanceCard(stringResource(R.string.home_income), summary.monthlyIncome.minorUnits, Modifier.fillMaxWidth())
+        BalanceCard(stringResource(R.string.home_expenses), summary.monthlyExpense.minorUnits, Modifier.fillMaxWidth())
         Text(
             text = stringResource(R.string.home_preview_notice),
             style = MaterialTheme.typography.bodyMedium,
