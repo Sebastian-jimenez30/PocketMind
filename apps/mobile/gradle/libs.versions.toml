@@ -46,6 +46,7 @@ androidx-room-compiler = { group = "androidx.room", name = "room-compiler", vers
 androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
 supabase-bom = { group = "io.github.jan-tennert.supabase", name = "bom", version.ref = "supabase" }
 supabase-auth-kt = { group = "io.github.jan-tennert.supabase", name = "auth-kt" }
+supabase-postgrest-kt = { group = "io.github.jan-tennert.supabase", name = "postgrest-kt" }
 ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
 
 [plugins]

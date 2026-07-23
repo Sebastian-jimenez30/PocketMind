@@ -24,17 +24,17 @@ import java.text.NumberFormat
 import java.util.Locale
 
 @Composable
-fun HomeRoute(viewModel: HomeViewModel = hiltViewModel()) {
+fun HomeRoute(onOpenProfile: () -> Unit, viewModel: HomeViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsState()
-    HomeScreen(uiState = uiState)
+    HomeScreen(uiState = uiState, onOpenProfile = onOpenProfile)
 }
 
 @Composable
-fun HomeScreen(uiState: HomeUiState) {
+fun HomeScreen(uiState: HomeUiState, onOpenProfile: () -> Unit) {
     Scaffold { paddingValues ->
         when (uiState) {
             HomeUiState.Loading -> LoadingContent(paddingValues)
-            is HomeUiState.Content -> DashboardContent(paddingValues, uiState)
+            is HomeUiState.Content -> DashboardContent(paddingValues, uiState, onOpenProfile)
         }
     }
 }
@@ -51,13 +51,14 @@ private fun LoadingContent(paddingValues: PaddingValues) {
 }
 
 @Composable
-private fun DashboardContent(paddingValues: PaddingValues, state: HomeUiState.Content) {
+private fun DashboardContent(paddingValues: PaddingValues, state: HomeUiState.Content, onOpenProfile: () -> Unit) {
     val summary = state.summary
     Column(
         modifier = Modifier.fillMaxSize().padding(paddingValues).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(stringResource(R.string.home_welcome), style = MaterialTheme.typography.headlineSmall)
+        androidx.compose.material3.TextButton(onClick = onOpenProfile) { Text("Perfil y preferencias") }
         Text(stringResource(R.string.home_financial_overview), style = MaterialTheme.typography.bodyLarge)
         BalanceCard(stringResource(R.string.home_available_balance), summary.availableBalance.minorUnits, Modifier.fillMaxWidth())
         BalanceCard(stringResource(R.string.home_income), summary.monthlyIncome.minorUnits, Modifier.fillMaxWidth())

@@ -79,6 +79,7 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     implementation(platform(libs.supabase.bom))
     implementation(libs.supabase.auth.kt)
+    implementation(libs.supabase.postgrest.kt)
     implementation(libs.ktor.client.okhttp)
     ksp(libs.hilt.compiler)
     ksp(libs.androidx.room.compiler)
