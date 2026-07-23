@@ -11,6 +11,8 @@ aquí debe actualizarse en el mismo cambio que la implemente.
 - [Especificación de producto](ESPECIFICACION_PRODUCTO.md): oportunidad,
   requisitos, casos de uso, historias de usuario, arquitectura e inventario de
   pruebas.
+- [Checklist de inicio](INICIO_DESARROLLO.md): decisiones y prerequisitos para
+  comenzar el primer incremento Android/iOS.
 
 ## Convenciones
 

@@ -1,8 +1,9 @@
 # PocketMind — Plan rector de implementación
 
 > **Estado:** base de planeación inicial
-> **Producto:** aplicación Android nativa para registrar y comprender las
-> finanzas personales a partir de notificaciones bancarias.
+> **Producto:** aplicaciones móviles nativas para Android e iOS que registran y
+> explican finanzas personales. Android incorpora automatización desde
+> notificaciones; iOS comienza con captura manual, voz y foto.
 
 Este documento fija el contexto, alcance y reglas de PocketMind. Es una guía
 viva: se actualizará mediante decisiones explícitas, sin reescribir la historia
@@ -10,10 +11,10 @@ de decisiones importantes.
 
 ## 1. Visión del producto
 
-PocketMind reduce el registro manual de finanzas personales. Tras la instalación,
-el consentimiento informado y la activación del acceso a notificaciones, la
-aplicación detecta operaciones bancarias, extrae sus datos, las clasifica y las
-presenta en un dashboard local y sincronizado.
+PocketMind reduce el registro manual de finanzas personales. Ambas aplicaciones
+permiten capturar, organizar y analizar operaciones. En Android, tras el
+consentimiento informado y la activación del acceso a notificaciones, también se
+detectan operaciones bancarias, se extraen sus datos y se clasifican.
 
 El objetivo no es solamente acumular movimientos: es ofrecer información
 comprensible sobre hábitos financieros, respetando privacidad, control del
@@ -22,15 +23,12 @@ usuario y funcionamiento sin conexión.
 ### Flujo principal
 
 ```text
-Notificación bancaria
-  → validación del banco
-  → normalización y análisis
-  → monto, comercio y tipo de operación
-  → deduplicación
-  → clasificación automática
-  → Room (fuente de verdad local)
-  → UI inmediata
-  → sincronización en segundo plano
+Android: notificación bancaria
+  → validación del banco → análisis → deduplicación → clasificación
+  → almacenamiento local → UI inmediata → sincronización
+
+iOS: captura manual, voz o foto
+  → borrador verificable → almacenamiento local → UI inmediata → sincronización
 ```
 
 ## 2. Alcance
@@ -38,14 +36,15 @@ Notificación bancaria
 ### MVP
 
 - Registro, inicio y cierre de sesión.
-- Onboarding claro y activación de `NotificationListenerService`.
-- Lectura de notificaciones bancarias autorizadas.
+- Onboarding claro en ambas plataformas; activación de
+  `NotificationListenerService` solo en Android.
+- Lectura de notificaciones bancarias autorizadas solo en Android.
 - Detección de ingresos y gastos.
 - Extracción de monto, comercio, fecha y tipo de operación.
 - Clasificación automática con reglas y nivel de confianza.
 - Dashboard de balance, ingresos, gastos y categorías.
 - Historial, filtros, búsqueda y edición de movimientos.
-- Persistencia local con Room y sincronización con Supabase.
+- Persistencia local por plataforma y sincronización con Supabase.
 - Estados sin conexión, errores y reintentos.
 
 ### Versión 2
@@ -73,8 +72,8 @@ Notificación bancaria
 
 1. **Privacidad por diseño.** El acceso a notificaciones exige consentimiento
    informado, una explicación sencilla y una alternativa clara si se rechaza.
-2. **Local-first.** Room es la fuente de verdad para la interfaz; la red no puede
-   impedir registrar ni consultar datos locales.
+2. **Local-first.** La base local de cada plataforma es fuente de verdad para la
+   interfaz; la red no puede impedir registrar ni consultar datos locales.
 3. **No inventar datos.** Si un parser no tiene confianza suficiente, el
    movimiento queda pendiente de revisión o sin clasificar.
 4. **No duplicar movimientos.** La ingestión y sincronización deben ser
@@ -88,8 +87,8 @@ Notificación bancaria
 8. **IA con control.** OpenAI se consume desde Supabase Edge Functions o un
    backend posterior; se aplican límites, consentimiento, trazabilidad y datos
    minimizados.
-9. **Cambios de esquema seguros.** Toda migración de Room incluye una prueba de
-   migración y una estrategia de compatibilidad.
+9. **Cambios de esquema seguros.** Toda migración de persistencia local incluye
+   una prueba de migración y una estrategia de compatibilidad.
 10. **Calidad como criterio de entrega.** Una funcionalidad no está terminada
     sin pruebas proporcionales, estados de error y revisión de accesibilidad.
 11. **No PII en telemetría.** No registrar texto de notificaciones, montos,
@@ -99,16 +98,16 @@ Notificación bancaria
 
 | Área | Decisión |
 |---|---|
-| Lenguaje | Kotlin |
-| UI | Jetpack Compose + Material 3 |
-| Arquitectura | Clean Architecture + MVVM + flujo unidireccional de estado |
-| Estado y concurrencia | ViewModel, StateFlow, Coroutines y Flow |
-| Inyección de dependencias | Hilt |
-| Base local | Room |
-| Navegación | Navigation Compose tipada |
-| Trabajo diferido | WorkManager |
+| Lenguajes | Kotlin compartido; Swift para la capa iOS |
+| UI | Jetpack Compose + Material 3 (Android); SwiftUI (iOS) |
+| Arquitectura | Clean Architecture + KMP + flujo unidireccional de estado |
+| Estado y concurrencia | Coroutines y Flow compartidos; ViewModel Android / estado SwiftUI iOS |
+| Inyección de dependencias | Hilt en Android; composición explícita o DI iOS |
+| Base local | Room en Android; SwiftData/Core Data en iOS |
+| Navegación | Navigation Compose (Android); NavigationStack (iOS) |
+| Trabajo diferido | WorkManager (Android); BGTaskScheduler según necesidad iOS |
 | Autenticación y sincronización | Supabase Auth + PostgreSQL + RLS |
-| Acceso bancario | NotificationListenerService |
+| Acceso bancario | NotificationListenerService, exclusivamente Android |
 | IA futura | OpenAI mediante Supabase Edge Functions/backend |
 | OCR futuro | Google ML Kit |
 | Pruebas | JUnit, MockK/fakes, Turbine, Compose UI Test y Maestro/Espresso |
@@ -119,56 +118,53 @@ en `gradle/libs.versions.toml`.
 
 ## 5. Arquitectura objetivo
 
-### Módulos Gradle
+### Estructura multiplataforma
 
 ```text
-:app                         punto de entrada, navegación y wiring final
-:core:common                 Result, dispatchers, errores y utilidades
-:core:model                  modelos compartidos y contratos básicos
-:core:ui                     design system y componentes reutilizables
-:core:database               Room, entidades, DAOs y migraciones
-:core:network                cliente y configuración de Supabase
-:core:security               sesión, cifrado y almacenamiento seguro
-:core:testing                fakes, builders y fixtures de prueba
-:feature:auth
-:feature:onboarding
-:feature:notification-ingestion
-:feature:dashboard
-:feature:transactions
-:feature:settings
+shared/
+  core/                       modelos, errores, validaciones y casos de uso KMP
+  data/                       contratos remotos, mapeadores y política de sync
+  testing/                    fixtures, builders y fakes compartidos
+androidApp/
+  app/                        punto de entrada Compose, Hilt y navegación
+  database/                   Room, entidades, DAO y migraciones Android
+  notification-ingestion/     listener y parsers bancarios Android
+iosApp/
+  PocketMind/                 SwiftUI, navegación y composición de dependencias
+  Persistence/                SwiftData/Core Data y migraciones iOS
 ```
 
-La modularización se aplicará de manera pragmática: se podrá iniciar con módulos
-`core` y `feature` esenciales, pero los límites anteriores no se romperán al
-crecer el código.
+Se comparte la lógica que debe ser idéntica: modelos de dominio, validaciones,
+cálculos financieros, reglas de categorización, deduplicación, contratos de
+repositorio y política de conflictos. La UI, permisos, persistencia local y APIs
+del sistema son específicas de cada plataforma.
 
 ### Capas de cada funcionalidad
 
 ```text
-feature/<nombre>/
-  presentation/              Compose, ViewModels, UiState y UiEvent
-  domain/                    casos de uso y contratos de repositorio
-  data/                      repositorios, fuentes de datos y mapeadores
+shared/<nombre>/
+  commonMain/                dominio y reglas compartidas
+  androidMain/               adaptadores Android cuando sean necesarios
+  iosMain/                   adaptadores iOS cuando sean necesarios
 ```
 
 Flujo obligatorio:
 
 ```text
 Acción de usuario / evento del sistema
-  → ViewModel
-  → caso de uso
-  → repositorio
-  → fuente local/remota
-  → StateFlow de UiState
-  → Composable
+  → capa de presentación nativa
+  → caso de uso compartido
+  → contrato de repositorio
+  → fuente local/remota de plataforma
+  → estado nativo de UI
 ```
 
 ### Reglas de implementación
 
-- Los Composables no acceden a DAOs, APIs ni repositorios.
+- Los Composables y las vistas SwiftUI no acceden a DAOs, APIs ni repositorios.
 - Las interfaces de repositorio viven en `domain`; sus implementaciones, en
   `data`.
-- Los ViewModels no contienen reglas de parsing, SQL ni lógica de red.
+- La capa de presentación no contiene reglas de parsing, SQL ni lógica de red.
 - No se usa `GlobalScope`, `!!` ni I/O en el hilo principal.
 - Las dependencias se inyectan; no se crean manualmente en pantallas ni casos de
   uso.
@@ -192,10 +188,24 @@ Entidades previstas:
 Toda entidad sincronizable debe contar con identificador estable, timestamps y
 metadatos suficientes para resolver conflictos sin perder una edición del usuario.
 
-## 7. Ingestión de notificaciones
+## 7. Capacidades por plataforma
 
-El primer banco objetivo es **Bancolombia**. Se ampliará el soporte banco por
-banco mediante parsers independientes y casos de prueba anonimizados.
+| Capacidad | Android | iOS inicial |
+|---|---|---|
+| Autenticación, perfil y sincronización | Sí | Sí |
+| Registro manual, voz y foto/OCR | Sí | Sí |
+| Cuentas, ahorros, tarjetas, préstamos y análisis | Sí | Sí |
+| Persistencia local offline | Room | SwiftData/Core Data |
+| Lectura de notificaciones bancarias de terceros | Sí | No |
+
+La ausencia inicial del listener en iOS no implica un modelo de datos distinto:
+todas las fuentes producen la misma entidad `Transaction`. Android añade el
+origen `NOTIFICATION`; iOS utiliza inicialmente `MANUAL`, `VOICE` y `RECEIPT`.
+
+## 8. Ingestión de notificaciones en Android
+
+El primer banco objetivo es **Bancolombia** en Android. Se ampliará el soporte
+banco por banco mediante parsers independientes y casos de prueba anonimizados.
 
 ```kotlin
 interface BankNotificationParser {
@@ -219,13 +229,14 @@ El pipeline debe:
 Un parser no reconocido, ambiguo o inválido se registra de forma segura como
 evento no procesado/pending review, sin crear un gasto incorrecto.
 
-## 8. Sincronización, autenticación e IA
+## 9. Sincronización, autenticación e IA
 
 ### Supabase
 
 - Supabase Auth gestiona sesión y renovación de token.
 - PostgreSQL usa Row Level Security en todas las tablas de usuario.
-- Room conserva una cola de operaciones pendientes y permite reintentos.
+- Cada persistencia local conserva una cola de operaciones pendientes y permite
+  reintentos; la política de conflictos se comparte en KMP.
 - La política inicial de conflicto es: **edición manual del usuario > dato
   automático**.
 - Cerrar sesión y borrar cuenta deben tener políticas explícitas para los datos
@@ -242,15 +253,16 @@ La IA es una capacidad remota, opcional y no bloqueante. Para la primera versió
   validación de respuesta.
 - Presentar resultados como sugerencias explicables, no como asesoría financiera.
 
-## 9. UX, accesibilidad y diseño
+## 10. UX, accesibilidad y diseño
 
-Pantallas MVP: autenticación, onboarding, permiso de notificaciones, dashboard,
-historial, búsqueda/filtros, detalle/edición y configuración.
+Pantallas MVP en ambas plataformas: autenticación, onboarding, dashboard,
+historial, búsqueda/filtros, detalle/edición y configuración. El permiso y
+estado de notificaciones bancarias aparece solo en Android.
 
 Reglas:
 
-- Material 3, design tokens y recursos de texto; no colores, dimensiones o
-  strings hardcodeados en pantallas.
+- Material 3 y tokens Android; SwiftUI y tokens equivalentes iOS. No se usan
+  colores, dimensiones o strings hardcodeados en pantallas.
 - Tema claro y oscuro.
 - Objetivos táctiles mínimos de 48dp, contraste WCAG AA y soporte TalkBack.
 - Soporte de tamaño de fuente, rotación y tamaños compactos, medianos y tablet.
@@ -271,8 +283,9 @@ Reglas:
 
 ### Fase 1 — Fundación
 
-- Crear proyecto Android en Android Studio y módulos iniciales.
-- Configurar Compose, Hilt, Room, Navigation, WorkManager y versiones.
+- Crear el proyecto KMP, `androidApp` en Android Studio y `iosApp` en Xcode.
+- Configurar Compose/Hilt/Room/WorkManager para Android y SwiftUI/SwiftData para
+  iOS; extraer dominio y sincronización compartidos.
 - Crear design system, navegación esqueleto, flavors y configuración segura.
 - Incorporar CI con formato, análisis estático, pruebas unitarias y build debug.
 - Configurar observabilidad sin PII.
@@ -281,7 +294,8 @@ Reglas:
 
 ### Fase 2 — Datos, sesión y sincronización
 
-- Implementar modelo Room, DAOs, migraciones y repositorios.
+- Implementar el modelo compartido, Room/DAOs/migraciones Android y persistencia
+  local/migraciones iOS mediante adaptadores de repositorio.
 - Configurar Auth, RLS y contrato de Supabase.
 - Implementar sesión, cierre de sesión, reintentos y cola de sincronización.
 - Construir pantallas de autenticación y estados offline.
@@ -290,7 +304,8 @@ Reglas:
 
 ### Fase 3 — Ingestión bancaria y clasificación
 
-- Construir onboarding y comprobación de acceso a notificaciones.
+- Construir onboarding común; añadir comprobación de acceso a notificaciones
+  exclusivamente en Android.
 - Implementar listener, parser Bancolombia, deduplicación y trazabilidad.
 - Crear reglas de clasificación inicial y corrección manual.
 - Preparar fixtures anonimizados y pruebas de regresión por cada patrón.
@@ -325,7 +340,7 @@ uso real. Cada nueva capacidad debe mantener las reglas de privacidad y pruebas.
 | Nivel | Objetivo | Ejemplos |
 |---|---|---|
 | Unitarias | lógica aislada | parsers, casos de uso, ViewModels, mapeadores |
-| Integración | límites entre capas | Room, repositorios, sincronización, migraciones |
+| Integración | límites entre capas | Room Android, persistencia iOS, repositorios y sincronización |
 | UI | comportamiento de pantalla | navegación, filtros, edición y estados |
 | E2E | recorridos críticos | login, onboarding, ingestión y dashboard |
 | Manual/dispositivo | sistema y OEM | listener, permisos, batería y red inestable |
@@ -346,15 +361,16 @@ Casos críticos mínimos:
 - Al recuperar red, la operación pendiente se sincroniza una sola vez.
 - Una edición manual no se pierde por clasificación ni sincronización.
 - Un parser inválido no cierra la app ni registra un movimiento falso.
-- Revocar el acceso a notificaciones se comunica de forma útil y segura.
+- Revocar el acceso a notificaciones se comunica de forma útil y segura en Android.
 - Las migraciones preservan datos existentes.
 
-## 12. Android Studio, dispositivos y entrega
+## 12. Herramientas, dispositivos y entrega multiplataforma
 
-- Emuladores: UI, navegación, tamaños de pantalla, rotación y tema.
-- Dispositivos físicos: `NotificationListenerService`, permisos y restricciones
-  reales de fabricantes.
-- Android Studio Profiler y Layout Inspector: rendimiento y Compose.
+- Emuladores Android y simuladores iOS: UI, navegación, tamaños, rotación y tema.
+- Dispositivos Android físicos: `NotificationListenerService`, permisos y
+  restricciones reales de fabricantes; iPhone físico: permisos, cámara, voz y
+  sincronización iOS.
+- Android Studio Profiler/Layout Inspector y Xcode Instruments: rendimiento.
 - LeakCanary: solo en builds de desarrollo.
 - Antes de releases: al menos dispositivos Samsung, Xiaomi/MIUI y un móvil de
   gama media; ampliar según base real de usuarios.
@@ -362,9 +378,9 @@ Casos críticos mínimos:
 Pipeline esperado:
 
 ```text
-PR → formato + análisis estático + unit tests + build debug
-main → integración + build staging + distribución QA
-release → E2E + dispositivos + AAB firmado + Play internal testing
+PR → formato + análisis estático + pruebas compartidas + builds Android/iOS
+main → integración + staging + distribución QA en ambas plataformas
+release → E2E + dispositivos + AAB para Play + TestFlight/App Store
 ```
 
 Las publicaciones siguen canales internos, cerrados y despliegue gradual,

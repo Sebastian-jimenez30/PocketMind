@@ -1,11 +1,12 @@
 # PocketMind — Especificación de producto, arquitectura y calidad
 
 > **Estado:** planificación inicial
-> **Audiencia:** producto, desarrollo Android, QA, datos y seguridad.
+> **Audiencia:** producto, desarrollo Android/iOS, QA, datos y seguridad.
 
 Este documento convierte la visión de PocketMind en requisitos verificables.
 Complementa el [plan de implementación](PLAN_IMPLEMENTACION.md): aquí se define
-qué producto construiremos, cómo se organizará y cómo se comprobará su calidad.
+qué producto construiremos, cómo se organizará y cómo se comprobará su calidad
+en Android e iOS.
 
 ## 1. Overview de la oportunidad
 
@@ -16,10 +17,10 @@ está diseñada para crear un hábito financiero diario. Registrar cada compra d
 forma manual es repetitivo, lento y fácil de abandonar.
 
 PocketMind aplica una capa de **facilidad, automatización y comprensión**. El
-usuario conserva el control, pero no debe actuar como su propio contador: la
-aplicación detecta operaciones desde notificaciones autorizadas, acepta registros
-por texto, voz y foto, organiza el patrimonio y explica el resultado con
-visualizaciones claras.
+usuario conserva el control, pero no debe actuar como su propio contador: ambas
+apps aceptan registros por texto, voz y foto; Android además detecta operaciones
+desde notificaciones autorizadas. Las dos organizan el patrimonio y explican el
+resultado con visualizaciones claras.
 
 | Problema | Consecuencia actual | Respuesta de PocketMind |
 |---|---|---|
@@ -44,6 +45,20 @@ suficientemente completos para revisar y mejorar sus finanzas con menor esfuerzo
 5. La privacidad es una funcionalidad, no una nota legal.
 
 ## 2. Objetivo y alcance
+
+### Estrategia de plataforma
+
+Android e iOS son productos de primera clase con UI nativa: Jetpack Compose y
+SwiftUI respectivamente. Kotlin Multiplatform (KMP) comparte modelos, reglas,
+casos de uso y política de sincronización. Persistencia local, permisos,
+navegación y APIs de sistema permanecen nativos.
+
+| Capacidad | Android | iOS inicial |
+|---|---|---|
+| Autenticación, perfil, productos y dashboard | Sí | Sí |
+| Registro manual, voz, foto/OCR e importaciones | Sí | Sí |
+| Sincronización y análisis financiero | Sí | Sí |
+| Notificaciones bancarias de terceros | Sí | No |
 
 ### Resultado esperado al terminar el desarrollo objetivo
 
@@ -112,10 +127,10 @@ flowchart LR
 | RF-05 | Alta, edición, eliminación y consulta de ingresos/egresos | MVP |
 | RF-06 | Categorías, comercios y corrección manual persistente | MVP |
 | RF-07 | Registro por lenguaje natural escrito y hablado | MVP incremental |
-| RF-08 | Lectura de notificaciones bancarias autorizadas | MVP |
+| RF-08 | Lectura de notificaciones bancarias autorizadas, solo Android | MVP Android |
 | RF-09 | Gestión de cuentas, ahorros, tarjetas y préstamos | MVP |
 | RF-10 | Dashboard, gráficas, estadísticas, historial y búsqueda | MVP |
-| RF-11 | Sincronización offline-first Room/Supabase | MVP |
+| RF-11 | Sincronización offline-first de persistencia local/Supabase | MVP |
 | RF-12 | Captura y extracción desde foto/recibo | V2 |
 | RF-13 | Importación PDF, Excel/CSV y extractos | V2 |
 | RF-14 | Presupuestos, metas, alertas y suscripciones | V2 |
@@ -125,7 +140,7 @@ flowchart LR
 
 | ID | Requisito verificable |
 |---|---|
-| RNF-01 | Room es fuente de verdad de la UI; consulta y registro básicos funcionan sin red. |
+| RNF-01 | La persistencia local nativa es fuente de verdad de la UI; consulta y registro funcionan sin red. |
 | RNF-02 | Ningún secreto se distribuye en APK, repositorio o `BuildConfig` de producción. |
 | RNF-03 | Todas las tablas remotas aplican RLS: un usuario no accede a datos de otro. |
 | RNF-04 | Ingestión y sincronización son idempotentes y toleran reintentos. |
@@ -133,7 +148,7 @@ flowchart LR
 | RNF-06 | No hay I/O ni parsing costoso en hilo principal; tareas diferidas usan WorkManager. |
 | RNF-07 | TalkBack, contraste AA, texto escalable y objetivos de 48dp. |
 | RNF-08 | No hay PII, montos ni texto de notificación en logs o analítica. |
-| RNF-09 | Cada migración Room tiene prueba automatizada de migración. |
+| RNF-09 | Cada migración de persistencia local Android/iOS tiene prueba automatizada. |
 | RNF-10 | Clean Architecture, MVVM, StateFlow y dependencias inyectadas. |
 | RNF-11 | Cada PR ejecuta formato, análisis estático, unit tests y build. |
 | RNF-12 | Se prueban permisos y tareas de fondo en emulador y dispositivos físicos. |
@@ -426,39 +441,36 @@ base funcional y consentimiento aplicable.
 
 ```mermaid
 flowchart TB
-  UI[Compose UI] --> VM[ViewModel\nUiState / UiEvent]
-  VM --> UC[Casos de uso\nDomain]
+  AUI[Compose Android] --> UC[Casos de uso KMP\nDomain]
+  IUI[SwiftUI iOS] --> UC
   UC --> RI[Interfaces de repositorio]
-  RI --> R[Implementaciones\nData]
-  R --> DB[(Room)]
-  R --> REM[Supabase / Edge Functions]
-  SYS[NotificationListenerService\nML Kit / voz] --> UC
-  DB --> R --> VM
+  RI --> AD[Adaptadores Android]
+  RI --> ID[Adaptadores iOS]
+  AD --> ADB[(Room)]
+  ID --> IDB[(SwiftData/Core Data)]
+  AD --> REM[Supabase / Edge Functions]
+  ID --> REM
+  SYS[NotificationListenerService Android\nML Kit / voz] --> UC
 ```
 
-Compose solo renderiza estado y emite eventos. Los casos de uso no dependen de
-Android UI; los repositorios coordinan fuentes y Room alimenta toda la interfaz.
+Compose y SwiftUI solo renderizan estado y emiten eventos. Los casos de uso KMP
+no dependen de UI ni de APIs de un sistema operativo. Cada plataforma implementa
+sus repositorios locales y adaptadores de permisos.
 
 ### Estructura modular prevista
 
 ```text
-:app
-:core:common          errores, AppResult, dispatchers
-:core:model           modelos de dominio compartidos
-:core:ui              tema y componentes Compose
-:core:database        Room, DAO, entidades y migraciones
-:core:network         Supabase y contratos remotos
-:core:security        sesión y almacenamiento seguro
-:core:testing         fixtures, builders y fakes
-:feature:auth
-:feature:profile
-:feature:onboarding
-:feature:transactions
-:feature:notification-ingestion
-:feature:accounts
-:feature:liabilities
-:feature:dashboard
-:feature:settings
+shared/
+  core/                modelos, validaciones, cálculos y casos de uso KMP
+  data/                DTOs, mapeadores, contratos y política de sincronización
+  testing/             fixtures, builders y fakes compartidos
+androidApp/
+  app/                 Compose, Hilt, navegación y features Android
+  database/            Room, DAO y migraciones
+  notification/        listener y parsers bancarios Android
+iosApp/
+  PocketMind/          SwiftUI, navegación y composición de dependencias
+  Persistence/         SwiftData/Core Data y migraciones
 ```
 
 ### Modelo de dominio inicial
@@ -485,8 +497,13 @@ Una transacción incluye origen (`MANUAL`, `VOICE`, `RECEIPT`, `NOTIFICATION`,
 ```mermaid
 flowchart LR
   A[Android Kotlin + Compose] --> R[(Room local)]
+  I[iOS Swift + SwiftUI] --> IP[(SwiftData/Core Data)]
+  K[KMP shared core] --> A
+  K --> I
   A --> W[WorkManager]
+  I --> BG[BGTaskScheduler]
   W --> S[Supabase]
+  BG --> S
   S --> AU[Auth]
   S --> PG[(PostgreSQL + RLS)]
   S --> EF[Edge Functions]
@@ -500,13 +517,13 @@ flowchart LR
 
 | Área | Decisión |
 |---|---|
-| Aplicación | Kotlin, Jetpack Compose, Material 3, MVVM, Clean Architecture |
-| Estado | Coroutines, Flow y StateFlow |
-| DI / navegación | Hilt y Navigation Compose |
-| Persistencia | Room y DataStore/almacenamiento seguro según dato |
-| Sincronización | Supabase Auth, PostgreSQL, RLS, Edge Functions y WorkManager |
-| Notificaciones | `NotificationListenerService`, parsers aislados por banco |
-| Voz / OCR | Reconocimiento de voz y ML Kit, con confirmación humana |
+| Aplicación | KMP compartido; Compose Android y SwiftUI iOS; Clean Architecture |
+| Estado | Coroutines/Flow compartidos; ViewModel Android y estado SwiftUI iOS |
+| DI / navegación | Hilt/Navigation Compose Android; composición/NavigationStack iOS |
+| Persistencia | Room Android; SwiftData/Core Data iOS; almacenamiento seguro por plataforma |
+| Sincronización | Supabase Auth, PostgreSQL, RLS, Edge Functions, WorkManager/BGTaskScheduler |
+| Notificaciones | `NotificationListenerService` y parsers, exclusivamente Android |
+| Voz / OCR | APIs nativas y ML Kit/alternativa iOS, con confirmación humana |
 | IA | OpenAI desde Edge Functions, nunca directamente desde APK |
 | Calidad | JUnit, MockK/fakes, Turbine, Compose UI Test, Maestro/Espresso |
 | Observabilidad | Firebase Crashlytics/Analytics sin PII; GitHub Actions |
@@ -533,7 +550,7 @@ flowchart LR
 ```text
                  E2E / dispositivo real  (flujos críticos)
               -----------------------------------------------
-                Integración (Room, sync, contratos remotos)
+                Integración (persistencia local por plataforma, sync, contratos)
           ------------------------------------------------------
            Unitarias (parsers, casos de uso, ViewModels, reglas)
 ```
@@ -541,9 +558,9 @@ flowchart LR
 | Nivel | Proporción objetivo | Herramientas | Puerta de calidad |
 |---|---:|---|---|
 | Unitarias | ~70% | JUnit, MockK/fakes, Turbine | Cada caso de uso y regla crítica |
-| Integración | ~20% | Room in-memory, WorkManager test, fakes | Migraciones, sync y repositorios |
-| UI/E2E | ~10% | Compose UI Test, Maestro/Espresso | Login, onboarding, registro y dashboard |
-| Manual | Según riesgo | Android Studio, dispositivos, Test Lab | Permisos, OEM, batería, cámara y voz |
+| Integración | ~20% | Room/SwiftData tests, WorkManager/BGTask tests, fakes | Migraciones, sync y repositorios |
+| UI/E2E | ~10% | Compose UI Test, XCTest/XCUITest, Maestro | Login, onboarding, registro y dashboard |
+| Manual | Según riesgo | Android Studio, Xcode, dispositivos y Test Lab | Permisos, OEM, batería, cámara y voz |
 
 ### Diseño de datos de prueba
 
@@ -555,7 +572,7 @@ flowchart LR
 
 ### Pruebas de integración obligatorias
 
-1. Una migración Room preserva transacciones y asigna valores seguros a campos nuevos.
+1. Las migraciones Room Android y SwiftData/Core Data iOS preservan transacciones.
 2. Repositorio cache-first emite local y después remoto sin bloquear UI.
 3. `SyncWorker` reintenta una operación sin crear duplicados.
 4. RLS de staging impide leer o modificar recursos de otro usuario.
@@ -573,9 +590,12 @@ flowchart LR
 
 ### Matriz de dispositivos
 
-- Emuladores: Android reciente, 320dp, 360dp, 411dp, tablet y fuente grande.
-- Físicos: al menos Samsung, Xiaomi/MIUI y un equipo de gama media.
-- OEM: listener de notificaciones, optimización de batería, WorkManager y permisos revocados.
+- Android: emuladores 320dp, 360dp, 411dp, tablet y fuente grande; Samsung,
+  Xiaomi/MIUI y un equipo de gama media físicos.
+- iOS: simuladores y al menos un iPhone físico; Dynamic Type, VoiceOver, cámara,
+  voz y permisos.
+- El listener bancario, optimización de batería y WorkManager se prueban solo en
+  Android; sincronización y reglas compartidas se prueban en ambas plataformas.
 
 ## 11. Criterios de salida y orden de entrega
 
@@ -586,12 +606,13 @@ esquema incluye migración y prueba de migración.
 
 Orden recomendado:
 
-1. Fundaciones: módulos, CI, design system, Room, Supabase, sesión y seguridad.
+1. Fundaciones: KMP, CI Android/iOS, design systems, persistencia por plataforma,
+   Supabase, sesión y seguridad.
 2. HU-001 a HU-004: identidad, perfil y preferencias.
 3. HU-005, HU-009 y HU-012: movimientos manuales, categorías e historial.
 4. HU-010 y HU-011: cuentas, ahorros, tarjetas y préstamos.
 5. HU-013 y HU-014: dashboard y sincronización offline-first.
-6. HU-008: notificaciones Bancolombia y endurecimiento en dispositivos reales.
+6. HU-008: notificaciones Bancolombia y endurecimiento Android en dispositivos reales.
 7. HU-006: voz; HU-007: foto/OCR como evolución V2.
 8. HU-015, auditoría, E2E, rendimiento y despliegue controlado.
 
