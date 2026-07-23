@@ -1,7 +1,9 @@
 package com.pocketmind.di
 
-import com.pocketmind.data.repository.PreviewDashboardRepository
+import com.pocketmind.data.repository.RoomDashboardRepository
+import com.pocketmind.data.repository.RoomTransactionRepository
 import com.pocketmind.shared.domain.repository.DashboardRepository
+import com.pocketmind.shared.domain.repository.TransactionRepository
 import com.pocketmind.shared.domain.usecase.ObserveDashboardSummaryUseCase
 import dagger.Binds
 import dagger.Module
@@ -17,8 +19,12 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindDashboardRepository(
-        implementation: PreviewDashboardRepository,
+        implementation: RoomDashboardRepository,
     ): DashboardRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindTransactionRepository(implementation: RoomTransactionRepository): TransactionRepository
 
     companion object {
         @Provides

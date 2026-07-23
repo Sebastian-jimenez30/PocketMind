@@ -7,17 +7,15 @@ enum class CurrencyCode {
 }
 
 /**
- * A non-negative monetary amount stored in the smallest unit of its currency.
- * Colombian pesos use whole units today; the representation supports fractional currencies too.
+ * A signed monetary value stored in the smallest unit of its currency.
+ *
+ * Transaction amounts are validated as positive by [FinancialTransaction]. Aggregates such as
+ * an account balance can be negative, which represents debt or an overdraft.
  */
 data class Money(
     val minorUnits: Long,
     val currency: CurrencyCode,
 ) {
-    init {
-        require(minorUnits >= 0) { "A monetary amount cannot be negative." }
-    }
-
     val isPositive: Boolean
         get() = minorUnits > 0
 }
