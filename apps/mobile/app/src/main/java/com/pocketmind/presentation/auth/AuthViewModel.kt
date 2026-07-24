@@ -9,6 +9,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -34,7 +35,17 @@ class AuthViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            _uiState.update { it.copy(isAuthenticated = authRepository.hasActiveSession()) }
+            authRepository
+                .observeAuthentication()
+                .distinctUntilChanged()
+                .collect { isAuthenticated ->
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            isAuthenticated = isAuthenticated,
+                        )
+                    }
+                }
         }
     }
 

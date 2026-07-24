@@ -217,6 +217,21 @@ metáforas de orden, detección, conversación y progreso.
 No reutilizar recursos visuales del UI Kit de referencia. Los activos deben ser
 propios, generados para PocketMind o contar con licencia comprobada.
 
+### Logotipo
+
+El distintivo de PocketMind representa una billetera con una tendencia ascendente:
+organización cotidiana y progreso financiero, sin adoptar la apariencia de una
+tarjeta bancaria. Los originales de las variantes aprobadas se conservan en
+`public/`.
+
+- Modo claro: `PocketMind1` — billetera índigo y tendencia turquesa.
+- Modo oscuro: `PocketMind4` — billetera lavanda y tendencia turquesa.
+
+Android empaqueta equivalentes optimizados en `res/drawable-nodpi/` y selecciona
+la variante desde `PocketBrandMark` según el tema activo. Ambos recursos deben
+conservar transparencia y mostrarse sin cápsula, recorte ni fondo añadido. No
+sustituirlos por capturas, recursos remotos ni versiones de terceros.
+
 ## 8. Estructura general de pantalla
 
 El shell visual preferido combina:
