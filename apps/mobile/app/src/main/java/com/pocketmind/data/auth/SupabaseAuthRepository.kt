@@ -3,14 +3,18 @@ package com.pocketmind.data.auth
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.SupabaseClient
 import javax.inject.Inject
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 class SupabaseAuthRepository @Inject constructor(
     private val supabase: SupabaseClient,
 ) : AuthRepository {
-    override suspend fun hasActiveSession(): Boolean = supabase.auth.currentSessionOrNull() != null
+    override fun observeAuthentication(): Flow<Boolean> =
+        supabase.auth.sessionStatus.map { it is SessionStatus.Authenticated }
 
     override suspend fun signIn(email: String, password: String): AuthOperationResult = execute {
         supabase.auth.signInWith(Email) {
