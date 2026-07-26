@@ -1,14 +1,18 @@
 package com.pocketmind.di
 
 import com.pocketmind.data.repository.RoomDashboardRepository
+import com.pocketmind.data.repository.RoomFinancialSetupRepository
 import com.pocketmind.data.repository.RoomTransactionRepository
 import com.pocketmind.data.auth.AuthRepository
 import com.pocketmind.data.auth.SupabaseAuthRepository
 import com.pocketmind.data.profile.ProfileRepository
 import com.pocketmind.data.profile.SupabaseProfileRepository
 import com.pocketmind.shared.domain.repository.DashboardRepository
+import com.pocketmind.shared.domain.repository.FinancialSetupRepository
 import com.pocketmind.shared.domain.repository.TransactionRepository
 import com.pocketmind.shared.domain.usecase.ObserveDashboardSummaryUseCase
+import com.pocketmind.shared.domain.usecase.ObserveFinancialSetupCompletedUseCase
+import com.pocketmind.shared.domain.usecase.SaveInitialFinancialSetupUseCase
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -32,6 +36,12 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
+    abstract fun bindFinancialSetupRepository(
+        implementation: RoomFinancialSetupRepository,
+    ): FinancialSetupRepository
+
+    @Binds
+    @Singleton
     abstract fun bindAuthRepository(implementation: SupabaseAuthRepository): AuthRepository
 
     @Binds
@@ -43,5 +53,15 @@ abstract class RepositoryModule {
         fun provideObserveDashboardSummaryUseCase(
             dashboardRepository: DashboardRepository,
         ): ObserveDashboardSummaryUseCase = ObserveDashboardSummaryUseCase(dashboardRepository)
+
+        @Provides
+        fun provideObserveFinancialSetupCompletedUseCase(
+            repository: FinancialSetupRepository,
+        ): ObserveFinancialSetupCompletedUseCase = ObserveFinancialSetupCompletedUseCase(repository)
+
+        @Provides
+        fun provideSaveInitialFinancialSetupUseCase(
+            repository: FinancialSetupRepository,
+        ): SaveInitialFinancialSetupUseCase = SaveInitialFinancialSetupUseCase(repository)
     }
 }
