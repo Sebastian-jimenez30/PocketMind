@@ -7,5 +7,7 @@ import kotlinx.coroutines.flow.Flow
 interface TransactionRepository {
     fun observeAll(): Flow<List<FinancialTransaction>>
 
+    suspend fun getById(id: String): FinancialTransaction?
+
     suspend fun save(transaction: FinancialTransaction)
 }

@@ -277,6 +277,11 @@ Superficie que se superpone visualmente a la cabecera, con radio superior de
 
 ### `FinancialSummaryCard`
 
+En Inicio es la primera página de un carrusel horizontal de panorama y cuentas.
+La primera página resume el total; las siguientes muestran cada cuenta con saldo,
+ingresos y gastos. Son superficies informativas de PocketMind, no tarjetas
+bancarias simuladas.
+
 Elemento protagonista del inicio. Presenta balance del periodo, ingresos,
 gastos y comparación. No imita una tarjeta Visa ni presupone un único banco.
 
@@ -301,6 +306,17 @@ Variantes primary, secondary, tonal, text y destructive. Incluye estados
 enabled, pressed, loading y disabled. Nunca coloca dos acciones primary juntas.
 
 ### `PocketTextField`
+
+Los formularios iniciales incluyen ejemplos breves en el placeholder, como
+“Cuenta Bancolombia” o “850000”, para reducir ambigüedad sin reemplazar la
+etiqueta persistente.
+
+### `PocketChoiceChip`
+
+Selector compacto para pocas opciones. El texto no cambia al seleccionar: se
+mantiene estable y se diferencia con borde índigo de 2 dp y fondo translúcido
+`primaryContainer`. Las colecciones extensas, como categorías, se muestran en
+un menú de campo en vez de una nube de chips.
 
 Incluye label persistente, valor, helper/error, leading/trailing action y
 accesibilidad. El placeholder no reemplaza la etiqueta.
@@ -338,7 +354,7 @@ La biometría se muestra únicamente si está configurada y disponible.
 Orden recomendado:
 
 1. saludo, avatar y notificaciones;
-2. resumen financiero del periodo;
+2. carrusel de panorama total seguido por cuentas;
 3. captura rápida;
 4. cuadrícula de acciones;
 5. últimos movimientos;

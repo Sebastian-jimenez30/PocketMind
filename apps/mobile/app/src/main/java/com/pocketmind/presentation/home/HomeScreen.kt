@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -85,16 +87,22 @@ import kotlinx.coroutines.launch
 @Composable
 fun HomeRoute(
     onOpenProfile: () -> Unit,
+    onOpenTransactions: () -> Unit,
+    onCreateTransaction: () -> Unit,
+    onManageAccounts: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    HomeScreen(uiState = uiState, onOpenProfile = onOpenProfile)
+    HomeScreen(uiState = uiState, onOpenProfile = onOpenProfile, onOpenTransactions = onOpenTransactions, onCreateTransaction = onCreateTransaction, onManageAccounts = onManageAccounts)
 }
 
 @Composable
 fun HomeScreen(
     uiState: HomeUiState,
     onOpenProfile: () -> Unit,
+    onOpenTransactions: () -> Unit,
+    onCreateTransaction: () -> Unit,
+    onManageAccounts: () -> Unit,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -117,7 +125,7 @@ fun HomeScreen(
                         stringResource(R.string.nav_transactions),
                         Icons.AutoMirrored.Rounded.ReceiptLong,
                         false,
-                        onComingSoon,
+                        onOpenTransactions,
                     ),
                     PocketNavigationItem(stringResource(R.string.nav_analysis), Icons.Rounded.Analytics, false, onComingSoon),
                     PocketNavigationItem(stringResource(R.string.nav_profile), Icons.Rounded.Person, false, onOpenProfile),
@@ -136,7 +144,10 @@ fun HomeScreen(
                     HomeUiState.Loading -> LoadingContent()
                     is HomeUiState.Content -> DashboardContent(
                         summary = uiState.summary,
+                        accounts = uiState.accounts,
                         onComingSoon = onComingSoon,
+                        onCreateTransaction = onCreateTransaction,
+                        onManageAccounts = onManageAccounts,
                     )
                 }
             }
@@ -192,7 +203,10 @@ private fun LoadingContent() {
 @Composable
 private fun DashboardContent(
     summary: DashboardSummary,
+    accounts: List<AccountOverview>,
     onComingSoon: () -> Unit,
+    onCreateTransaction: () -> Unit,
+    onManageAccounts: () -> Unit,
 ) {
     val quickActions = listOf(
         QuickAction(R.string.home_action_expense, Icons.AutoMirrored.Rounded.TrendingDown),
@@ -212,8 +226,8 @@ private fun DashboardContent(
         ),
         verticalArrangement = Arrangement.spacedBy(PocketSpacing.xl),
     ) {
-        item { FinancialSummaryCard(summary) }
-        item { CaptureCard(onClick = onComingSoon) }
+        item { AccountWalletCarousel(summary, accounts) }
+        item { CaptureCard(onClick = onCreateTransaction) }
         item {
             Text(
                 text = stringResource(R.string.home_quick_actions_title),
@@ -228,7 +242,7 @@ private fun DashboardContent(
                 rowActions.forEach { action ->
                     QuickActionTile(
                         action = action,
-                        onClick = onComingSoon,
+                        onClick = if (action.labelRes == R.string.home_action_accounts) onManageAccounts else onComingSoon,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -297,6 +311,81 @@ private fun FinancialSummaryCard(summary: DashboardSummary) {
                     modifier = Modifier.weight(1f),
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun AccountWalletCarousel(summary: DashboardSummary, accounts: List<AccountOverview>) {
+    val pageCount = accounts.size + 1
+    val pagerState = rememberPagerState(pageCount = { pageCount })
+    Column(verticalArrangement = Arrangement.spacedBy(PocketSpacing.sm)) {
+        HorizontalPager(
+            state = pagerState,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(end = PocketSpacing.xl),
+            pageSpacing = PocketSpacing.md,
+            modifier = Modifier.fillMaxWidth(),
+        ) { page ->
+            if (page == 0) {
+                FinancialSummaryCard(summary)
+            } else {
+                AccountSummaryCard(accounts[page - 1])
+            }
+        }
+        if (pageCount > 1) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                repeat(pageCount) { index ->
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = PocketSpacing.xxs)
+                            .size(if (pagerState.currentPage == index) 8.dp else 6.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (pagerState.currentPage == index) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
+                            ),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AccountSummaryCard(overview: AccountOverview) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+    ) {
+        Column(
+            modifier = Modifier.padding(PocketSpacing.xl),
+            verticalArrangement = Arrangement.spacedBy(PocketSpacing.md),
+        ) {
+            Text(stringResource(R.string.home_account_label), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+            Text(overview.account.name, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSecondaryContainer)
+            Text(visibleAmount(overview.currentBalance.minorUnits, true), style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+            Row(horizontalArrangement = Arrangement.spacedBy(PocketSpacing.md)) {
+                AccountStat(stringResource(R.string.home_income), visibleAmount(overview.income.minorUnits, true), Modifier.weight(1f))
+                AccountStat(stringResource(R.string.home_expenses), visibleAmount(overview.expense.minorUnits, true), Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun AccountStat(label: String, amount: String, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.10f),
+    ) {
+        Column(modifier = Modifier.padding(PocketSpacing.md)) {
+            Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.78f))
+            Text(amount, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
         }
     }
 }
@@ -384,7 +473,7 @@ private fun QuickActionTile(
     val label = stringResource(action.labelRes)
     Surface(
         modifier = modifier
-            .height(116.dp)
+            .height(128.dp)
             .clip(RoundedCornerShape(18.dp))
             .clickable(role = Role.Button, onClick = onClick)
             .semantics { contentDescription = label },
@@ -493,6 +582,9 @@ private fun HomePreview() {
                 ),
             ),
             onOpenProfile = {},
+            onOpenTransactions = {},
+            onCreateTransaction = {},
+            onManageAccounts = {},
         )
     }
 }
