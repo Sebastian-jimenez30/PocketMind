@@ -53,6 +53,8 @@ class PocketMindVisualIdentityTest {
                     onOpenTransactions = {},
                     onCreateTransaction = {},
                     onManageAccounts = {},
+                    onOpenAnalysis = {},
+                    onOpenProduct = {},
                 )
             }
         }

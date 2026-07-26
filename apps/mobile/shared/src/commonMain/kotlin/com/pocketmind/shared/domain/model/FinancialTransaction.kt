@@ -3,6 +3,7 @@ package com.pocketmind.shared.domain.model
 enum class TransactionType {
     INCOME,
     EXPENSE,
+    TRANSFER,
 }
 
 enum class TransactionSource {
@@ -31,11 +32,15 @@ data class FinancialTransaction(
     val note: String? = null,
     val source: TransactionSource,
     val status: TransactionStatus = TransactionStatus.POSTED,
+    val relatedAccountId: String? = null,
 ) {
     init {
         require(id.isNotBlank()) { "A transaction id is required." }
         require(accountId.isNotBlank()) { "An account id is required." }
         require(amount.isPositive) { "A transaction amount must be positive." }
         require(occurredAtEpochMillis > 0) { "A transaction date is required." }
+        require(type != TransactionType.TRANSFER || !relatedAccountId.isNullOrBlank()) {
+            "A transfer destination is required."
+        }
     }
 }

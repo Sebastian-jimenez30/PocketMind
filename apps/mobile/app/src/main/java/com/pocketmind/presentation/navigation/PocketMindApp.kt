@@ -13,17 +13,25 @@ import com.pocketmind.presentation.accounts.AccountEditorRoute
 import com.pocketmind.presentation.accounts.AccountsRoute
 import com.pocketmind.presentation.onboarding.FinancialOnboardingRoute
 import com.pocketmind.presentation.profile.ProfileRoute
+import com.pocketmind.presentation.products.ManualActionRoute
+import com.pocketmind.presentation.products.ManualActionType
+import com.pocketmind.presentation.products.ProductDetailRoute
+import com.pocketmind.presentation.analysis.AnalysisRoute
+import com.pocketmind.shared.domain.model.TransactionType
 
 private const val AUTH_ROUTE = "auth"
 private const val HOME_ROUTE = "home"
 private const val FINANCIAL_ONBOARDING_ROUTE = "financial-onboarding"
 private const val PROFILE_ROUTE = "profile"
 private const val TRANSACTIONS_ROUTE = "transactions"
-private const val TRANSACTION_NEW_ROUTE = "transaction-new"
+private const val TRANSACTION_NEW_ROUTE = "transaction-new/{type}"
 private const val TRANSACTION_EDIT_ROUTE = "transaction-edit/{transactionId}"
 private const val ACCOUNTS_ROUTE = "accounts"
 private const val ACCOUNT_NEW_ROUTE = "account-new"
 private const val ACCOUNT_EDIT_ROUTE = "account-edit/{accountId}"
+private const val PRODUCT_DETAIL_ROUTE = "product/{accountId}"
+private const val MANUAL_ACTION_ROUTE = "manual-action/{accountId}/{action}"
+private const val ANALYSIS_ROUTE = "analysis"
 
 /** Root navigation graph. New product flows will be registered here by feature. */
 @Composable
@@ -56,13 +64,15 @@ fun PocketMindApp() {
             HomeRoute(
                 onOpenProfile = { navController.navigate(PROFILE_ROUTE) },
                 onOpenTransactions = { navController.navigate(TRANSACTIONS_ROUTE) },
-                onCreateTransaction = { navController.navigate(TRANSACTION_NEW_ROUTE) },
+                onCreateTransaction = { type -> navController.navigate("transaction-new/${type.name}") },
                 onManageAccounts = { navController.navigate(ACCOUNTS_ROUTE) },
+                onOpenAnalysis = { navController.navigate(ANALYSIS_ROUTE) },
+                onOpenProduct = { id -> navController.navigate("product/$id") },
             )
         }
         composable(TRANSACTIONS_ROUTE) {
             TransactionsRoute(
-                onCreate = { navController.navigate(TRANSACTION_NEW_ROUTE) },
+                onCreate = { navController.navigate("transaction-new/${TransactionType.EXPENSE.name}") },
                 onEdit = { id -> navController.navigate("transaction-edit/$id") },
                 onManageAccounts = { navController.navigate(ACCOUNTS_ROUTE) },
                 onBack = { navController.popBackStack() },
@@ -77,7 +87,7 @@ fun PocketMindApp() {
         composable(ACCOUNTS_ROUTE) {
             AccountsRoute(
                 onCreate = { navController.navigate(ACCOUNT_NEW_ROUTE) },
-                onEdit = { id -> navController.navigate("account-edit/$id") },
+                onOpen = { id -> navController.navigate("product/$id") },
                 onBack = { navController.popBackStack() },
             )
         }
@@ -86,6 +96,22 @@ fun PocketMindApp() {
         }
         composable(ACCOUNT_EDIT_ROUTE) {
             AccountEditorRoute(onSaved = { navController.popBackStack() }, onBack = { navController.popBackStack() })
+        }
+        composable(PRODUCT_DETAIL_ROUTE) {
+            ProductDetailRoute(
+                onBack = { navController.popBackStack() },
+                onEdit = { id -> navController.navigate("account-edit/$id") },
+                onAction = { id, action -> navController.navigate("manual-action/$id/${action.name}") },
+            )
+        }
+        composable(MANUAL_ACTION_ROUTE) {
+            ManualActionRoute(
+                onSaved = { navController.popBackStack() },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(ANALYSIS_ROUTE) {
+            AnalysisRoute(onBack = { navController.popBackStack() })
         }
         composable(PROFILE_ROUTE) {
             ProfileRoute(

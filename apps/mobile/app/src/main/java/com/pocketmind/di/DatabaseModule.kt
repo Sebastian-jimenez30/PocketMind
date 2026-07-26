@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.pocketmind.data.local.PocketMindDatabase
 import com.pocketmind.data.local.dao.AccountDao
 import com.pocketmind.data.local.dao.FinancialSetupDao
+import com.pocketmind.data.local.dao.ManualFinanceDao
 import com.pocketmind.data.local.dao.TransactionDao
 import dagger.Module
 import dagger.Provides
@@ -21,8 +22,10 @@ object DatabaseModule {
     fun provideDatabase(@ApplicationContext context: Context): PocketMindDatabase =
         Room.databaseBuilder(context, PocketMindDatabase::class.java, "pocketmind.db")
             .addMigrations(PocketMindDatabase.MIGRATION_1_2)
+            .addMigrations(PocketMindDatabase.MIGRATION_2_3)
             .build()
     @Provides fun provideAccountDao(database: PocketMindDatabase): AccountDao = database.accountDao()
     @Provides fun provideTransactionDao(database: PocketMindDatabase): TransactionDao = database.transactionDao()
     @Provides fun provideFinancialSetupDao(database: PocketMindDatabase): FinancialSetupDao = database.financialSetupDao()
+    @Provides fun provideManualFinanceDao(database: PocketMindDatabase): ManualFinanceDao = database.manualFinanceDao()
 }

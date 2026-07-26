@@ -14,4 +14,5 @@ data class TransactionEntity(
     val currency: String,
     val occurredAtEpochMillis: Long,
     val categoryId: String?, val merchant: String?, val note: String?, val source: String, val status: String,
+    val relatedAccountId: String? = null,
 )

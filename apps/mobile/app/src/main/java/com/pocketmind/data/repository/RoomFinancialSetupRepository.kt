@@ -3,12 +3,14 @@ package com.pocketmind.data.repository
 import androidx.room.withTransaction
 import com.pocketmind.data.local.PocketMindDatabase
 import com.pocketmind.data.local.dao.FinancialSetupDao
+import com.pocketmind.data.local.dao.ManualFinanceDao
 import com.pocketmind.data.local.entity.AccountEntity
 import com.pocketmind.data.local.entity.DebtEntity
 import com.pocketmind.data.local.entity.FinancialSetupEntity
 import com.pocketmind.data.local.entity.IncomeSourceEntity
 import com.pocketmind.data.local.entity.RecurringObligationEntity
 import com.pocketmind.data.local.entity.SavingsPlanEntity
+import com.pocketmind.data.local.entity.SavingsProfileEntity
 import com.pocketmind.shared.domain.model.Debt
 import com.pocketmind.shared.domain.model.FinancialAccount
 import com.pocketmind.shared.domain.model.FinancialSetup
@@ -23,6 +25,7 @@ import kotlinx.coroutines.flow.Flow
 class RoomFinancialSetupRepository @Inject constructor(
     private val database: PocketMindDatabase,
     private val financialSetupDao: FinancialSetupDao,
+    private val manualFinanceDao: ManualFinanceDao,
 ) : FinancialSetupRepository {
     override fun observeIsCompleted(): Flow<Boolean> = financialSetupDao.observeIsCompleted()
 
@@ -32,6 +35,21 @@ class RoomFinancialSetupRepository @Inject constructor(
             financialSetupDao.upsertIncomeSources(setup.incomeSources.map(IncomeSource::toEntity))
             financialSetupDao.upsertDebts(setup.debts.map(Debt::toEntity))
             financialSetupDao.upsertSavingsPlans(setup.savingsPlans.map(SavingsPlan::toEntity))
+            setup.savingsPlans.forEach { plan ->
+                manualFinanceDao.upsertSavingsProfile(
+                    SavingsProfileEntity(
+                        accountId = plan.id,
+                        type = when (plan.type) {
+                            com.pocketmind.shared.domain.model.SavingsPlanType.TERM_DEPOSIT -> "TERM_DEPOSIT"
+                            com.pocketmind.shared.domain.model.SavingsPlanType.POCKET -> "POCKET"
+                            else -> "SIMPLE"
+                        },
+                        annualYieldBasisPoints = plan.annualYieldBasisPoints ?: 0,
+                        openedAtEpochMillis = System.currentTimeMillis(),
+                        maturityAtEpochMillis = plan.targetDateEpochMillis,
+                    ),
+                )
+            }
             financialSetupDao.upsertRecurringObligations(setup.recurringObligations.map(RecurringObligation::toEntity))
             financialSetupDao.upsertSetup(
                 FinancialSetupEntity(completedAtEpochMillis = System.currentTimeMillis()),

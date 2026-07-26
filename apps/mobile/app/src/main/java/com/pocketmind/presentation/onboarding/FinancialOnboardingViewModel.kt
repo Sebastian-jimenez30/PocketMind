@@ -151,8 +151,26 @@ class FinancialOnboardingViewModel @Inject constructor(
         }
         if (obligationName.isNotBlank() && obligation == null) return null
 
+        val savingsAccount = savings?.let {
+            FinancialAccount(
+                id = it.id,
+                name = it.name,
+                type = com.pocketmind.shared.domain.model.FinancialAccountType.SAVINGS,
+                currency = CurrencyCode.COP,
+                openingBalance = it.currentAmount,
+            )
+        }
+        val debtAccount = debt?.let {
+            FinancialAccount(
+                id = it.id,
+                name = it.name,
+                type = com.pocketmind.shared.domain.model.FinancialAccountType.LOAN,
+                currency = CurrencyCode.COP,
+                openingBalance = it.outstandingBalance,
+            )
+        }
         return FinancialSetup(
-            accounts = listOfNotNull(account),
+            accounts = listOfNotNull(account, savingsAccount, debtAccount),
             incomeSources = listOfNotNull(income),
             debts = listOfNotNull(debt),
             savingsPlans = listOfNotNull(savings),

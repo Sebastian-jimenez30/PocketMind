@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -27,6 +28,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,7 +58,7 @@ fun TransactionEditorRoute(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     LaunchedEffect(state.saved) { if (state.saved) onSaved() }
-    TransactionEditorScreen(state, viewModel::update, viewModel::save, onBack)
+    TransactionEditorScreen(state, viewModel::update, viewModel::save, viewModel::delete, onBack)
 }
 
 @Composable
@@ -63,6 +66,7 @@ fun TransactionEditorScreen(
     state: TransactionEditorUiState,
     onUpdate: ((TransactionEditorUiState) -> TransactionEditorUiState) -> Unit,
     onSave: () -> Unit,
+    onDelete: () -> Unit,
     onBack: () -> Unit,
 ) {
     if (state.isLoading) {
@@ -72,16 +76,26 @@ fun TransactionEditorScreen(
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         EditorHeader(state.transactionId != null, onBack)
         Column(
-            modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(PocketSpacing.xl),
+            modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).imePadding().padding(PocketSpacing.xl),
             verticalArrangement = Arrangement.spacedBy(PocketSpacing.lg),
         ) {
             TransactionTypeSelector(state.type) { type -> onUpdate { it.copy(type = type) } }
             AccountSelector(state.accounts, state.accountId) { id -> onUpdate { it.copy(accountId = id) } }
             OutlinedTextField(
                 value = state.amount,
-                onValueChange = { value -> onUpdate { it.copy(amount = value) } },
+                onValueChange = { value -> onUpdate { it.copy(amount = value.filter(Char::isDigit)) } },
                 label = { Text(stringResource(R.string.transaction_editor_amount)) },
                 placeholder = { Text(stringResource(R.string.transaction_editor_amount_example)) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = state.date,
+                onValueChange = { value -> onUpdate { it.copy(date = value.filter { char -> char.isDigit() || char == '/' }.take(10)) } },
+                label = { Text(stringResource(R.string.transaction_editor_date)) },
+                placeholder = { Text(stringResource(R.string.account_editor_date_example)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
                 shape = RoundedCornerShape(16.dp),
@@ -112,6 +126,31 @@ fun TransactionEditorScreen(
                 onClick = onSave,
                 loading = state.isSaving,
             )
+            if (state.canDelete) {
+                var confirmDelete by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+                TextButton(onClick = { confirmDelete = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.transaction_editor_delete), color = MaterialTheme.colorScheme.error)
+                }
+                if (confirmDelete) {
+                    AlertDialog(
+                        onDismissRequest = { confirmDelete = false },
+                        title = { Text(stringResource(R.string.transaction_editor_delete_title)) },
+                        text = { Text(stringResource(R.string.transaction_editor_delete_message)) },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                confirmDelete = false
+                                onDelete()
+                            }) { Text(stringResource(R.string.transaction_editor_confirm_delete), color = MaterialTheme.colorScheme.error) }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { confirmDelete = false }) {
+                                Text(stringResource(R.string.transaction_editor_cancel))
+                            }
+                        },
+                    )
+                }
+            }
+            Spacer(Modifier.height(PocketSpacing.sm))
         }
     }
 }
@@ -133,7 +172,9 @@ private fun TransactionTypeSelector(selected: TransactionType, onSelect: (Transa
     Column(verticalArrangement = Arrangement.spacedBy(PocketSpacing.sm)) {
         Text(stringResource(R.string.transaction_editor_type), style = MaterialTheme.typography.labelLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(PocketSpacing.sm)) {
-            TransactionType.entries.forEach { type -> PocketChoiceChip(stringResource(type.labelRes()), type == selected, onClick = { onSelect(type) }) }
+            TransactionType.entries.filter { it != TransactionType.TRANSFER }.forEach { type ->
+                PocketChoiceChip(stringResource(type.labelRes()), type == selected, onClick = { onSelect(type) })
+            }
         }
     }
 }
@@ -194,6 +235,7 @@ private fun CategorySelector(selected: TransactionCategoryId, onSelect: (Transac
 private fun TransactionType.labelRes(): Int = when (this) {
     TransactionType.INCOME -> R.string.transactions_income
     TransactionType.EXPENSE -> R.string.transactions_expense
+    TransactionType.TRANSFER -> R.string.transactions_transfer
 }
 
 private fun TransactionCategoryId.labelRes(): Int = when (this) {

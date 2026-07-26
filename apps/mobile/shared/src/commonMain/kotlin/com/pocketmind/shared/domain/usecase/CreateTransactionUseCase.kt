@@ -17,6 +17,7 @@ data class NewTransaction(
     val categoryId: String? = null,
     val merchant: String? = null,
     val note: String? = null,
+    val relatedAccountId: String? = null,
 )
 
 enum class TransactionValidationError {
@@ -50,6 +51,7 @@ class CreateTransactionUseCase(
             note = input.note?.trim()?.takeIf(String::isNotEmpty),
             source = input.source,
             status = TransactionStatus.POSTED,
+            relatedAccountId = input.relatedAccountId?.trim()?.takeIf(String::isNotEmpty),
         )
         transactionRepository.save(transaction)
         return CreateTransactionResult.Success(transaction)
