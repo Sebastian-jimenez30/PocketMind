@@ -7,10 +7,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.pocketmind.presentation.auth.AuthRoute
 import com.pocketmind.presentation.home.HomeRoute
+import com.pocketmind.presentation.onboarding.FinancialOnboardingRoute
 import com.pocketmind.presentation.profile.ProfileRoute
 
 private const val AUTH_ROUTE = "auth"
 private const val HOME_ROUTE = "home"
+private const val FINANCIAL_ONBOARDING_ROUTE = "financial-onboarding"
 private const val PROFILE_ROUTE = "profile"
 
 /** Root navigation graph. New product flows will be registered here by feature. */
@@ -25,8 +27,17 @@ fun PocketMindApp() {
         composable(AUTH_ROUTE) {
             AuthRoute(
                 onAuthenticated = {
-                    navController.navigate(HOME_ROUTE) {
+                    navController.navigate(FINANCIAL_ONBOARDING_ROUTE) {
                         popUpTo(AUTH_ROUTE) { inclusive = true }
+                    }
+                },
+            )
+        }
+        composable(FINANCIAL_ONBOARDING_ROUTE) {
+            FinancialOnboardingRoute(
+                onCompleted = {
+                    navController.navigate(HOME_ROUTE) {
+                        popUpTo(FINANCIAL_ONBOARDING_ROUTE) { inclusive = true }
                     }
                 },
             )
