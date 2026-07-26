@@ -3,6 +3,7 @@ package com.pocketmind.presentation.onboarding
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,7 +15,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -36,6 +36,7 @@ import com.pocketmind.shared.domain.model.Recurrence
 import com.pocketmind.shared.domain.model.SavingsPlanType
 import com.pocketmind.ui.components.PocketBrandMark
 import com.pocketmind.ui.components.PocketContentSheet
+import com.pocketmind.ui.components.PocketChoiceChip
 import com.pocketmind.ui.components.PocketMessage
 import com.pocketmind.ui.components.PocketPrimaryButton
 import com.pocketmind.ui.theme.PocketSpacing
@@ -133,8 +134,8 @@ private fun IntroStep() {
 @Composable
 private fun AccountStep(state: FinancialOnboardingUiState, update: ((FinancialOnboardingUiState) -> FinancialOnboardingUiState) -> Unit) {
     StepTitle(R.string.onboarding_account_title, R.string.onboarding_account_description)
-    TextField(state.accountName, { value -> update { it.copy(accountName = value) } }, R.string.onboarding_account_name, KeyboardType.Text)
-    MoneyField(state.accountBalance, { value -> update { it.copy(accountBalance = value) } }, R.string.onboarding_account_balance)
+    TextField(state.accountName, { value -> update { it.copy(accountName = value) } }, R.string.onboarding_account_name, R.string.onboarding_account_name_example, KeyboardType.Text)
+    MoneyField(state.accountBalance, { value -> update { it.copy(accountBalance = value) } }, R.string.onboarding_account_balance, R.string.onboarding_account_balance_example)
     AccountTypeSelector(state.accountType) { type -> update { it.copy(accountType = type) } }
     OptionalHint()
 }
@@ -142,8 +143,8 @@ private fun AccountStep(state: FinancialOnboardingUiState, update: ((FinancialOn
 @Composable
 private fun IncomeStep(state: FinancialOnboardingUiState, update: ((FinancialOnboardingUiState) -> FinancialOnboardingUiState) -> Unit) {
     StepTitle(R.string.onboarding_income_title, R.string.onboarding_income_description)
-    TextField(state.incomeName, { value -> update { it.copy(incomeName = value) } }, R.string.onboarding_income_name, KeyboardType.Text)
-    MoneyField(state.incomeAmount, { value -> update { it.copy(incomeAmount = value) } }, R.string.onboarding_income_amount)
+    TextField(state.incomeName, { value -> update { it.copy(incomeName = value) } }, R.string.onboarding_income_name, R.string.onboarding_income_name_example, KeyboardType.Text)
+    MoneyField(state.incomeAmount, { value -> update { it.copy(incomeAmount = value) } }, R.string.onboarding_income_amount, R.string.onboarding_income_amount_example)
     RecurrenceSelector(state.incomeRecurrence) { recurrence -> update { it.copy(incomeRecurrence = recurrence) } }
     OptionalHint()
 }
@@ -151,22 +152,22 @@ private fun IncomeStep(state: FinancialOnboardingUiState, update: ((FinancialOnb
 @Composable
 private fun DebtStep(state: FinancialOnboardingUiState, update: ((FinancialOnboardingUiState) -> FinancialOnboardingUiState) -> Unit) {
     StepTitle(R.string.onboarding_debt_title, R.string.onboarding_debt_description)
-    TextField(state.debtName, { value -> update { it.copy(debtName = value) } }, R.string.onboarding_debt_name, KeyboardType.Text)
-    MoneyField(state.debtBalance, { value -> update { it.copy(debtBalance = value) } }, R.string.onboarding_debt_balance)
-    MoneyField(state.debtInstallment, { value -> update { it.copy(debtInstallment = value) } }, R.string.onboarding_debt_installment)
-    TextField(state.debtInterestRate, { value -> update { it.copy(debtInterestRate = value) } }, R.string.onboarding_debt_interest_rate, KeyboardType.Decimal)
-    TextField(state.debtDueDay, { value -> update { it.copy(debtDueDay = value) } }, R.string.onboarding_due_day, KeyboardType.Number)
+    TextField(state.debtName, { value -> update { it.copy(debtName = value) } }, R.string.onboarding_debt_name, R.string.onboarding_debt_name_example, KeyboardType.Text)
+    MoneyField(state.debtBalance, { value -> update { it.copy(debtBalance = value) } }, R.string.onboarding_debt_balance, R.string.onboarding_debt_balance_example)
+    MoneyField(state.debtInstallment, { value -> update { it.copy(debtInstallment = value) } }, R.string.onboarding_debt_installment, R.string.onboarding_debt_installment_example)
+    TextField(state.debtInterestRate, { value -> update { it.copy(debtInterestRate = value) } }, R.string.onboarding_debt_interest_rate, R.string.onboarding_debt_interest_rate_example, KeyboardType.Decimal)
+    TextField(state.debtDueDay, { value -> update { it.copy(debtDueDay = value) } }, R.string.onboarding_due_day, R.string.onboarding_due_day_example, KeyboardType.Number)
     OptionalHint()
 }
 
 @Composable
 private fun SavingsStep(state: FinancialOnboardingUiState, update: ((FinancialOnboardingUiState) -> FinancialOnboardingUiState) -> Unit) {
     StepTitle(R.string.onboarding_savings_title, R.string.onboarding_savings_description)
-    TextField(state.savingsName, { value -> update { it.copy(savingsName = value) } }, R.string.onboarding_savings_name, KeyboardType.Text)
-    MoneyField(state.savingsAmount, { value -> update { it.copy(savingsAmount = value) } }, R.string.onboarding_savings_amount)
-    MoneyField(state.savingsMonthlyContribution, { value -> update { it.copy(savingsMonthlyContribution = value) } }, R.string.onboarding_savings_contribution)
-    MoneyField(state.savingsTargetAmount, { value -> update { it.copy(savingsTargetAmount = value) } }, R.string.onboarding_savings_target)
-    TextField(state.savingsAnnualYield, { value -> update { it.copy(savingsAnnualYield = value) } }, R.string.onboarding_savings_yield, KeyboardType.Decimal)
+    TextField(state.savingsName, { value -> update { it.copy(savingsName = value) } }, R.string.onboarding_savings_name, R.string.onboarding_savings_name_example, KeyboardType.Text)
+    MoneyField(state.savingsAmount, { value -> update { it.copy(savingsAmount = value) } }, R.string.onboarding_savings_amount, R.string.onboarding_savings_amount_example)
+    MoneyField(state.savingsMonthlyContribution, { value -> update { it.copy(savingsMonthlyContribution = value) } }, R.string.onboarding_savings_contribution, R.string.onboarding_savings_contribution_example)
+    MoneyField(state.savingsTargetAmount, { value -> update { it.copy(savingsTargetAmount = value) } }, R.string.onboarding_savings_target, R.string.onboarding_savings_target_example)
+    TextField(state.savingsAnnualYield, { value -> update { it.copy(savingsAnnualYield = value) } }, R.string.onboarding_savings_yield, R.string.onboarding_savings_yield_example, KeyboardType.Decimal)
     SavingsTypeSelector(state.savingsType) { type -> update { it.copy(savingsType = type) } }
     OptionalHint()
 }
@@ -174,9 +175,9 @@ private fun SavingsStep(state: FinancialOnboardingUiState, update: ((FinancialOn
 @Composable
 private fun ObligationStep(state: FinancialOnboardingUiState, update: ((FinancialOnboardingUiState) -> FinancialOnboardingUiState) -> Unit) {
     StepTitle(R.string.onboarding_obligation_title, R.string.onboarding_obligation_description)
-    TextField(state.obligationName, { value -> update { it.copy(obligationName = value) } }, R.string.onboarding_obligation_name, KeyboardType.Text)
-    MoneyField(state.obligationAmount, { value -> update { it.copy(obligationAmount = value) } }, R.string.onboarding_obligation_amount)
-    TextField(state.obligationDueDay, { value -> update { it.copy(obligationDueDay = value) } }, R.string.onboarding_due_day, KeyboardType.Number)
+    TextField(state.obligationName, { value -> update { it.copy(obligationName = value) } }, R.string.onboarding_obligation_name, R.string.onboarding_obligation_name_example, KeyboardType.Text)
+    MoneyField(state.obligationAmount, { value -> update { it.copy(obligationAmount = value) } }, R.string.onboarding_obligation_amount, R.string.onboarding_obligation_amount_example)
+    TextField(state.obligationDueDay, { value -> update { it.copy(obligationDueDay = value) } }, R.string.onboarding_due_day, R.string.onboarding_due_day_example, KeyboardType.Number)
     OptionalHint()
 }
 
@@ -189,11 +190,12 @@ private fun StepTitle(title: Int, description: Int) {
 }
 
 @Composable
-private fun TextField(value: String, onChange: (String) -> Unit, label: Int, keyboardType: KeyboardType) {
+private fun TextField(value: String, onChange: (String) -> Unit, label: Int, placeholder: Int, keyboardType: KeyboardType) {
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
         label = { Text(stringResource(label)) },
+        placeholder = { Text(stringResource(placeholder)) },
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         singleLine = true,
         shape = RoundedCornerShape(16.dp),
@@ -202,19 +204,15 @@ private fun TextField(value: String, onChange: (String) -> Unit, label: Int, key
 }
 
 @Composable
-private fun MoneyField(value: String, onChange: (String) -> Unit, label: Int) = TextField(value, onChange, label, KeyboardType.Number)
+private fun MoneyField(value: String, onChange: (String) -> Unit, label: Int, placeholder: Int) = TextField(value, onChange, label, placeholder, KeyboardType.Number)
 
 @Composable
 private fun RecurrenceSelector(selected: Recurrence, onSelect: (Recurrence) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(PocketSpacing.sm)) {
         Text(stringResource(R.string.onboarding_income_frequency), style = MaterialTheme.typography.labelLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(PocketSpacing.sm)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(PocketSpacing.sm), verticalArrangement = Arrangement.spacedBy(PocketSpacing.sm)) {
             listOf(Recurrence.MONTHLY, Recurrence.BIWEEKLY, Recurrence.VARIABLE).forEach { recurrence ->
-                AssistChip(
-                    onClick = { onSelect(recurrence) },
-                    label = { Text(stringResource(recurrence.labelRes())) },
-                    leadingIcon = if (recurrence == selected) ({ Text(stringResource(R.string.onboarding_selected)) }) else null,
-                )
+                PocketChoiceChip(stringResource(recurrence.labelRes()), recurrence == selected, onClick = { onSelect(recurrence) })
             }
         }
     }
@@ -231,13 +229,9 @@ private fun Recurrence.labelRes(): Int = when (this) {
 private fun AccountTypeSelector(selected: FinancialAccountType, onSelect: (FinancialAccountType) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(PocketSpacing.sm)) {
         Text(stringResource(R.string.onboarding_account_type), style = MaterialTheme.typography.labelLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(PocketSpacing.sm)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(PocketSpacing.sm), verticalArrangement = Arrangement.spacedBy(PocketSpacing.sm)) {
             listOf(FinancialAccountType.BANK_ACCOUNT, FinancialAccountType.CASH, FinancialAccountType.SAVINGS).forEach { type ->
-                AssistChip(
-                    onClick = { onSelect(type) },
-                    label = { Text(stringResource(type.labelRes())) },
-                    leadingIcon = if (type == selected) ({ Text(stringResource(R.string.onboarding_selected)) }) else null,
-                )
+                PocketChoiceChip(stringResource(type.labelRes()), type == selected, onClick = { onSelect(type) })
             }
         }
     }
@@ -255,20 +249,14 @@ private fun FinancialAccountType.labelRes(): Int = when (this) {
 private fun SavingsTypeSelector(selected: SavingsPlanType, onSelect: (SavingsPlanType) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(PocketSpacing.sm)) {
         Text(stringResource(R.string.onboarding_savings_type), style = MaterialTheme.typography.labelLarge)
-        listOf(
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(PocketSpacing.sm), verticalArrangement = Arrangement.spacedBy(PocketSpacing.sm)) {
+            listOf(
             SavingsPlanType.FLEXIBLE,
             SavingsPlanType.GOAL,
             SavingsPlanType.TERM_DEPOSIT,
             SavingsPlanType.POCKET,
-        ).chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(PocketSpacing.sm)) {
-                row.forEach { type ->
-                    AssistChip(
-                        onClick = { onSelect(type) },
-                        label = { Text(stringResource(type.labelRes())) },
-                        leadingIcon = if (type == selected) ({ Text(stringResource(R.string.onboarding_selected)) }) else null,
-                    )
-                }
+            ).forEach { type ->
+                PocketChoiceChip(stringResource(type.labelRes()), type == selected, onClick = { onSelect(type) })
             }
         }
     }
@@ -283,7 +271,7 @@ private fun SavingsPlanType.labelRes(): Int = when (this) {
 
 @Composable
 private fun OptionalHint() {
-    Text(stringResource(R.string.onboarding_optional_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    PocketMessage(stringResource(R.string.onboarding_optional_hint), isError = false)
 }
 
 @Composable

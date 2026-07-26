@@ -56,6 +56,8 @@ class CreateTransactionUseCaseTest {
 
         override fun observeAll(): Flow<List<FinancialTransaction>> = emptyFlow()
 
+        override suspend fun getById(id: String): FinancialTransaction? = saved.firstOrNull { it.id == id }
+
         override suspend fun save(transaction: FinancialTransaction) {
             saved += transaction
         }

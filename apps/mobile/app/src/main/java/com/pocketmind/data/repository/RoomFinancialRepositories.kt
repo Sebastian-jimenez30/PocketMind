@@ -1,6 +1,7 @@
 package com.pocketmind.data.repository
 
 import com.pocketmind.data.local.dao.TransactionDao
+import com.pocketmind.data.local.dao.AccountDao
 import com.pocketmind.data.local.entity.TransactionEntity
 import com.pocketmind.shared.domain.model.CurrencyCode
 import com.pocketmind.shared.domain.model.DashboardSummary
@@ -17,15 +18,23 @@ import javax.inject.Inject
 
 class RoomTransactionRepository @Inject constructor(private val transactionDao: TransactionDao) : TransactionRepository {
     override fun observeAll(): Flow<List<FinancialTransaction>> = transactionDao.observeAll().map { entities -> entities.map(TransactionEntity::toDomain) }
+    override suspend fun getById(id: String): FinancialTransaction? = transactionDao.getById(id)?.toDomain()
     override suspend fun save(transaction: FinancialTransaction) = transactionDao.upsert(transaction.toEntity())
 }
 
-class RoomDashboardRepository @Inject constructor(private val transactionDao: TransactionDao) : DashboardRepository {
-    override fun observeSummary(): Flow<DashboardSummary> = transactionDao.observeAll().map { transactions ->
+class RoomDashboardRepository @Inject constructor(
+    private val transactionDao: TransactionDao,
+    private val accountDao: AccountDao,
+) : DashboardRepository {
+    override fun observeSummary(): Flow<DashboardSummary> = kotlinx.coroutines.flow.combine(
+        transactionDao.observeAll(),
+        accountDao.observeActive(),
+    ) { transactions, accounts ->
         val postedTransactions = transactions.filter { it.status == TransactionStatus.POSTED.name }
         val income = postedTransactions.filter { it.type == TransactionType.INCOME.name }.sumOf { it.amountMinorUnits }
         val expense = postedTransactions.filter { it.type == TransactionType.EXPENSE.name }.sumOf { it.amountMinorUnits }
-        DashboardSummary(Money(income - expense, CurrencyCode.COP), Money(income, CurrencyCode.COP), Money(expense, CurrencyCode.COP))
+        val openingBalance = accounts.sumOf { it.openingBalanceMinorUnits }
+        DashboardSummary(Money(openingBalance + income - expense, CurrencyCode.COP), Money(income, CurrencyCode.COP), Money(expense, CurrencyCode.COP))
     }
 }
 

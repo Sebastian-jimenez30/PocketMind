@@ -9,5 +9,6 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface AccountDao {
     @Query("SELECT * FROM accounts WHERE isArchived = 0 ORDER BY name") fun observeActive(): Flow<List<AccountEntity>>
+    @Query("SELECT * FROM accounts WHERE id = :id LIMIT 1") suspend fun getById(id: String): AccountEntity?
     @Upsert suspend fun upsert(account: AccountEntity)
 }

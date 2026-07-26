@@ -50,6 +50,9 @@ class PocketMindVisualIdentityTest {
                 HomeScreen(
                     uiState = HomeUiState.Content(sampleSummary()),
                     onOpenProfile = {},
+                    onOpenTransactions = {},
+                    onCreateTransaction = {},
+                    onManageAccounts = {},
                 )
             }
         }
