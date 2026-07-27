@@ -4,16 +4,20 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pocketmind.shared.domain.model.CurrencyCode
+import com.pocketmind.shared.domain.command.FinancialCommand
+import com.pocketmind.shared.domain.command.FinancialCommandResult
 import com.pocketmind.shared.domain.model.FinancialAccount
 import com.pocketmind.shared.domain.model.FinancialAccountType
+import com.pocketmind.shared.domain.model.FinancialProductConfiguration
 import com.pocketmind.shared.domain.model.Money
 import com.pocketmind.shared.domain.model.CreditCardProfile
 import com.pocketmind.shared.domain.model.SavingsProductType
 import com.pocketmind.shared.domain.model.SavingsProfile
 import com.pocketmind.shared.domain.model.LoanProfile
 import com.pocketmind.shared.domain.usecase.ManualFinanceUseCases
+import com.pocketmind.shared.domain.usecase.ExecuteFinancialCommandUseCase
 import com.pocketmind.shared.domain.usecase.GetFinancialAccountUseCase
-import com.pocketmind.shared.domain.usecase.SaveFinancialAccountUseCase
+import com.pocketmind.presentation.common.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.util.UUID
 import java.time.LocalDate
@@ -51,8 +55,8 @@ data class AccountEditorUiState(
 class AccountEditorViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val getAccount: GetFinancialAccountUseCase,
-    private val saveAccount: SaveFinancialAccountUseCase,
     private val manualFinance: ManualFinanceUseCases,
+    private val executeFinancialCommand: ExecuteFinancialCommandUseCase,
 ) : ViewModel() {
     private val accountId: String? = savedStateHandle["accountId"]
     private val _uiState = MutableStateFlow(AccountEditorUiState(accountId = accountId))
@@ -142,17 +146,15 @@ class AccountEditorViewModel @Inject constructor(
             _uiState.update { it.copy(isSaving = true, error = null) }
             runCatching {
                 val id = state.accountId ?: UUID.randomUUID().toString()
-                saveAccount(
-                    FinancialAccount(
-                        id = id,
-                        name = state.name.trim(),
-                        type = state.type,
-                        currency = CurrencyCode.COP,
-                        openingBalance = Money(balance, CurrencyCode.COP),
-                    ),
+                val account = FinancialAccount(
+                    id = id,
+                    name = state.name.trim(),
+                    type = state.type,
+                    currency = CurrencyCode.COP,
+                    openingBalance = Money(balance, CurrencyCode.COP),
                 )
-                when (state.type) {
-                    FinancialAccountType.CREDIT_CARD -> manualFinance.saveCreditCardProfile(
+                val configuration = when (state.type) {
+                    FinancialAccountType.CREDIT_CARD -> FinancialProductConfiguration.CreditCard(
                         CreditCardProfile(
                             accountId = id,
                             creditLimit = Money(state.creditLimit.toLong(), CurrencyCode.COP),
@@ -164,7 +166,7 @@ class AccountEditorViewModel @Inject constructor(
                                 ?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli(),
                         ),
                     )
-                    FinancialAccountType.SAVINGS -> manualFinance.saveSavingsProfile(
+                    FinancialAccountType.SAVINGS -> FinancialProductConfiguration.Savings(
                         SavingsProfile(
                             accountId = id,
                             type = state.savingsType,
@@ -177,7 +179,7 @@ class AccountEditorViewModel @Inject constructor(
                             maturityAtEpochMillis = maturity?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli(),
                         ),
                     )
-                    FinancialAccountType.LOAN -> manualFinance.saveLoanProfile(
+                    FinancialAccountType.LOAN -> FinancialProductConfiguration.Loan(
                         LoanProfile(
                             accountId = id,
                             annualInterestBasisPoints = annualRateBasisPoints,
@@ -186,10 +188,35 @@ class AccountEditorViewModel @Inject constructor(
                             openedAtEpochMillis = state.loanOpenedAtEpochMillis ?: System.currentTimeMillis(),
                         ),
                     )
-                    else -> Unit
+                    else -> FinancialProductConfiguration.Standard
+                }
+                val commandId = UUID.randomUUID().toString()
+                val command = if (state.accountId == null) {
+                    FinancialCommand.CreateProduct(
+                        commandId = commandId,
+                        account = account,
+                        configuration = configuration,
+                    )
+                } else {
+                    FinancialCommand.UpdateProduct(
+                        commandId = commandId,
+                        account = account,
+                        configuration = configuration,
+                    )
+                }
+                when (val result = executeFinancialCommand(command)) {
+                    is FinancialCommandResult.Success -> Unit
+                    is FinancialCommandResult.Rejected -> error(result.toUserMessage())
                 }
             }.onSuccess { _uiState.update { it.copy(isSaving = false, saved = true) } }
-                .onFailure { _uiState.update { it.copy(isSaving = false, error = "No pudimos guardar el producto. Inténtalo de nuevo.") } }
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(
+                            isSaving = false,
+                            error = error.message ?: "No pudimos guardar el producto. Inténtalo de nuevo.",
+                        )
+                    }
+                }
         }
     }
 }

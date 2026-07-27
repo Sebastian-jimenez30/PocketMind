@@ -5,6 +5,7 @@ import com.pocketmind.data.profile.ProfileSettings
 import com.pocketmind.shared.domain.model.CreditCardPayment
 import com.pocketmind.shared.domain.model.CreditCardProfile
 import com.pocketmind.shared.domain.model.FinancialAccount
+import com.pocketmind.shared.domain.model.FinancialProductConfiguration
 import com.pocketmind.shared.domain.model.FinancialTransaction
 import com.pocketmind.shared.domain.model.InstallmentPurchase
 import com.pocketmind.shared.domain.model.SavingsMovement
@@ -45,9 +46,10 @@ class HomeViewModelTest {
             override suspend fun getCreditCardProfile(accountId: String): CreditCardProfile? = null
             override suspend fun getSavingsProfile(accountId: String): SavingsProfile? = null
             override suspend fun getLoanProfile(accountId: String): LoanProfile? = null
-            override suspend fun saveCreditCardProfile(profile: CreditCardProfile) = Unit
-            override suspend fun saveSavingsProfile(profile: SavingsProfile) = Unit
-            override suspend fun saveLoanProfile(profile: LoanProfile) = Unit
+            override suspend fun saveProduct(
+                account: FinancialAccount,
+                configuration: FinancialProductConfiguration,
+            ) = Unit
             override suspend fun saveInstallmentPurchase(
                 purchase: InstallmentPurchase,
                 ledgerTransaction: FinancialTransaction,
@@ -55,14 +57,17 @@ class HomeViewModelTest {
             override suspend fun saveCreditCardPayment(
                 payment: CreditCardPayment,
                 ledgerTransaction: FinancialTransaction,
+                sourceSavingsMovement: SavingsMovement?,
             ) = Unit
             override suspend fun saveSavingsMovement(
                 movement: SavingsMovement,
                 ledgerTransaction: FinancialTransaction?,
+                relatedSavingsMovement: SavingsMovement?,
             ) = Unit
             override suspend fun saveLoanPayment(
                 payment: LoanPayment,
                 ledgerTransaction: FinancialTransaction,
+                sourceSavingsMovement: SavingsMovement?,
             ) = Unit
         }
 

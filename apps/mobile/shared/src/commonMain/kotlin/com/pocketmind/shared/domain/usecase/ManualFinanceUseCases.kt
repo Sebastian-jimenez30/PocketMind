@@ -1,16 +1,8 @@
 package com.pocketmind.shared.domain.usecase
 
-import com.pocketmind.shared.domain.model.CreditCardPayment
-import com.pocketmind.shared.domain.model.CreditCardProfile
-import com.pocketmind.shared.domain.model.FinancialTransaction
-import com.pocketmind.shared.domain.model.InstallmentPurchase
-import com.pocketmind.shared.domain.model.LoanPayment
-import com.pocketmind.shared.domain.model.LoanProfile
-import com.pocketmind.shared.domain.model.SavingsMovement
-import com.pocketmind.shared.domain.model.SavingsProfile
 import com.pocketmind.shared.domain.repository.ManualFinanceRepository
 
-/** Domain entry point for manual cards and savings. Platform UI never depends on Room. */
+/** Read access for product overviews. Writes go through [ExecuteFinancialCommandUseCase]. */
 class ManualFinanceUseCases(
     private val repository: ManualFinanceRepository,
 ) {
@@ -25,19 +17,4 @@ class ManualFinanceUseCases(
     suspend fun getCreditCardProfile(accountId: String) = repository.getCreditCardProfile(accountId)
     suspend fun getSavingsProfile(accountId: String) = repository.getSavingsProfile(accountId)
     suspend fun getLoanProfile(accountId: String) = repository.getLoanProfile(accountId)
-    suspend fun saveCreditCardProfile(profile: CreditCardProfile) = repository.saveCreditCardProfile(profile)
-    suspend fun saveSavingsProfile(profile: SavingsProfile) = repository.saveSavingsProfile(profile)
-    suspend fun saveLoanProfile(profile: LoanProfile) = repository.saveLoanProfile(profile)
-
-    suspend fun recordPurchase(purchase: InstallmentPurchase, ledgerTransaction: FinancialTransaction) =
-        repository.saveInstallmentPurchase(purchase, ledgerTransaction)
-
-    suspend fun recordCardPayment(payment: CreditCardPayment, ledgerTransaction: FinancialTransaction) =
-        repository.saveCreditCardPayment(payment, ledgerTransaction)
-
-    suspend fun recordSavingsMovement(movement: SavingsMovement, ledgerTransaction: FinancialTransaction?) =
-        repository.saveSavingsMovement(movement, ledgerTransaction)
-
-    suspend fun recordLoanPayment(payment: LoanPayment, ledgerTransaction: FinancialTransaction) =
-        repository.saveLoanPayment(payment, ledgerTransaction)
 }

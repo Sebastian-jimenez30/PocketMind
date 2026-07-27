@@ -43,33 +43,24 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.pocketmind.R
-import com.pocketmind.shared.domain.model.CreditCardPayment
-import com.pocketmind.shared.domain.model.CurrencyCode
+import com.pocketmind.presentation.common.toUserMessage
+import com.pocketmind.shared.domain.command.FinancialCommand
+import com.pocketmind.shared.domain.command.FinancialCommandResult
 import com.pocketmind.shared.domain.model.FinancialAccount
 import com.pocketmind.shared.domain.model.FinancialAccountType
-import com.pocketmind.shared.domain.model.FinancialTransaction
-import com.pocketmind.shared.domain.model.InstallmentPurchase
-import com.pocketmind.shared.domain.model.LoanPayment
 import com.pocketmind.shared.domain.model.Money
-import com.pocketmind.shared.domain.model.SavingsMovement
 import com.pocketmind.shared.domain.model.SavingsMovementType
 import com.pocketmind.shared.domain.model.TransactionCategoryId
 import com.pocketmind.shared.domain.model.TransactionSource
-import com.pocketmind.shared.domain.model.TransactionType
 import com.pocketmind.shared.domain.model.calculateCreditCardOverview
-import com.pocketmind.shared.domain.model.calculateLoanOverview
-import com.pocketmind.shared.domain.model.calculateSavingsProjection
-import com.pocketmind.shared.domain.usecase.CreateTransactionResult
-import com.pocketmind.shared.domain.usecase.CreateTransactionUseCase
+import com.pocketmind.shared.domain.usecase.ExecuteFinancialCommandUseCase
 import com.pocketmind.shared.domain.usecase.ManualFinanceUseCases
-import com.pocketmind.shared.domain.usecase.NewTransaction
 import com.pocketmind.shared.domain.usecase.ObserveActiveFinancialAccountsUseCase
 import com.pocketmind.ui.components.PocketMessage
 import com.pocketmind.ui.components.PocketPrimaryButton
 import com.pocketmind.ui.components.pocketBringIntoViewOnFocus
 import com.pocketmind.ui.theme.PocketSpacing
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
@@ -112,7 +103,7 @@ class ManualRecordViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val observeProducts: ObserveActiveFinancialAccountsUseCase,
     private val manualFinance: ManualFinanceUseCases,
-    private val createTransaction: CreateTransactionUseCase,
+    private val executeFinancialCommand: ExecuteFinancialCommandUseCase,
 ) : ViewModel() {
     private val initialOperation = savedStateHandle.get<String>("operation")
         ?.let { runCatching { ManualRecordType.valueOf(it) }.getOrNull() }
@@ -170,8 +161,10 @@ class ManualRecordViewModel @Inject constructor(
         val state = _uiState.value
         val amount = state.amount.toLongOrNull()?.takeIf { it > 0 }
         val occurredAt = state.date.parseDateMillis()
+        val product = state.products.firstOrNull { it.id == state.productId }
         when {
             state.productId.isBlank() -> return showError("Elige el producto del movimiento.")
+            product == null -> return showError("No encontramos el producto seleccionado.")
             amount == null -> return showError("Agrega un valor mayor que cero.")
             occurredAt == null -> return showError("Usa una fecha válida en formato dd/mm/aaaa.")
             state.operation == ManualRecordType.CARD_PURCHASE && state.merchant.isBlank() ->
@@ -181,39 +174,27 @@ class ManualRecordViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, error = null) }
             runCatching {
-                when (state.operation) {
-                    ManualRecordType.INCOME, ManualRecordType.EXPENSE ->
-                        saveStandardMovement(state, amount, occurredAt)
-                    ManualRecordType.CARD_PURCHASE -> savePurchase(state, amount, occurredAt)
-                    ManualRecordType.CARD_PAYMENT -> saveCardPayment(state, amount, occurredAt)
-                    ManualRecordType.SAVINGS_DEPOSIT -> saveSavingsMovement(
-                        state,
-                        amount,
-                        occurredAt,
-                        SavingsMovementType.DEPOSIT,
-                    )
-                    ManualRecordType.SAVINGS_WITHDRAWAL -> saveSavingsMovement(
-                        state,
-                        amount,
-                        occurredAt,
-                        SavingsMovementType.WITHDRAWAL,
-                    )
-                    ManualRecordType.LOAN_PAYMENT -> saveLoanPayment(state, amount, occurredAt)
+                executeFinancialCommand(
+                    state.toCommand(
+                        commandId = UUID.randomUUID().toString(),
+                        amount = Money(amount, product.currency),
+                        occurredAtEpochMillis = occurredAt,
+                    ),
+                )
+            }.onSuccess { result ->
+                when (result) {
+                    is FinancialCommandResult.Success ->
+                        _uiState.update { it.copy(isSaving = false, saved = true) }
+                    is FinancialCommandResult.Rejected ->
+                        _uiState.update { it.copy(isSaving = false, error = result.toUserMessage()) }
                 }
-            }.onSuccess {
-                _uiState.update { it.copy(isSaving = false, saved = true) }
-            }.onFailure { error ->
-                val message = when (error.message) {
-                    "Purchase exceeds available credit" -> "La compra supera el cupo disponible."
-                    "Payment exceeds debt" -> "El pago no puede superar la deuda actual."
-                    "Withdrawal exceeds savings" -> "El retiro no puede superar el ahorro disponible."
-                    "Loan payment exceeds debt" -> "El abono no puede superar la deuda actual."
-                    "Missing card profile", "Missing savings profile", "Missing loan profile" ->
-                        "Completa primero los datos de este producto desde Editar."
-                    "Invalid installments" -> "Usa entre 1 y 60 cuotas."
-                    else -> "No pudimos guardar. Revisa los datos e inténtalo de nuevo."
+            }.onFailure {
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        error = "No pudimos guardar. Revisa los datos e inténtalo de nuevo.",
+                    )
                 }
-                _uiState.update { it.copy(isSaving = false, error = message) }
             }
         }
     }
@@ -247,265 +228,80 @@ class ManualRecordViewModel @Inject constructor(
         }
     }
 
-    private suspend fun saveStandardMovement(
-        state: ManualRecordUiState,
-        amount: Long,
-        occurredAt: Long,
-    ) {
-        val result = createTransaction(
-            NewTransaction(
-                id = UUID.randomUUID().toString(),
-                accountId = state.productId,
-                type = if (state.operation == ManualRecordType.INCOME) {
-                    TransactionType.INCOME
-                } else {
-                    TransactionType.EXPENSE
-                },
-                amount = Money(amount, CurrencyCode.COP),
-                occurredAtEpochMillis = occurredAt,
-                source = TransactionSource.MANUAL,
-                categoryId = state.category.name,
-                merchant = state.merchant,
-                note = state.note,
-            ),
-        )
-        check(result is CreateTransactionResult.Success) { "Invalid movement" }
-    }
-
-    private suspend fun savePurchase(
-        state: ManualRecordUiState,
-        amount: Long,
-        occurredAt: Long,
-    ) {
-        val installments = state.installments.toIntOrNull()?.takeIf { it in 1..60 }
-            ?: error("Invalid installments")
-        val merchant = state.merchant.trim()
-        val profile = manualFinance.getCreditCardProfile(state.productId)
-            ?: error("Missing card profile")
-        val account = observeProducts().first().first { it.id == state.productId }
-        val overview = calculateCreditCardOverview(
-            profile,
-            account.openingBalance,
-            manualFinance.observeInstallmentPurchases().first(),
-            manualFinance.observeCreditCardPayments().first(),
-        )
-        val id = UUID.randomUUID().toString()
-        val purchase = InstallmentPurchase(
-            id = id,
-            accountId = state.productId,
-            merchant = merchant,
-            principal = Money(amount, CurrencyCode.COP),
-            installmentCount = installments,
-            annualInterestBasisPoints = profile.annualInterestBasisPoints,
-            purchasedAtEpochMillis = occurredAt,
-            firstPaymentAtEpochMillis = estimatedCardDueDate(
-                occurredAt,
-                profile.statementClosingDay,
-                profile.paymentDueDay,
-            ),
-            categoryId = state.category.name,
-            note = state.note.trim().ifBlank { null },
-        )
-        require(purchase.financedTotal.minorUnits <= overview.availableCredit.minorUnits) {
-            "Purchase exceeds available credit"
-        }
-        manualFinance.recordPurchase(
-            purchase,
-            FinancialTransaction(
-                id = "purchase-$id",
-                accountId = state.productId,
-                type = TransactionType.EXPENSE,
-                amount = Money(amount, CurrencyCode.COP),
-                occurredAtEpochMillis = occurredAt,
-                categoryId = state.category.name,
-                merchant = merchant,
-                note = "${installments} cuotas. ${state.note}".trim(),
-                source = TransactionSource.MANUAL,
-            ),
-        )
-    }
-
-    private suspend fun saveCardPayment(
-        state: ManualRecordUiState,
-        amount: Long,
-        occurredAt: Long,
-    ) {
-        val account = observeProducts().first().first { it.id == state.productId }
-        val profile = manualFinance.getCreditCardProfile(state.productId)
-            ?: error("Missing card profile")
-        val overview = calculateCreditCardOverview(
-            profile,
-            account.openingBalance,
-            manualFinance.observeInstallmentPurchases().first(),
-            manualFinance.observeCreditCardPayments().first(),
-        )
-        require(amount <= overview.currentDebt.minorUnits) { "Payment exceeds debt" }
-        val id = UUID.randomUUID().toString()
-        val payment = CreditCardPayment(
-            id = id,
-            accountId = state.productId,
-            amount = Money(amount, CurrencyCode.COP),
-            paidAtEpochMillis = occurredAt,
-            sourceAccountId = state.sourceProductId.ifBlank { null },
-            note = state.note.trim().ifBlank { null },
-        )
-        val ledger = state.sourceProductId.takeIf(String::isNotBlank)?.let { sourceId ->
-            FinancialTransaction(
-                id = "card-payment-$id",
-                accountId = sourceId,
-                type = TransactionType.TRANSFER,
-                amount = Money(amount, CurrencyCode.COP),
-                occurredAtEpochMillis = occurredAt,
-                categoryId = TransactionCategoryId.DEBT_PAYMENT.name,
-                merchant = "Pago de tarjeta",
-                note = state.note.trim().ifBlank { null },
-                source = TransactionSource.MANUAL,
-                relatedAccountId = state.productId,
-            )
-        } ?: FinancialTransaction(
-            id = "card-payment-$id",
-            accountId = state.productId,
-            type = TransactionType.INCOME,
-            amount = Money(amount, CurrencyCode.COP),
-            occurredAtEpochMillis = occurredAt,
-            categoryId = TransactionCategoryId.DEBT_PAYMENT.name,
-            merchant = "Pago de tarjeta",
-            note = state.note.trim().ifBlank { null },
-            source = TransactionSource.MANUAL,
-        )
-        manualFinance.recordCardPayment(payment, ledger)
-    }
-
-    private suspend fun saveSavingsMovement(
-        state: ManualRecordUiState,
-        amount: Long,
-        occurredAt: Long,
-        type: SavingsMovementType,
-    ) {
-        if (type == SavingsMovementType.WITHDRAWAL) {
-            val account = observeProducts().first().first { it.id == state.productId }
-            val profile = manualFinance.getSavingsProfile(state.productId)
-                ?: error("Missing savings profile")
-            val projection = calculateSavingsProjection(
-                profile,
-                account.openingBalance,
-                manualFinance.observeSavingsMovements().first(),
-                occurredAt,
-            )
-            require(amount <= projection.currentBalance.minorUnits) {
-                "Withdrawal exceeds savings"
-            }
-        }
-        val id = UUID.randomUUID().toString()
-        val movement = SavingsMovement(
-            id = id,
-            accountId = state.productId,
-            type = type,
-            amount = Money(amount, CurrencyCode.COP),
-            annualYieldBasisPoints = null,
-            occurredAtEpochMillis = occurredAt,
-            note = state.note.trim().ifBlank { null },
-        )
-        val relatedProduct = state.sourceProductId.takeIf(String::isNotBlank)
-        val ledger = if (relatedProduct == null) {
-            FinancialTransaction(
-                id = "savings-$id",
-                accountId = state.productId,
-                type = if (type == SavingsMovementType.DEPOSIT) {
-                    TransactionType.INCOME
-                } else {
-                    TransactionType.EXPENSE
-                },
-                amount = Money(amount, CurrencyCode.COP),
-                occurredAtEpochMillis = occurredAt,
-                categoryId = TransactionCategoryId.SAVINGS.name,
-                merchant = if (type == SavingsMovementType.DEPOSIT) {
-                    "Aporte al ahorro"
-                } else {
-                    "Retiro del ahorro"
-                },
-                note = state.note.trim().ifBlank { null },
-                source = TransactionSource.MANUAL,
-            )
-        } else {
-            FinancialTransaction(
-                id = "savings-$id",
-                accountId = if (type == SavingsMovementType.DEPOSIT) relatedProduct else state.productId,
-                type = TransactionType.TRANSFER,
-                amount = Money(amount, CurrencyCode.COP),
-                occurredAtEpochMillis = occurredAt,
-                categoryId = TransactionCategoryId.SAVINGS.name,
-                merchant = if (type == SavingsMovementType.DEPOSIT) {
-                    "Aporte al ahorro"
-                } else {
-                    "Retiro del ahorro"
-                },
-                note = state.note.trim().ifBlank { null },
-                source = TransactionSource.MANUAL,
-                relatedAccountId = if (type == SavingsMovementType.DEPOSIT) {
-                    state.productId
-                } else {
-                    relatedProduct
-                },
-            )
-        }
-        manualFinance.recordSavingsMovement(movement, ledger)
-    }
-
-    private suspend fun saveLoanPayment(
-        state: ManualRecordUiState,
-        amount: Long,
-        occurredAt: Long,
-    ) {
-        val account = observeProducts().first().first { it.id == state.productId }
-        val profile = manualFinance.getLoanProfile(state.productId)
-            ?: error("Missing loan profile")
-        val overview = calculateLoanOverview(
-            profile,
-            account.openingBalance,
-            manualFinance.observeLoanPayments().first(),
-            occurredAt,
-        )
-        require(amount <= overview.currentDebt.minorUnits) { "Loan payment exceeds debt" }
-        val id = UUID.randomUUID().toString()
-        val payment = LoanPayment(
-            id = id,
-            accountId = state.productId,
-            amount = Money(amount, CurrencyCode.COP),
-            paidAtEpochMillis = occurredAt,
-            sourceAccountId = state.sourceProductId.ifBlank { null },
-            note = state.note.trim().ifBlank { null },
-        )
-        val ledger = state.sourceProductId.takeIf(String::isNotBlank)?.let { sourceId ->
-            FinancialTransaction(
-                id = "loan-payment-$id",
-                accountId = sourceId,
-                type = TransactionType.TRANSFER,
-                amount = Money(amount, CurrencyCode.COP),
-                occurredAtEpochMillis = occurredAt,
-                categoryId = TransactionCategoryId.DEBT_PAYMENT.name,
-                merchant = "Pago de préstamo",
-                note = state.note.trim().ifBlank { null },
-                source = TransactionSource.MANUAL,
-                relatedAccountId = state.productId,
-            )
-        } ?: FinancialTransaction(
-            id = "loan-payment-$id",
-            accountId = state.productId,
-            type = TransactionType.INCOME,
-            amount = Money(amount, CurrencyCode.COP),
-            occurredAtEpochMillis = occurredAt,
-            categoryId = TransactionCategoryId.DEBT_PAYMENT.name,
-            merchant = "Pago de préstamo",
-            note = state.note.trim().ifBlank { null },
-            source = TransactionSource.MANUAL,
-        )
-        manualFinance.recordLoanPayment(payment, ledger)
-    }
-
     private fun showError(message: String) {
         _uiState.update { it.copy(error = message) }
     }
+}
+
+private fun ManualRecordUiState.toCommand(
+    commandId: String,
+    amount: Money,
+    occurredAtEpochMillis: Long,
+): FinancialCommand = when (operation) {
+    ManualRecordType.INCOME -> FinancialCommand.RecordIncome(
+        commandId = commandId,
+        productId = productId,
+        amount = amount,
+        occurredAtEpochMillis = occurredAtEpochMillis,
+        source = TransactionSource.MANUAL,
+        categoryId = category.name,
+        merchant = merchant,
+        note = note,
+    )
+    ManualRecordType.EXPENSE -> FinancialCommand.RecordExpense(
+        commandId = commandId,
+        productId = productId,
+        amount = amount,
+        occurredAtEpochMillis = occurredAtEpochMillis,
+        source = TransactionSource.MANUAL,
+        categoryId = category.name,
+        merchant = merchant,
+        note = note,
+    )
+    ManualRecordType.CARD_PURCHASE -> FinancialCommand.RecordCardPurchase(
+        commandId = commandId,
+        cardId = productId,
+        merchant = merchant,
+        principal = amount,
+        installmentCount = installments.toIntOrNull() ?: 0,
+        purchasedAtEpochMillis = occurredAtEpochMillis,
+        source = TransactionSource.MANUAL,
+        categoryId = category.name,
+        note = note,
+    )
+    ManualRecordType.CARD_PAYMENT -> FinancialCommand.RecordCardPayment(
+        commandId = commandId,
+        cardId = productId,
+        amount = amount,
+        paidAtEpochMillis = occurredAtEpochMillis,
+        source = TransactionSource.MANUAL,
+        sourceProductId = sourceProductId,
+        note = note,
+    )
+    ManualRecordType.SAVINGS_DEPOSIT,
+    ManualRecordType.SAVINGS_WITHDRAWAL -> FinancialCommand.RecordSavingsMovement(
+        commandId = commandId,
+        savingsId = productId,
+        movementType = if (operation == ManualRecordType.SAVINGS_DEPOSIT) {
+            SavingsMovementType.DEPOSIT
+        } else {
+            SavingsMovementType.WITHDRAWAL
+        },
+        amount = amount,
+        occurredAtEpochMillis = occurredAtEpochMillis,
+        source = TransactionSource.MANUAL,
+        relatedProductId = sourceProductId,
+        note = note,
+    )
+    ManualRecordType.LOAN_PAYMENT -> FinancialCommand.RecordLoanPayment(
+        commandId = commandId,
+        loanId = productId,
+        amount = amount,
+        paidAtEpochMillis = occurredAtEpochMillis,
+        source = TransactionSource.MANUAL,
+        sourceProductId = sourceProductId,
+        note = note,
+    )
 }
 
 @Composable
@@ -849,19 +645,3 @@ private fun LocalDate.formatText(): String =
     "%02d/%02d/%04d".format(dayOfMonth, monthValue, year)
 
 private fun todayText(): String = LocalDate.now().formatText()
-
-internal fun estimatedCardDueDate(
-    purchasedAtEpochMillis: Long,
-    closingDay: Int,
-    paymentDay: Int,
-): Long {
-    val purchaseDate = Instant.ofEpochMilli(purchasedAtEpochMillis)
-        .atZone(ZoneId.systemDefault())
-        .toLocalDate()
-    val monthsToAdd = if (purchaseDate.dayOfMonth <= closingDay) 1L else 2L
-    val dueMonth = purchaseDate.plusMonths(monthsToAdd).withDayOfMonth(1)
-    return dueMonth.withDayOfMonth(paymentDay.coerceAtMost(dueMonth.lengthOfMonth()))
-        .atStartOfDay(ZoneId.systemDefault())
-        .toInstant()
-        .toEpochMilli()
-}

@@ -2,6 +2,7 @@ package com.pocketmind.data.repository
 
 import androidx.room.withTransaction
 import com.pocketmind.data.local.PocketMindDatabase
+import com.pocketmind.data.local.dao.AccountDao
 import com.pocketmind.data.local.dao.ManualFinanceDao
 import com.pocketmind.data.local.entity.CreditCardPaymentEntity
 import com.pocketmind.data.local.entity.CreditCardProfileEntity
@@ -13,6 +14,8 @@ import com.pocketmind.data.local.entity.LoanProfileEntity
 import com.pocketmind.shared.domain.model.CreditCardPayment
 import com.pocketmind.shared.domain.model.CreditCardProfile
 import com.pocketmind.shared.domain.model.CurrencyCode
+import com.pocketmind.shared.domain.model.FinancialAccount
+import com.pocketmind.shared.domain.model.FinancialProductConfiguration
 import com.pocketmind.shared.domain.model.InstallmentPurchase
 import com.pocketmind.shared.domain.model.FinancialTransaction
 import com.pocketmind.shared.domain.model.Money
@@ -30,6 +33,7 @@ import kotlinx.coroutines.flow.map
 
 class RoomManualFinanceRepository @Inject constructor(
     private val dao: ManualFinanceDao,
+    private val accountDao: AccountDao,
     private val database: PocketMindDatabase,
     private val transactionRepository: TransactionRepository,
 ) : ManualFinanceRepository {
@@ -63,14 +67,34 @@ class RoomManualFinanceRepository @Inject constructor(
     override suspend fun getLoanProfile(accountId: String): LoanProfile? =
         dao.getLoanProfile(accountId)?.toDomain()
 
-    override suspend fun saveCreditCardProfile(profile: CreditCardProfile) =
-        dao.upsertCreditCardProfile(profile.toEntity())
-
-    override suspend fun saveSavingsProfile(profile: SavingsProfile) =
-        dao.upsertSavingsProfile(profile.toEntity())
-
-    override suspend fun saveLoanProfile(profile: LoanProfile) =
-        dao.upsertLoanProfile(profile.toEntity())
+    override suspend fun saveProduct(
+        account: FinancialAccount,
+        configuration: FinancialProductConfiguration,
+    ) = database.withTransaction {
+        accountDao.upsert(account.toEntity())
+        when (configuration) {
+            FinancialProductConfiguration.Standard -> {
+                dao.deleteCreditCardProfile(account.id)
+                dao.deleteSavingsProfile(account.id)
+                dao.deleteLoanProfile(account.id)
+            }
+            is FinancialProductConfiguration.CreditCard -> {
+                dao.upsertCreditCardProfile(configuration.profile.toEntity())
+                dao.deleteSavingsProfile(account.id)
+                dao.deleteLoanProfile(account.id)
+            }
+            is FinancialProductConfiguration.Savings -> {
+                dao.upsertSavingsProfile(configuration.profile.toEntity())
+                dao.deleteCreditCardProfile(account.id)
+                dao.deleteLoanProfile(account.id)
+            }
+            is FinancialProductConfiguration.Loan -> {
+                dao.upsertLoanProfile(configuration.profile.toEntity())
+                dao.deleteCreditCardProfile(account.id)
+                dao.deleteSavingsProfile(account.id)
+            }
+        }
+    }
 
     override suspend fun saveInstallmentPurchase(
         purchase: InstallmentPurchase,
@@ -83,16 +107,20 @@ class RoomManualFinanceRepository @Inject constructor(
     override suspend fun saveCreditCardPayment(
         payment: CreditCardPayment,
         ledgerTransaction: FinancialTransaction,
+        sourceSavingsMovement: SavingsMovement?,
     ) = database.withTransaction {
         dao.upsertCreditCardPayment(payment.toEntity())
+        sourceSavingsMovement?.let { dao.upsertSavingsMovement(it.toEntity()) }
         transactionRepository.save(ledgerTransaction)
     }
 
     override suspend fun saveSavingsMovement(
         movement: SavingsMovement,
         ledgerTransaction: FinancialTransaction?,
+        relatedSavingsMovement: SavingsMovement?,
     ): Unit = database.withTransaction {
         dao.upsertSavingsMovement(movement.toEntity())
+        relatedSavingsMovement?.let { dao.upsertSavingsMovement(it.toEntity()) }
         ledgerTransaction?.let { transactionRepository.save(it) }
         Unit
     }
@@ -100,8 +128,10 @@ class RoomManualFinanceRepository @Inject constructor(
     override suspend fun saveLoanPayment(
         payment: LoanPayment,
         ledgerTransaction: FinancialTransaction,
+        sourceSavingsMovement: SavingsMovement?,
     ) = database.withTransaction {
         dao.upsertLoanPayment(payment.toEntity())
+        sourceSavingsMovement?.let { dao.upsertSavingsMovement(it.toEntity()) }
         transactionRepository.save(ledgerTransaction)
     }
 }

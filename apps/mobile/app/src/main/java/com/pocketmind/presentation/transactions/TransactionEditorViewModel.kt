@@ -3,19 +3,18 @@ package com.pocketmind.presentation.transactions
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.pocketmind.shared.domain.model.CurrencyCode
+import com.pocketmind.presentation.common.toUserMessage
+import com.pocketmind.shared.domain.command.FinancialCommand
+import com.pocketmind.shared.domain.command.FinancialCommandResult
 import com.pocketmind.shared.domain.model.FinancialAccount
 import com.pocketmind.shared.domain.model.FinancialAccountType
 import com.pocketmind.shared.domain.model.Money
 import com.pocketmind.shared.domain.model.TransactionCategoryId
 import com.pocketmind.shared.domain.model.TransactionSource
 import com.pocketmind.shared.domain.model.TransactionType
-import com.pocketmind.shared.domain.usecase.CreateTransactionResult
-import com.pocketmind.shared.domain.usecase.CreateTransactionUseCase
+import com.pocketmind.shared.domain.usecase.ExecuteFinancialCommandUseCase
 import com.pocketmind.shared.domain.usecase.GetTransactionUseCase
-import com.pocketmind.shared.domain.usecase.NewTransaction
 import com.pocketmind.shared.domain.usecase.ObserveActiveFinancialAccountsUseCase
-import com.pocketmind.shared.domain.repository.TransactionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.util.UUID
 import java.time.Instant
@@ -50,8 +49,7 @@ class TransactionEditorViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     observeAccounts: ObserveActiveFinancialAccountsUseCase,
     private val getTransaction: GetTransactionUseCase,
-    private val createTransaction: CreateTransactionUseCase,
-    private val transactionRepository: TransactionRepository,
+    private val executeFinancialCommand: ExecuteFinancialCommandUseCase,
 ) : ViewModel() {
     private val initialId: String? = savedStateHandle["transactionId"]
     private val initialType = savedStateHandle.get<String>("type")
@@ -103,30 +101,72 @@ class TransactionEditorViewModel @Inject constructor(
         val state = _uiState.value
         val amount = state.amount.toLongOrNull()?.takeIf { it > 0 }
         val occurredAt = state.date.parseDisplayDate()
-        if (amount == null || state.accountId.isBlank() || occurredAt == null) {
+        val product = state.accounts.firstOrNull { it.id == state.accountId }
+        if (amount == null || product == null || occurredAt == null) {
             _uiState.update { it.copy(error = "Completa un producto y un valor mayor que cero.") }
             return
         }
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, error = null) }
-            when (
-                createTransaction(
-                    NewTransaction(
-                        id = state.transactionId ?: UUID.randomUUID().toString(),
-                        accountId = state.accountId,
-                        type = state.type,
-                        amount = Money(amount, CurrencyCode.COP),
+            val transactionId = state.transactionId ?: UUID.randomUUID().toString()
+            val commandId = UUID.randomUUID().toString()
+            val command = if (state.transactionId != null) {
+                FinancialCommand.UpdateTransaction(
+                    commandId = commandId,
+                    transactionId = transactionId,
+                    productId = state.accountId,
+                    type = state.type,
+                    amount = Money(amount, product.currency),
+                    occurredAtEpochMillis = occurredAt,
+                    source = TransactionSource.MANUAL,
+                    categoryId = state.category.name,
+                    merchant = state.merchant,
+                    note = state.note,
+                )
+            } else {
+                when (state.type) {
+                    TransactionType.INCOME -> FinancialCommand.RecordIncome(
+                        commandId = transactionId,
+                        productId = state.accountId,
+                        amount = Money(amount, product.currency),
                         occurredAtEpochMillis = occurredAt,
                         source = TransactionSource.MANUAL,
                         categoryId = state.category.name,
                         merchant = state.merchant,
                         note = state.note,
-                    ),
-                )
-            ) {
-                is CreateTransactionResult.Success -> _uiState.update { it.copy(isSaving = false, saved = true) }
-                is CreateTransactionResult.Invalid -> _uiState.update { it.copy(isSaving = false, error = "Revisa los datos del movimiento.") }
+                    )
+                    TransactionType.EXPENSE -> FinancialCommand.RecordExpense(
+                        commandId = transactionId,
+                        productId = state.accountId,
+                        amount = Money(amount, product.currency),
+                        occurredAtEpochMillis = occurredAt,
+                        source = TransactionSource.MANUAL,
+                        categoryId = state.category.name,
+                        merchant = state.merchant,
+                        note = state.note,
+                    )
+                    TransactionType.TRANSFER -> {
+                        _uiState.update {
+                            it.copy(isSaving = false, error = "Registra transferencias desde el formulario de operaciones.")
+                        }
+                        return@launch
+                    }
+                }
             }
+            runCatching { executeFinancialCommand(command) }
+                .onSuccess { result ->
+                    when (result) {
+                        is FinancialCommandResult.Success ->
+                            _uiState.update { it.copy(isSaving = false, saved = true) }
+                        is FinancialCommandResult.Rejected ->
+                            _uiState.update { it.copy(isSaving = false, error = result.toUserMessage()) }
+                    }
+                }
+                .onFailure {
+                    _uiState.update {
+                        it.copy(isSaving = false, error = "No pudimos guardar el movimiento.")
+                    }
+                }
         }
     }
 
@@ -135,15 +175,30 @@ class TransactionEditorViewModel @Inject constructor(
         val id = state.transactionId?.takeIf { state.canDelete } ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, error = null) }
-            runCatching { transactionRepository.delete(id) }
-                .onSuccess { _uiState.update { it.copy(isSaving = false, saved = true) } }
-                .onFailure { _uiState.update { it.copy(isSaving = false, error = "No pudimos eliminar el movimiento.") } }
+            runCatching {
+                executeFinancialCommand(
+                    FinancialCommand.DeleteTransaction(
+                        commandId = UUID.randomUUID().toString(),
+                        transactionId = id,
+                    ),
+                )
+            }.onSuccess { result ->
+                when (result) {
+                    is FinancialCommandResult.Success ->
+                        _uiState.update { it.copy(isSaving = false, saved = true) }
+                    is FinancialCommandResult.Rejected ->
+                        _uiState.update { it.copy(isSaving = false, error = result.toUserMessage()) }
+                }
+            }.onFailure {
+                _uiState.update { it.copy(isSaving = false, error = "No pudimos eliminar el movimiento.") }
+            }
         }
     }
 }
 
 private fun String.hasLinkedProduct(): Boolean =
-    startsWith("purchase-") || startsWith("card-payment-") || startsWith("savings-")
+    startsWith("purchase-") || startsWith("card-payment-") ||
+        startsWith("savings-") || startsWith("loan-payment-")
 
 private fun Long.toDisplayDate(): String {
     val date = Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()).toLocalDate()

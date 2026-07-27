@@ -51,4 +51,13 @@ interface ManualFinanceDao {
     @Upsert suspend fun upsertSavingsMovement(movement: SavingsMovementEntity)
     @Upsert suspend fun upsertLoanProfile(profile: LoanProfileEntity)
     @Upsert suspend fun upsertLoanPayment(payment: LoanPaymentEntity)
+
+    @Query("DELETE FROM credit_card_profiles WHERE accountId = :accountId")
+    suspend fun deleteCreditCardProfile(accountId: String)
+
+    @Query("DELETE FROM savings_profiles WHERE accountId = :accountId")
+    suspend fun deleteSavingsProfile(accountId: String)
+
+    @Query("DELETE FROM loan_profiles WHERE accountId = :accountId")
+    suspend fun deleteLoanProfile(accountId: String)
 }
