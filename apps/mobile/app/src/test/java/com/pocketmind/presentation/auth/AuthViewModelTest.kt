@@ -2,6 +2,7 @@ package com.pocketmind.presentation.auth
 
 import com.pocketmind.data.auth.AuthOperationResult
 import com.pocketmind.data.auth.AuthRepository
+import com.pocketmind.data.sync.SessionBootstrapper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -10,6 +11,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -33,13 +35,21 @@ class AuthViewModelTest {
     @Test
     fun `authenticates when Google callback creates a session`() {
         val repository = FakeAuthRepository()
-        val viewModel = AuthViewModel(repository)
+        var bootstrapCalls = 0
+        val viewModel = AuthViewModel(
+            authRepository = repository,
+            sessionBootstrapper = SessionBootstrapper {
+                bootstrapCalls += 1
+                Result.success(Unit)
+            },
+        )
 
         assertFalse(viewModel.uiState.value.isAuthenticated)
 
         repository.authentication.value = true
 
         assertTrue(viewModel.uiState.value.isAuthenticated)
+        assertEquals(1, bootstrapCalls)
     }
 
     private class FakeAuthRepository : AuthRepository {

@@ -20,7 +20,7 @@ class RoomFinancialAccountRepository @Inject constructor(
 
     override suspend fun getById(id: String): FinancialAccount? = accountDao.getById(id)?.toDomain()
 
-    override suspend fun save(account: FinancialAccount) = accountDao.upsert(account.toEntity())
+    override suspend fun save(account: FinancialAccount) = accountDao.upsert(account.toAccountEntity())
 }
 
 private fun AccountEntity.toDomain() = FinancialAccount(
@@ -32,7 +32,7 @@ private fun AccountEntity.toDomain() = FinancialAccount(
     isArchived = isArchived,
 )
 
-internal fun FinancialAccount.toEntity() = AccountEntity(
+internal fun FinancialAccount.toAccountEntity() = AccountEntity(
     id = id,
     name = name,
     type = type.name,

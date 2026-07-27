@@ -16,8 +16,8 @@ class ManualRecordDateCalculatorTest {
 
         val dueDate = calculator.firstPaymentAt(
             purchasedAtEpochMillis = purchase,
-            closingDay = 20,
-            paymentDay = 8,
+            statementClosingDay = 20,
+            paymentDueDay = 8,
         )
 
         assertEquals(LocalDate.of(2026, 8, 8), dueDate.toLocalDate())
@@ -29,8 +29,8 @@ class ManualRecordDateCalculatorTest {
 
         val dueDate = calculator.firstPaymentAt(
             purchasedAtEpochMillis = purchase,
-            closingDay = 20,
-            paymentDay = 8,
+            statementClosingDay = 20,
+            paymentDueDay = 8,
         )
 
         assertEquals(LocalDate.of(2026, 9, 8), dueDate.toLocalDate())
@@ -42,8 +42,8 @@ class ManualRecordDateCalculatorTest {
 
         val dueDate = calculator.firstPaymentAt(
             purchasedAtEpochMillis = purchase,
-            closingDay = 20,
-            paymentDay = 31,
+            statementClosingDay = 20,
+            paymentDueDay = 31,
         )
 
         assertEquals(LocalDate.of(2026, 2, 28), dueDate.toLocalDate())

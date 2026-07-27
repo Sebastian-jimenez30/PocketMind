@@ -71,7 +71,7 @@ class RoomManualFinanceRepository @Inject constructor(
         account: FinancialAccount,
         configuration: FinancialProductConfiguration,
     ) = database.withTransaction {
-        accountDao.upsert(account.toEntity())
+        accountDao.upsert(account.toAccountEntity())
         when (configuration) {
             FinancialProductConfiguration.Standard -> {
                 dao.deleteCreditCardProfile(account.id)
