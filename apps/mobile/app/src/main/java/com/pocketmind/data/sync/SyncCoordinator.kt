@@ -21,12 +21,17 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
+/** Minimal synchronization boundary required after an authentication session becomes active. */
+fun interface SessionBootstrapper {
+    suspend fun bootstrapCurrentSession(): Result<Unit>
+}
+
 @Singleton
 class SyncCoordinator @Inject constructor(
     @ApplicationContext context: Context,
     private val supabase: SupabaseClient,
     private val engine: FinanceSyncEngine,
-) {
+) : SessionBootstrapper {
     private val workManager = WorkManager.getInstance(context)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var started = false
@@ -46,7 +51,7 @@ class SyncCoordinator @Inject constructor(
         }
     }
 
-    suspend fun bootstrapCurrentSession(): Result<Unit> = runCatching {
+    override suspend fun bootstrapCurrentSession(): Result<Unit> = runCatching {
         val user = supabase.auth.retrieveUserForCurrentSession()
         engine.bootstrap(user.id).getOrThrow()
     }

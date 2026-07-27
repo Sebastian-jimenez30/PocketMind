@@ -10,6 +10,8 @@ import com.pocketmind.data.auth.AuthRepository
 import com.pocketmind.data.auth.SupabaseAuthRepository
 import com.pocketmind.data.profile.ProfileRepository
 import com.pocketmind.data.profile.SupabaseProfileRepository
+import com.pocketmind.data.sync.SessionBootstrapper
+import com.pocketmind.data.sync.SyncCoordinator
 import com.pocketmind.shared.domain.repository.DashboardRepository
 import com.pocketmind.shared.domain.repository.FinancialAccountRepository
 import com.pocketmind.shared.domain.repository.FinancialSetupRepository
@@ -70,6 +72,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindProfileRepository(implementation: SupabaseProfileRepository): ProfileRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindSessionBootstrapper(implementation: SyncCoordinator): SessionBootstrapper
 
     @Binds
     @Singleton

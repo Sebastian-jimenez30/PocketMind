@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pocketmind.data.auth.AuthOperationResult
 import com.pocketmind.data.auth.AuthRepository
-import com.pocketmind.data.sync.SyncCoordinator
+import com.pocketmind.data.sync.SessionBootstrapper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,7 +30,7 @@ data class AuthUiState(
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    private val syncCoordinator: SyncCoordinator,
+    private val sessionBootstrapper: SessionBootstrapper,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AuthUiState())
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
@@ -43,7 +43,7 @@ class AuthViewModel @Inject constructor(
                 .collect { isAuthenticated ->
                     if (isAuthenticated) {
                         _uiState.update { it.copy(isLoading = true, isAuthenticated = false) }
-                        syncCoordinator.bootstrapCurrentSession()
+                        sessionBootstrapper.bootstrapCurrentSession()
                     }
                     _uiState.update {
                         it.copy(
@@ -89,7 +89,7 @@ class AuthViewModel @Inject constructor(
 
     private suspend fun handle(result: AuthOperationResult, mode: AuthMode) {
         if (result == AuthOperationResult.Success && mode == AuthMode.SIGN_IN) {
-            syncCoordinator.bootstrapCurrentSession()
+            sessionBootstrapper.bootstrapCurrentSession()
             _uiState.update {
                 it.copy(isLoading = false, isAuthenticated = true, message = null, isError = false)
             }
