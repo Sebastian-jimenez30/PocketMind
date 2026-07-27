@@ -14,12 +14,14 @@ import kotlinx.coroutines.flow.stateIn
 
 data class TransactionsUiState(
     val items: List<TransactionListItem> = emptyList(),
+    val accounts: List<com.pocketmind.shared.domain.model.FinancialAccount> = emptyList(),
     val isLoading: Boolean = true,
 )
 
 data class TransactionListItem(
     val transaction: FinancialTransaction,
     val accountName: String,
+    val destinationAccountName: String = "",
 )
 
 @HiltViewModel
@@ -34,8 +36,13 @@ class TransactionsViewModel @Inject constructor(
         val accountNames = accounts.associate { it.id to it.name }
         TransactionsUiState(
             items = transactions.map { transaction ->
-                TransactionListItem(transaction, accountNames[transaction.accountId].orEmpty())
+                TransactionListItem(
+                    transaction,
+                    accountNames[transaction.accountId].orEmpty(),
+                    transaction.relatedAccountId?.let(accountNames::get).orEmpty(),
+                )
             },
+            accounts = accounts,
             isLoading = false,
         )
     }.stateIn(

@@ -10,4 +10,6 @@ interface TransactionRepository {
     suspend fun getById(id: String): FinancialTransaction?
 
     suspend fun save(transaction: FinancialTransaction)
+
+    suspend fun delete(id: String)
 }

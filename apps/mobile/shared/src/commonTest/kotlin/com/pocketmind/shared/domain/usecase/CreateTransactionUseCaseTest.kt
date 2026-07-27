@@ -61,5 +61,9 @@ class CreateTransactionUseCaseTest {
         override suspend fun save(transaction: FinancialTransaction) {
             saved += transaction
         }
+
+        override suspend fun delete(id: String) {
+            saved.removeAll { it.id == id }
+        }
     }
 }

@@ -20,6 +20,7 @@ class RoomTransactionRepository @Inject constructor(private val transactionDao: 
     override fun observeAll(): Flow<List<FinancialTransaction>> = transactionDao.observeAll().map { entities -> entities.map(TransactionEntity::toDomain) }
     override suspend fun getById(id: String): FinancialTransaction? = transactionDao.getById(id)?.toDomain()
     override suspend fun save(transaction: FinancialTransaction) = transactionDao.upsert(transaction.toEntity())
+    override suspend fun delete(id: String) = transactionDao.deleteById(id)
 }
 
 class RoomDashboardRepository @Inject constructor(
@@ -38,5 +39,30 @@ class RoomDashboardRepository @Inject constructor(
     }
 }
 
-private fun TransactionEntity.toDomain() = FinancialTransaction(id, accountId, TransactionType.valueOf(type), Money(amountMinorUnits, CurrencyCode.valueOf(currency)), occurredAtEpochMillis, categoryId, merchant, note, TransactionSource.valueOf(source), TransactionStatus.valueOf(status))
-private fun FinancialTransaction.toEntity() = TransactionEntity(id, accountId, type.name, amount.minorUnits, amount.currency.name, occurredAtEpochMillis, categoryId, merchant, note, source.name, status.name)
+private fun TransactionEntity.toDomain() = FinancialTransaction(
+    id,
+    accountId,
+    TransactionType.valueOf(type),
+    Money(amountMinorUnits, CurrencyCode.valueOf(currency)),
+    occurredAtEpochMillis,
+    categoryId,
+    merchant,
+    note,
+    TransactionSource.valueOf(source),
+    TransactionStatus.valueOf(status),
+    relatedAccountId,
+)
+private fun FinancialTransaction.toEntity() = TransactionEntity(
+    id,
+    accountId,
+    type.name,
+    amount.minorUnits,
+    amount.currency.name,
+    occurredAtEpochMillis,
+    categoryId,
+    merchant,
+    note,
+    source.name,
+    status.name,
+    relatedAccountId,
+)

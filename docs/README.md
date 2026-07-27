@@ -15,6 +15,9 @@ aquí debe actualizarse en el mismo cambio que la implemente.
   comenzar el primer incremento Android/iOS.
 - [Identidad visual y UX](IDENTIDAD_VISUAL.md): principios de marca, tokens,
   componentes, patrones de pantalla, accesibilidad y criterios de revisión.
+- [Núcleo financiero manual](NUCLEO_FINANCIERO_MANUAL.md): modelo de cuentas,
+  tarjetas, cuotas, ahorros, transferencias, cálculos y reglas previas a la
+  automatización.
 
 ## Convenciones
 

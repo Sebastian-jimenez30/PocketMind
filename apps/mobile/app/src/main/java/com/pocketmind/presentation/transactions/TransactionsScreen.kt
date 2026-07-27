@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -36,6 +38,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,10 +66,14 @@ import com.pocketmind.shared.domain.model.TransactionCategoryId
 import com.pocketmind.shared.domain.model.TransactionSource
 import com.pocketmind.shared.domain.model.TransactionType
 import com.pocketmind.ui.components.PocketPrimaryButton
+import com.pocketmind.ui.components.PocketChoiceChip
 import com.pocketmind.ui.theme.PocketMindTheme
 import com.pocketmind.ui.theme.PocketSpacing
 import java.text.NumberFormat
 import java.util.Locale
+import java.util.Calendar
+import java.text.SimpleDateFormat
+import java.util.Date
 
 @Composable
 fun TransactionsRoute(
@@ -76,6 +87,7 @@ fun TransactionsRoute(
     TransactionsScreen(state, onCreate, onEdit, onManageAccounts, onBack)
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionsScreen(
     state: TransactionsUiState,
@@ -85,9 +97,26 @@ fun TransactionsScreen(
     onBack: () -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
+    var selectedAccountId by rememberSaveable { mutableStateOf("") }
+    var selectedType by rememberSaveable { mutableStateOf<TransactionType?>(null) }
+    var selectedCategory by rememberSaveable { mutableStateOf<TransactionCategoryId?>(null) }
+    var currentMonthOnly by rememberSaveable { mutableStateOf(false) }
+    val monthStart = Calendar.getInstance().apply {
+        set(Calendar.DAY_OF_MONTH, 1)
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
     val filtered = state.items.filter { item ->
-        query.isBlank() || item.transaction.merchant.orEmpty().contains(query, true) ||
-            item.transaction.note.orEmpty().contains(query, true) || item.accountName.contains(query, true)
+        (query.isBlank() || item.transaction.merchant.orEmpty().contains(query, true) ||
+            item.transaction.note.orEmpty().contains(query, true) || item.accountName.contains(query, true) ||
+            item.destinationAccountName.contains(query, true)) &&
+            (selectedAccountId.isBlank() || item.transaction.accountId == selectedAccountId ||
+                item.transaction.relatedAccountId == selectedAccountId) &&
+            (selectedType == null || item.transaction.type == selectedType) &&
+            (selectedCategory == null || item.transaction.categoryId == selectedCategory?.name) &&
+            (!currentMonthOnly || item.transaction.occurredAtEpochMillis >= monthStart)
     }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -108,6 +137,54 @@ fun TransactionsScreen(
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = PocketSpacing.xl),
             )
+            FlowRow(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = PocketSpacing.xl, vertical = PocketSpacing.sm),
+                horizontalArrangement = Arrangement.spacedBy(PocketSpacing.xs),
+                verticalArrangement = Arrangement.spacedBy(PocketSpacing.xs),
+            ) {
+                PocketChoiceChip(stringResource(R.string.transactions_filter_all), selectedType == null, onClick = { selectedType = null })
+                PocketChoiceChip(stringResource(R.string.transactions_income), selectedType == TransactionType.INCOME, onClick = { selectedType = TransactionType.INCOME })
+                PocketChoiceChip(stringResource(R.string.transactions_expense), selectedType == TransactionType.EXPENSE, onClick = { selectedType = TransactionType.EXPENSE })
+                PocketChoiceChip(stringResource(R.string.transactions_filter_month), currentMonthOnly, onClick = { currentMonthOnly = !currentMonthOnly })
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = PocketSpacing.xl),
+                horizontalArrangement = Arrangement.spacedBy(PocketSpacing.sm),
+            ) {
+                FilterDropdown(
+                    label = stringResource(R.string.transactions_filter_account),
+                    selected = state.accounts.firstOrNull { it.id == selectedAccountId }?.name
+                        ?: stringResource(R.string.transactions_filter_all),
+                    options = listOf("" to stringResource(R.string.transactions_filter_all)) +
+                        state.accounts.map { it.id to it.name },
+                    onSelect = { selectedAccountId = it },
+                    modifier = Modifier.weight(1f),
+                )
+                FilterDropdown(
+                    label = stringResource(R.string.transactions_filter_category),
+                    selected = selectedCategory?.let { stringResource(it.toCategoryLabelRes()) }
+                        ?: stringResource(R.string.transactions_filter_all),
+                    options = listOf("" to stringResource(R.string.transactions_filter_all)) +
+                        TransactionCategoryId.entries.map { it.name to stringResource(it.toCategoryLabelRes()) },
+                    onSelect = { selectedCategory = it.takeIf(String::isNotBlank)?.let(TransactionCategoryId::valueOf) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            if (filtered.isNotEmpty()) {
+                val net = filtered.sumOf {
+                    when (it.transaction.type) {
+                        TransactionType.INCOME -> it.transaction.amount.minorUnits
+                        TransactionType.EXPENSE -> -it.transaction.amount.minorUnits
+                        TransactionType.TRANSFER -> 0
+                    }
+                }
+                Text(
+                    stringResource(R.string.transactions_filtered_total, amountText(Money(kotlin.math.abs(net), CurrencyCode.COP), net >= 0)),
+                    modifier = Modifier.padding(horizontal = PocketSpacing.xl, vertical = PocketSpacing.xs),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             when {
                 state.isLoading -> LoadingState()
                 state.items.isEmpty() -> EmptyTransactions(onCreate, onManageAccounts)
@@ -166,7 +243,47 @@ private fun TransactionsList(items: List<TransactionListItem>, onEdit: (String) 
         verticalArrangement = Arrangement.spacedBy(PocketSpacing.sm),
     ) {
         if (items.isEmpty()) item { Text(stringResource(R.string.transactions_no_results), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        items(items, key = { it.transaction.id }) { item -> TransactionRow(item, onEdit) }
+        items.groupBy { dayLabel(it.transaction.occurredAtEpochMillis) }.forEach { (day, dayItems) ->
+            item(key = "day-$day") {
+                Text(day, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = PocketSpacing.xs))
+            }
+            items(dayItems, key = { it.transaction.id }) { item -> TransactionRow(item, onEdit) }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FilterDropdown(
+    label: String,
+    selected: String,
+    options: List<Pair<String, String>>,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var expanded by androidx.compose.runtime.remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = modifier,
+    ) {
+        OutlinedTextField(
+            value = selected,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+            shape = RoundedCornerShape(16.dp),
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { (id, text) ->
+                DropdownMenuItem(text = { Text(text) }, onClick = {
+                    onSelect(id)
+                    expanded = false
+                })
+            }
+        }
     }
 }
 
@@ -174,30 +291,64 @@ private fun TransactionsList(items: List<TransactionListItem>, onEdit: (String) 
 private fun TransactionRow(item: TransactionListItem, onEdit: (String) -> Unit) {
     val transaction = item.transaction
     val isIncome = transaction.type == TransactionType.INCOME
+    val isTransfer = transaction.type == TransactionType.TRANSFER
+    val editable = !transaction.id.startsWith("purchase-") &&
+        !transaction.id.startsWith("card-payment-") &&
+        !transaction.id.startsWith("savings-")
     Card(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).clickable { onEdit(transaction.id) },
+        modifier = Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .then(if (editable) Modifier.clickable { onEdit(transaction.id) } else Modifier),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Row(modifier = Modifier.padding(PocketSpacing.md), verticalAlignment = Alignment.CenterVertically) {
             Icon(
-                if (isIncome) Icons.AutoMirrored.Rounded.TrendingUp else Icons.AutoMirrored.Rounded.TrendingDown,
-                contentDescription = stringResource(if (isIncome) R.string.transactions_income else R.string.transactions_expense),
-                tint = if (isIncome) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error,
+                when {
+                    isTransfer -> Icons.Rounded.AccountBalanceWallet
+                    isIncome -> Icons.AutoMirrored.Rounded.TrendingUp
+                    else -> Icons.AutoMirrored.Rounded.TrendingDown
+                },
+                contentDescription = stringResource(
+                    when {
+                        isTransfer -> R.string.transactions_transfer
+                        isIncome -> R.string.transactions_income
+                        else -> R.string.transactions_expense
+                    },
+                ),
+                tint = when {
+                    isTransfer -> MaterialTheme.colorScheme.primary
+                    isIncome -> MaterialTheme.colorScheme.secondary
+                    else -> MaterialTheme.colorScheme.error
+                },
             )
             Spacer(Modifier.width(PocketSpacing.md))
             Column(modifier = Modifier.weight(1f)) {
                 Text(transaction.merchant.orEmpty().ifBlank { categoryLabel(transaction.categoryId) }, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(item.accountName.ifBlank { stringResource(R.string.transactions_unknown_account) }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    if (isTransfer) {
+                        "${item.accountName} → ${item.destinationAccountName}"
+                    } else {
+                        item.accountName.ifBlank { stringResource(R.string.transactions_unknown_account) }
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Text(stringResource(R.string.transactions_source_manual), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text(
-                text = amountText(transaction.amount, isIncome),
+                text = if (isTransfer) amountTextNeutral(transaction.amount) else amountText(transaction.amount, isIncome),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = if (isIncome) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error,
+                color = when {
+                    isTransfer -> MaterialTheme.colorScheme.primary
+                    isIncome -> MaterialTheme.colorScheme.secondary
+                    else -> MaterialTheme.colorScheme.error
+                },
             )
-            Icon(Icons.Rounded.Edit, stringResource(R.string.transactions_edit), modifier = Modifier.padding(start = PocketSpacing.sm).size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (editable) {
+                Icon(Icons.Rounded.Edit, stringResource(R.string.transactions_edit), modifier = Modifier.padding(start = PocketSpacing.sm).size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }
@@ -228,6 +379,16 @@ private fun amountText(amount: Money, income: Boolean): String {
     val currency = NumberFormat.getCurrencyInstance(Locale.Builder().setLanguage("es").setRegion("CO").build()).apply { maximumFractionDigits = 0 }.format(amount.minorUnits)
     return if (income) "+$currency" else "-$currency"
 }
+
+private fun amountTextNeutral(amount: Money): String = NumberFormat.getCurrencyInstance(
+    Locale.Builder().setLanguage("es").setRegion("CO").build(),
+).apply { maximumFractionDigits = 0 }.format(amount.minorUnits)
+
+private fun dayLabel(epochMillis: Long): String =
+    SimpleDateFormat(
+        "EEEE, d MMM",
+        Locale.Builder().setLanguage("es").setRegion("CO").build(),
+    ).format(Date(epochMillis))
 
 @Preview(showBackground = true)
 @Composable

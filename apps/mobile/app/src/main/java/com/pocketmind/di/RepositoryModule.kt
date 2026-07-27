@@ -3,6 +3,7 @@ package com.pocketmind.di
 import com.pocketmind.data.repository.RoomDashboardRepository
 import com.pocketmind.data.repository.RoomFinancialAccountRepository
 import com.pocketmind.data.repository.RoomFinancialSetupRepository
+import com.pocketmind.data.repository.RoomManualFinanceRepository
 import com.pocketmind.data.repository.RoomTransactionRepository
 import com.pocketmind.data.auth.AuthRepository
 import com.pocketmind.data.auth.SupabaseAuthRepository
@@ -11,6 +12,7 @@ import com.pocketmind.data.profile.SupabaseProfileRepository
 import com.pocketmind.shared.domain.repository.DashboardRepository
 import com.pocketmind.shared.domain.repository.FinancialAccountRepository
 import com.pocketmind.shared.domain.repository.FinancialSetupRepository
+import com.pocketmind.shared.domain.repository.ManualFinanceRepository
 import com.pocketmind.shared.domain.repository.TransactionRepository
 import com.pocketmind.shared.domain.usecase.ObserveDashboardSummaryUseCase
 import com.pocketmind.shared.domain.usecase.GetFinancialAccountUseCase
@@ -20,6 +22,7 @@ import com.pocketmind.shared.domain.usecase.CreateTransactionUseCase
 import com.pocketmind.shared.domain.usecase.ObserveFinancialSetupCompletedUseCase
 import com.pocketmind.shared.domain.usecase.SaveInitialFinancialSetupUseCase
 import com.pocketmind.shared.domain.usecase.SaveFinancialAccountUseCase
+import com.pocketmind.shared.domain.usecase.ManualFinanceUseCases
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -52,6 +55,12 @@ abstract class RepositoryModule {
     abstract fun bindFinancialSetupRepository(
         implementation: RoomFinancialSetupRepository,
     ): FinancialSetupRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindManualFinanceRepository(
+        implementation: RoomManualFinanceRepository,
+    ): ManualFinanceRepository
 
     @Binds
     @Singleton
@@ -101,5 +110,10 @@ abstract class RepositoryModule {
         fun provideCreateTransactionUseCase(
             repository: TransactionRepository,
         ): CreateTransactionUseCase = CreateTransactionUseCase(repository)
+
+        @Provides
+        fun provideManualFinanceUseCases(
+            repository: ManualFinanceRepository,
+        ): ManualFinanceUseCases = ManualFinanceUseCases(repository)
     }
 }

@@ -22,7 +22,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.CreditCard
+import androidx.compose.material.icons.rounded.Savings
+import androidx.compose.material.icons.rounded.Payments
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FloatingActionButton
@@ -54,13 +57,13 @@ import java.text.NumberFormat
 import java.util.Locale
 
 @Composable
-fun AccountsRoute(onCreate: () -> Unit, onEdit: (String) -> Unit, onBack: () -> Unit, viewModel: AccountsViewModel = hiltViewModel()) {
+fun AccountsRoute(onCreate: () -> Unit, onOpen: (String) -> Unit, onBack: () -> Unit, viewModel: AccountsViewModel = hiltViewModel()) {
     val accounts by viewModel.accounts.collectAsStateWithLifecycle()
-    AccountsScreen(accounts, onCreate, onEdit, onBack)
+    AccountsScreen(accounts, onCreate, onOpen, onBack)
 }
 
 @Composable
-fun AccountsScreen(accounts: List<FinancialAccount>, onCreate: () -> Unit, onEdit: (String) -> Unit, onBack: () -> Unit) {
+fun AccountsScreen(accounts: List<ProductListItem>, onCreate: () -> Unit, onOpen: (String) -> Unit, onBack: () -> Unit) {
     Scaffold(
         floatingActionButton = {
             FloatingActionButton(onClick = onCreate, containerColor = MaterialTheme.colorScheme.primary) {
@@ -70,10 +73,38 @@ fun AccountsScreen(accounts: List<FinancialAccount>, onCreate: () -> Unit, onEdi
     ) { paddingValues ->
         Column(Modifier.fillMaxSize().padding(paddingValues)) {
             AccountsHeader(onBack)
-            if (accounts.isEmpty()) EmptyAccounts(onCreate) else LazyColumn(
-                contentPadding = PaddingValues(PocketSpacing.xl),
-                verticalArrangement = Arrangement.spacedBy(PocketSpacing.sm),
-            ) { items(accounts, key = { it.id }) { account -> AccountRow(account, onEdit) } }
+            if (accounts.isEmpty()) {
+                EmptyAccounts(onCreate)
+            } else {
+                ProductsList(accounts, onOpen)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProductsList(accounts: List<ProductListItem>, onOpen: (String) -> Unit) {
+    val sections = listOf(
+        R.string.accounts_section_money to accounts.filter {
+            it.account.type == FinancialAccountType.BANK_ACCOUNT || it.account.type == FinancialAccountType.CASH
+        },
+        R.string.accounts_section_cards to accounts.filter { it.account.type == FinancialAccountType.CREDIT_CARD },
+        R.string.accounts_section_savings to accounts.filter { it.account.type == FinancialAccountType.SAVINGS },
+        R.string.accounts_section_loans to accounts.filter { it.account.type == FinancialAccountType.LOAN },
+    ).filter { it.second.isNotEmpty() }
+    LazyColumn(
+        contentPadding = PaddingValues(PocketSpacing.xl),
+        verticalArrangement = Arrangement.spacedBy(PocketSpacing.sm),
+    ) {
+        sections.forEach { (title, products) ->
+            item(key = "section-$title") {
+                Text(
+                    stringResource(title),
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(top = PocketSpacing.sm, bottom = PocketSpacing.xs),
+                )
+            }
+            items(products, key = { it.account.id }) { account -> AccountRow(account, onOpen) }
         }
     }
 }
@@ -107,19 +138,28 @@ private fun EmptyAccounts(onCreate: () -> Unit) = Column(
 }
 
 @Composable
-private fun AccountRow(account: FinancialAccount, onEdit: (String) -> Unit) = Card(
-    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).clickable { onEdit(account.id) },
+private fun AccountRow(item: ProductListItem, onOpen: (String) -> Unit) = Card(
+    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).clickable { onOpen(item.account.id) },
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
 ) {
     Row(Modifier.padding(PocketSpacing.md), verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Rounded.AccountBalanceWallet, null, tint = MaterialTheme.colorScheme.primary)
+        Icon(
+            when (item.account.type) {
+                FinancialAccountType.CREDIT_CARD -> Icons.Rounded.CreditCard
+                FinancialAccountType.SAVINGS -> Icons.Rounded.Savings
+                FinancialAccountType.LOAN -> Icons.Rounded.Payments
+                else -> Icons.Rounded.AccountBalanceWallet
+            },
+            null,
+            tint = MaterialTheme.colorScheme.primary,
+        )
         Spacer(Modifier.width(PocketSpacing.md))
         Column(Modifier.weight(1f)) {
-            Text(account.name, style = MaterialTheme.typography.titleMedium)
-            Text(stringResource(account.type.labelRes()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(item.account.name, style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(item.account.type.labelRes()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Text(formatMoney(account.openingBalance), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        Icon(Icons.Rounded.Edit, stringResource(R.string.accounts_edit), Modifier.padding(start = PocketSpacing.sm).size(20.dp), MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(formatMoney(item.currentAmount), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Icon(Icons.Rounded.ChevronRight, stringResource(R.string.accounts_open), Modifier.padding(start = PocketSpacing.sm).size(20.dp), MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -138,5 +178,13 @@ private fun formatMoney(money: Money): String = NumberFormat.getCurrencyInstance
 @Preview(showBackground = true)
 @Composable
 private fun AccountsPreview() = PocketMindTheme {
-    AccountsScreen(listOf(FinancialAccount("1", "Cuenta principal", FinancialAccountType.BANK_ACCOUNT, CurrencyCode.COP, Money(500_000, CurrencyCode.COP))), {}, {}, {})
+    AccountsScreen(
+        listOf(
+            ProductListItem(
+                FinancialAccount("1", "Cuenta principal", FinancialAccountType.BANK_ACCOUNT, CurrencyCode.COP, Money(500_000, CurrencyCode.COP)),
+                Money(500_000, CurrencyCode.COP),
+            ),
+        ),
+        {}, {}, {},
+    )
 }
