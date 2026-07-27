@@ -116,3 +116,45 @@ data class SavingsMovementEntity(
     val occurredAtEpochMillis: Long,
     val note: String?,
 )
+
+@Entity(
+    tableName = "loan_profiles",
+    foreignKeys = [
+        ForeignKey(
+            entity = AccountEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["accountId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
+data class LoanProfileEntity(
+    @PrimaryKey val accountId: String,
+    val annualInterestBasisPoints: Int,
+    val monthlyPaymentMinorUnits: Long,
+    val currency: String,
+    val paymentDueDay: Int,
+    val openedAtEpochMillis: Long,
+)
+
+@Entity(
+    tableName = "loan_payments",
+    foreignKeys = [
+        ForeignKey(
+            entity = AccountEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["accountId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("accountId"), Index("paidAtEpochMillis")],
+)
+data class LoanPaymentEntity(
+    @PrimaryKey val id: String,
+    val accountId: String,
+    val amountMinorUnits: Long,
+    val currency: String,
+    val paidAtEpochMillis: Long,
+    val sourceAccountId: String?,
+    val note: String?,
+)

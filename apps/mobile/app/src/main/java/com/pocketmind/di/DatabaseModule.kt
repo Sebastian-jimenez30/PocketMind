@@ -23,6 +23,7 @@ object DatabaseModule {
         Room.databaseBuilder(context, PocketMindDatabase::class.java, "pocketmind.db")
             .addMigrations(PocketMindDatabase.MIGRATION_1_2)
             .addMigrations(PocketMindDatabase.MIGRATION_2_3)
+            .addMigrations(PocketMindDatabase.MIGRATION_3_4)
             .build()
     @Provides fun provideAccountDao(database: PocketMindDatabase): AccountDao = database.accountDao()
     @Provides fun provideTransactionDao(database: PocketMindDatabase): TransactionDao = database.transactionDao()

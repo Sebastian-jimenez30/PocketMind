@@ -4,6 +4,8 @@ import com.pocketmind.shared.domain.model.CreditCardPayment
 import com.pocketmind.shared.domain.model.CreditCardProfile
 import com.pocketmind.shared.domain.model.FinancialTransaction
 import com.pocketmind.shared.domain.model.InstallmentPurchase
+import com.pocketmind.shared.domain.model.LoanPayment
+import com.pocketmind.shared.domain.model.LoanProfile
 import com.pocketmind.shared.domain.model.SavingsMovement
 import com.pocketmind.shared.domain.model.SavingsProfile
 import com.pocketmind.shared.domain.repository.ManualFinanceRepository
@@ -17,11 +19,15 @@ class ManualFinanceUseCases(
     fun observeCreditCardPayments() = repository.observeCreditCardPayments()
     fun observeSavingsProfiles() = repository.observeSavingsProfiles()
     fun observeSavingsMovements() = repository.observeSavingsMovements()
+    fun observeLoanProfiles() = repository.observeLoanProfiles()
+    fun observeLoanPayments() = repository.observeLoanPayments()
 
     suspend fun getCreditCardProfile(accountId: String) = repository.getCreditCardProfile(accountId)
     suspend fun getSavingsProfile(accountId: String) = repository.getSavingsProfile(accountId)
+    suspend fun getLoanProfile(accountId: String) = repository.getLoanProfile(accountId)
     suspend fun saveCreditCardProfile(profile: CreditCardProfile) = repository.saveCreditCardProfile(profile)
     suspend fun saveSavingsProfile(profile: SavingsProfile) = repository.saveSavingsProfile(profile)
+    suspend fun saveLoanProfile(profile: LoanProfile) = repository.saveLoanProfile(profile)
 
     suspend fun recordPurchase(purchase: InstallmentPurchase, ledgerTransaction: FinancialTransaction) =
         repository.saveInstallmentPurchase(purchase, ledgerTransaction)
@@ -31,4 +37,7 @@ class ManualFinanceUseCases(
 
     suspend fun recordSavingsMovement(movement: SavingsMovement, ledgerTransaction: FinancialTransaction?) =
         repository.saveSavingsMovement(movement, ledgerTransaction)
+
+    suspend fun recordLoanPayment(payment: LoanPayment, ledgerTransaction: FinancialTransaction) =
+        repository.saveLoanPayment(payment, ledgerTransaction)
 }

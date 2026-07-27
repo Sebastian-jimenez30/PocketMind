@@ -11,8 +11,14 @@ import com.pocketmind.shared.domain.model.InstallmentPurchase
 import com.pocketmind.shared.domain.model.SavingsMovement
 import com.pocketmind.shared.domain.model.SavingsProfile
 import com.pocketmind.shared.domain.model.SavingsProjection
+import com.pocketmind.shared.domain.model.SavingsDailyBalance
+import com.pocketmind.shared.domain.model.LoanOverview
+import com.pocketmind.shared.domain.model.LoanPayment
+import com.pocketmind.shared.domain.model.LoanProfile
 import com.pocketmind.shared.domain.model.calculateCreditCardOverview
 import com.pocketmind.shared.domain.model.calculateSavingsProjection
+import com.pocketmind.shared.domain.model.calculateSavingsDailyProgress
+import com.pocketmind.shared.domain.model.calculateLoanOverview
 import com.pocketmind.shared.domain.usecase.ManualFinanceUseCases
 import com.pocketmind.shared.domain.repository.TransactionRepository
 import com.pocketmind.shared.domain.usecase.ObserveActiveFinancialAccountsUseCase
@@ -31,6 +37,10 @@ data class ProductDetailUiState(
     val savingsProfile: SavingsProfile? = null,
     val savingsProjection: SavingsProjection? = null,
     val savingsMovements: List<SavingsMovement> = emptyList(),
+    val savingsDailyProgress: List<SavingsDailyBalance> = emptyList(),
+    val loanProfile: LoanProfile? = null,
+    val loanOverview: LoanOverview? = null,
+    val loanPayments: List<LoanPayment> = emptyList(),
     val transactions: List<FinancialTransaction> = emptyList(),
     val isLoading: Boolean = true,
 )
@@ -52,6 +62,8 @@ class ProductDetailViewModel @Inject constructor(
         manualFinance.observeCreditCardPayments(),
         manualFinance.observeSavingsProfiles(),
         manualFinance.observeSavingsMovements(),
+        manualFinance.observeLoanProfiles(),
+        manualFinance.observeLoanPayments(),
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         val accounts = values[0] as List<FinancialAccount>
@@ -67,6 +79,10 @@ class ProductDetailViewModel @Inject constructor(
         val savingsProfiles = values[5] as List<SavingsProfile>
         @Suppress("UNCHECKED_CAST")
         val savingsMovements = values[6] as List<SavingsMovement>
+        @Suppress("UNCHECKED_CAST")
+        val loanProfiles = values[7] as List<LoanProfile>
+        @Suppress("UNCHECKED_CAST")
+        val loanPayments = values[8] as List<LoanPayment>
 
         val account = accounts.firstOrNull { it.id == accountId }
         val profile = cardProfiles.firstOrNull { it.accountId == accountId }
@@ -74,6 +90,9 @@ class ProductDetailViewModel @Inject constructor(
         val accountPurchases = purchases.filter { it.accountId == accountId }
         val accountPayments = payments.filter { it.accountId == accountId }
         val accountSavingsMovements = savingsMovements.filter { it.accountId == accountId }
+        val loan = loanProfiles.firstOrNull { it.accountId == accountId }
+        val accountLoanPayments = loanPayments.filter { it.accountId == accountId }
+        val now = System.currentTimeMillis()
         ProductDetailUiState(
             account = account,
             cardOverview = if (account != null && profile != null) {
@@ -85,11 +104,31 @@ class ProductDetailViewModel @Inject constructor(
             payments = accountPayments,
             savingsProfile = savings,
             savingsProjection = if (account != null && savings != null) {
-                calculateSavingsProjection(savings, account.openingBalance, accountSavingsMovements, System.currentTimeMillis())
+                calculateSavingsProjection(savings, account.openingBalance, accountSavingsMovements, now)
             } else {
                 null
             },
             savingsMovements = accountSavingsMovements,
+            savingsDailyProgress = if (
+                account != null && savings != null && savings.annualYieldBasisPoints > 0
+            ) {
+                calculateSavingsDailyProgress(
+                    savings,
+                    account.openingBalance,
+                    accountSavingsMovements,
+                    fromEpochMillis = (now - 6L * 86_400_000L).coerceAtLeast(savings.openedAtEpochMillis),
+                    toEpochMillis = now,
+                )
+            } else {
+                emptyList()
+            },
+            loanProfile = loan,
+            loanOverview = if (account != null && loan != null) {
+                calculateLoanOverview(loan, account.openingBalance, accountLoanPayments, now)
+            } else {
+                null
+            },
+            loanPayments = accountLoanPayments,
             transactions = transactions.filter { it.accountId == accountId || it.relatedAccountId == accountId },
             isLoading = false,
         )

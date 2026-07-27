@@ -240,10 +240,18 @@ El shell visual preferido combina:
 2. saludo, título o navegación contextual;
 3. superficie principal clara con esquinas superiores amplias;
 4. contenido modular mediante tarjetas;
-5. navegación inferior cuando el destino es de primer nivel.
+5. navegación inferior estable en toda pantalla autenticada.
 
 La cabecera puede reducirse al desplazarse. Debe respetar safe areas, barras del
 sistema y teclado.
+
+Las cabeceras contextuales usan una sola línea, títulos preferentemente de una
+palabra y el alto mínimo necesario para el botón Atrás. No se reserva una zona
+superior amplia para descripciones que ya aparecen dentro del contenido.
+
+Autenticación y onboarding no muestran navegación inferior. Inicio,
+Movimientos, Análisis, Perfil y sus flujos secundarios autenticados conservan la
+barra para permitir cambios de contexto sin reconstruir el historial.
 
 ### Navegación principal
 
@@ -256,6 +264,9 @@ La navegación inferior estable contiene cuatro destinos:
 
 El destino activo usa icono, etiqueta y una cápsula de color. El botón Atrás no
 duplica destinos ni regresa a contenido autenticado después de cerrar sesión.
+Al pulsar un destino se abre siempre su pantalla raíz, incluso si la persona se
+encuentra dentro de un formulario o detalle perteneciente a ese mismo destino.
+La barra no usa divisor, sombra ni franja de color superior.
 
 La captura se trata como acción, no como destino. Desde Inicio abre registro
 manual, voz, fotografía y opciones automáticas disponibles.
@@ -277,8 +288,8 @@ Superficie que se superpone visualmente a la cabecera, con radio superior de
 
 ### `FinancialSummaryCard`
 
-En Inicio es la primera página de un carrusel horizontal de panorama y cuentas.
-La primera página resume el total; las siguientes muestran cada cuenta con saldo,
+En Inicio es la primera página de un carrusel horizontal de panorama y productos.
+La primera página resume el total; las siguientes muestran cada producto con saldo,
 ingresos y gastos. Son superficies informativas de PocketMind, no tarjetas
 bancarias simuladas.
 
@@ -311,12 +322,15 @@ Los formularios iniciales incluyen ejemplos breves en el placeholder, como
 “Cuenta Bancolombia” o “850000”, para reducir ambigüedad sin reemplazar la
 etiqueta persistente.
 
+Los menús desplegables usan campo y superficie con radio de 16 dp/pt. No se
+permiten popups cuadrados ni cuadrículas para opciones de longitud variable.
+
 ### `PocketChoiceChip`
 
-Selector compacto para pocas opciones. El texto no cambia al seleccionar: se
+Selector compacto para dos o tres opciones breves y simétricas. El texto no cambia al seleccionar: se
 mantiene estable y se diferencia con borde índigo de 2 dp y fondo translúcido
-`primaryContainer`. Las colecciones extensas, como categorías, se muestran en
-un menú de campo en vez de una nube de chips.
+`primaryContainer`. Los tipos de producto, categorías y demás colecciones se
+muestran en un menú de campo en vez de una cuadrícula o nube de chips.
 
 Incluye label persistente, valor, helper/error, leading/trailing action y
 accesibilidad. El placeholder no reemplaza la etiqueta.
@@ -354,7 +368,7 @@ La biometría se muestra únicamente si está configurada y disponible.
 Orden recomendado:
 
 1. saludo, avatar y notificaciones;
-2. carrusel de panorama total seguido por cuentas;
+2. carrusel de panorama total seguido por productos;
 3. captura rápida;
 4. cuadrícula de acciones;
 5. últimos movimientos;
@@ -364,11 +378,18 @@ No mostrar simultáneamente todas las capacidades futuras.
 
 ### 10.3 Movimientos
 
-- búsqueda visible y filtros por periodo, tipo, categoría, cuenta y origen;
+- búsqueda compacta con icono de filtros dentro del campo;
+- filtros por periodo, tipo, categoría, producto y origen en una hoja bajo demanda;
 - lista agrupada por fecha;
 - totales coherentes con los filtros;
 - edición y corrección accesibles;
 - estado automático identificable sin ruido visual.
+
+El registro manual es una sola pantalla dinámica. Primero muestra Operación y
+Producto; después presenta únicamente los campos necesarios para esa operación.
+Cambiar la opción no abre un segundo formulario ni conserva campos irrelevantes.
+Las tasas, fechas de corte y fechas de pago pertenecen al producto y nunca se
+solicitan nuevamente al registrar una compra o un pago.
 
 ### 10.4 Análisis
 
@@ -383,7 +404,7 @@ ni depender exclusivamente de leyendas por color.
 ### 10.5 Perfil y preferencias
 
 La portada muestra avatar, nombre y correo. Las preferencias se agrupan en datos
-personales, preferencias financieras, cuentas y productos, automatización,
+personales, preferencias financieras, productos, automatización,
 seguridad, privacidad, apariencia e idioma y cierre de sesión.
 
 Evitar un formulario único excesivamente largo.
@@ -433,6 +454,8 @@ Requisitos:
 - escalado de fuente, modo oscuro y reducción de movimiento;
 - layouts compactos, medianos y expandidos;
 - contenido usable con teclado abierto;
+- el campo que recibe foco se desplaza a una zona visible después de abrirse el
+  teclado;
 - orientación y tamaños soportados.
 
 Las cantidades se formatean por locale, inicialmente `es-CO`, y nunca se

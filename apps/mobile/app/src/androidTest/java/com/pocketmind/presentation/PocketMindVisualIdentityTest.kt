@@ -44,16 +44,15 @@ class PocketMindVisualIdentityTest {
     }
 
     @Test
-    fun home_exposesFinancialSummaryAndNavigation() {
+    fun home_exposesFinancialSummaryAndActions() {
         composeRule.setContent {
             PocketMindTheme {
                 HomeScreen(
                     uiState = HomeUiState.Content(sampleSummary()),
-                    onOpenProfile = {},
                     onOpenTransactions = {},
                     onCreateTransaction = {},
                     onManageAccounts = {},
-                    onOpenAnalysis = {},
+                    onStartRecord = {},
                     onOpenProduct = {},
                 )
             }
@@ -61,8 +60,7 @@ class PocketMindVisualIdentityTest {
 
         composeRule.onNodeWithText("Balance de este mes").assertIsDisplayed()
         composeRule.onNodeWithText("Accesos rápidos").assertIsDisplayed()
-        composeRule.onNodeWithText("Inicio").assertIsDisplayed()
-        composeRule.onNodeWithText("Perfil").assertIsDisplayed()
+        composeRule.onNodeWithText("Productos").assertIsDisplayed()
     }
 
     @Test

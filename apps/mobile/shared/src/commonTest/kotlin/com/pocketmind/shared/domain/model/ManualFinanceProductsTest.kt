@@ -61,6 +61,54 @@ class ManualFinanceProductsTest {
         assertTrue(projection.estimatedYield.minorUnits in 99_999..100_001)
     }
 
+    @Test
+    fun `daily savings progress exposes accumulated effective annual yield`() {
+        val profile = SavingsProfile(
+            accountId = "savings",
+            type = SavingsProductType.POCKET,
+            annualYieldBasisPoints = 1_000,
+            openedAtEpochMillis = 1_000L,
+            maturityAtEpochMillis = null,
+        )
+
+        val progress = calculateSavingsDailyProgress(
+            profile,
+            openingBalance = money(1_000_000),
+            movements = emptyList(),
+            fromEpochMillis = 1_000L,
+            toEpochMillis = 1_000L + 2L * 86_400_000L,
+        )
+
+        assertEquals(3, progress.size)
+        assertTrue(progress.last().balance.minorUnits > progress.first().balance.minorUnits)
+        assertTrue(progress.last().estimatedYield.minorUnits > 0)
+    }
+
+    @Test
+    fun `loan payments reduce debt after effective annual interest`() {
+        val year = 365L * 86_400_000L
+        val profile = LoanProfile(
+            accountId = "loan",
+            annualInterestBasisPoints = 1_000,
+            monthlyPayment = money(100_000),
+            paymentDueDay = 15,
+            openedAtEpochMillis = 1_000L,
+        )
+
+        val overview = calculateLoanOverview(
+            profile,
+            openingDebt = money(1_000_000),
+            payments = listOf(
+                LoanPayment("payment", "loan", money(100_000), 1_000L + year, null, null),
+            ),
+            atEpochMillis = 1_000L + year,
+        )
+
+        assertTrue(overview.currentDebt.minorUnits in 999_999..1_000_001)
+        assertTrue(overview.estimatedInterest.minorUnits in 99_999..100_001)
+        assertEquals(100_000, overview.nextPayment.minorUnits)
+    }
+
     private fun purchase(
         id: String = "purchase",
         principal: Long,

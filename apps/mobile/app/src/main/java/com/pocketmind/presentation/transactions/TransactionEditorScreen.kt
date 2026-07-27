@@ -46,8 +46,8 @@ import com.pocketmind.shared.domain.model.FinancialAccount
 import com.pocketmind.shared.domain.model.TransactionCategoryId
 import com.pocketmind.shared.domain.model.TransactionType
 import com.pocketmind.ui.components.PocketMessage
-import com.pocketmind.ui.components.PocketChoiceChip
 import com.pocketmind.ui.components.PocketPrimaryButton
+import com.pocketmind.ui.components.pocketBringIntoViewOnFocus
 import com.pocketmind.ui.theme.PocketSpacing
 
 @Composable
@@ -89,7 +89,7 @@ fun TransactionEditorScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
                 shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().pocketBringIntoViewOnFocus(),
             )
             OutlinedTextField(
                 value = state.date,
@@ -99,7 +99,7 @@ fun TransactionEditorScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
                 shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().pocketBringIntoViewOnFocus(),
             )
             CategorySelector(state.category) { category -> onUpdate { it.copy(category = category) } }
             OutlinedTextField(
@@ -109,7 +109,7 @@ fun TransactionEditorScreen(
                 placeholder = { Text(stringResource(R.string.transaction_editor_merchant_example)) },
                 singleLine = true,
                 shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().pocketBringIntoViewOnFocus(),
             )
             OutlinedTextField(
                 value = state.note,
@@ -118,7 +118,7 @@ fun TransactionEditorScreen(
                 placeholder = { Text(stringResource(R.string.transaction_editor_note_example)) },
                 minLines = 3,
                 shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().pocketBringIntoViewOnFocus(),
             )
             state.error?.let { PocketMessage(it, isError = true) }
             PocketPrimaryButton(
@@ -158,22 +158,44 @@ fun TransactionEditorScreen(
 @Composable
 private fun EditorHeader(editing: Boolean, onBack: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primary).statusBarsPadding().padding(PocketSpacing.md),
+        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primary).statusBarsPadding()
+            .padding(horizontal = PocketSpacing.sm, vertical = PocketSpacing.xxs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.transactions_back), tint = MaterialTheme.colorScheme.onPrimary) }
         Spacer(Modifier.padding(PocketSpacing.xs))
-        Text(stringResource(if (editing) R.string.transaction_editor_edit_title else R.string.transaction_editor_create_title), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary)
+        Text(stringResource(if (editing) R.string.transaction_editor_edit_title else R.string.transaction_editor_create_title), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
     }
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun TransactionTypeSelector(selected: TransactionType, onSelect: (TransactionType) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(PocketSpacing.sm)) {
-        Text(stringResource(R.string.transaction_editor_type), style = MaterialTheme.typography.labelLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(PocketSpacing.sm)) {
+    var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+        OutlinedTextField(
+            value = stringResource(selected.labelRes()),
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(stringResource(R.string.transaction_editor_type)) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier = Modifier.fillMaxWidth()
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true),
+            shape = RoundedCornerShape(16.dp),
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            shape = RoundedCornerShape(16.dp),
+        ) {
             TransactionType.entries.filter { it != TransactionType.TRANSFER }.forEach { type ->
-                PocketChoiceChip(stringResource(type.labelRes()), type == selected, onClick = { onSelect(type) })
+                DropdownMenuItem(
+                    text = { Text(stringResource(type.labelRes())) },
+                    onClick = {
+                        onSelect(type)
+                        expanded = false
+                    },
+                )
             }
         }
     }
@@ -198,7 +220,11 @@ private fun AccountSelector(accounts: List<FinancialAccount>, selectedId: String
                     modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true),
                     shape = RoundedCornerShape(16.dp),
                 )
-                ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                    shape = RoundedCornerShape(16.dp),
+                ) {
                     accounts.forEach { account ->
                         DropdownMenuItem(text = { Text(account.name) }, onClick = { onSelect(account.id); expanded = false })
                     }
@@ -223,7 +249,11 @@ private fun CategorySelector(selected: TransactionCategoryId, onSelect: (Transac
                 modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true),
                 shape = RoundedCornerShape(16.dp),
             )
-            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                shape = RoundedCornerShape(16.dp),
+            ) {
                 TransactionCategoryId.entries.forEach { category ->
                     DropdownMenuItem(text = { Text(stringResource(category.labelRes())) }, onClick = { onSelect(category); expanded = false })
                 }

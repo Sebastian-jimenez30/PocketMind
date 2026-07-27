@@ -8,6 +8,8 @@ import com.pocketmind.data.local.entity.CreditCardProfileEntity
 import com.pocketmind.data.local.entity.InstallmentPurchaseEntity
 import com.pocketmind.data.local.entity.SavingsMovementEntity
 import com.pocketmind.data.local.entity.SavingsProfileEntity
+import com.pocketmind.data.local.entity.LoanPaymentEntity
+import com.pocketmind.data.local.entity.LoanProfileEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -27,15 +29,26 @@ interface ManualFinanceDao {
     @Query("SELECT * FROM savings_movements ORDER BY occurredAtEpochMillis DESC")
     fun observeSavingsMovements(): Flow<List<SavingsMovementEntity>>
 
+    @Query("SELECT * FROM loan_profiles")
+    fun observeLoanProfiles(): Flow<List<LoanProfileEntity>>
+
+    @Query("SELECT * FROM loan_payments ORDER BY paidAtEpochMillis DESC")
+    fun observeLoanPayments(): Flow<List<LoanPaymentEntity>>
+
     @Query("SELECT * FROM credit_card_profiles WHERE accountId = :accountId LIMIT 1")
     suspend fun getCreditCardProfile(accountId: String): CreditCardProfileEntity?
 
     @Query("SELECT * FROM savings_profiles WHERE accountId = :accountId LIMIT 1")
     suspend fun getSavingsProfile(accountId: String): SavingsProfileEntity?
 
+    @Query("SELECT * FROM loan_profiles WHERE accountId = :accountId LIMIT 1")
+    suspend fun getLoanProfile(accountId: String): LoanProfileEntity?
+
     @Upsert suspend fun upsertCreditCardProfile(profile: CreditCardProfileEntity)
     @Upsert suspend fun upsertInstallmentPurchase(purchase: InstallmentPurchaseEntity)
     @Upsert suspend fun upsertCreditCardPayment(payment: CreditCardPaymentEntity)
     @Upsert suspend fun upsertSavingsProfile(profile: SavingsProfileEntity)
     @Upsert suspend fun upsertSavingsMovement(movement: SavingsMovementEntity)
+    @Upsert suspend fun upsertLoanProfile(profile: LoanProfileEntity)
+    @Upsert suspend fun upsertLoanPayment(payment: LoanPaymentEntity)
 }

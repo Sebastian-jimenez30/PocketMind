@@ -25,16 +25,11 @@ import androidx.compose.material.icons.automirrored.rounded.TrendingDown
 import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.AddCircle
-import androidx.compose.material.icons.rounded.Analytics
 import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Payments
-import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.Savings
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
-import androidx.compose.material.icons.rounded.CreditCard
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -47,6 +42,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,10 +69,8 @@ import com.pocketmind.shared.domain.model.DashboardSummary
 import com.pocketmind.shared.domain.model.Money
 import com.pocketmind.shared.domain.model.TransactionType
 import com.pocketmind.shared.domain.model.FinancialTransaction
-import com.pocketmind.ui.components.PocketBottomNavigation
 import com.pocketmind.ui.components.PocketBrandMark
 import com.pocketmind.ui.components.PocketContentSheet
-import com.pocketmind.ui.components.PocketNavigationItem
 import com.pocketmind.ui.components.PocketPrimaryButton
 import com.pocketmind.ui.components.PocketSectionCard
 import com.pocketmind.ui.theme.PocketMindTheme
@@ -87,22 +81,23 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun HomeRoute(
-    onOpenProfile: () -> Unit,
     onOpenTransactions: () -> Unit,
     onCreateTransaction: (TransactionType) -> Unit,
     onManageAccounts: () -> Unit,
-    onOpenAnalysis: () -> Unit,
+    onStartRecord: () -> Unit,
     onOpenProduct: (String) -> Unit,
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) {
+        viewModel.refreshProfile()
+    }
     HomeScreen(
         uiState = uiState,
-        onOpenProfile = onOpenProfile,
         onOpenTransactions = onOpenTransactions,
         onCreateTransaction = onCreateTransaction,
         onManageAccounts = onManageAccounts,
-        onOpenAnalysis = onOpenAnalysis,
+        onStartRecord = onStartRecord,
         onOpenProduct = onOpenProduct,
     )
 }
@@ -110,11 +105,10 @@ fun HomeRoute(
 @Composable
 fun HomeScreen(
     uiState: HomeUiState,
-    onOpenProfile: () -> Unit,
     onOpenTransactions: () -> Unit,
     onCreateTransaction: (TransactionType) -> Unit,
     onManageAccounts: () -> Unit,
-    onOpenAnalysis: () -> Unit,
+    onStartRecord: () -> Unit,
     onOpenProduct: (String) -> Unit,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -130,28 +124,16 @@ fun HomeScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.primary,
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        bottomBar = {
-            PocketBottomNavigation(
-                items = listOf(
-                    PocketNavigationItem(stringResource(R.string.nav_home), Icons.Rounded.Home, true, {}),
-                    PocketNavigationItem(
-                        stringResource(R.string.nav_transactions),
-                        Icons.AutoMirrored.Rounded.ReceiptLong,
-                        false,
-                        onOpenTransactions,
-                    ),
-                    PocketNavigationItem(stringResource(R.string.nav_analysis), Icons.Rounded.Analytics, false, onOpenAnalysis),
-                    PocketNavigationItem(stringResource(R.string.nav_profile), Icons.Rounded.Person, false, onOpenProfile),
-                ),
-            )
-        },
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues),
         ) {
-            HomeHeader(onNotificationsClick = onComingSoon)
+            HomeHeader(
+                displayName = (uiState as? HomeUiState.Content)?.displayName.orEmpty(),
+                onNotificationsClick = onComingSoon,
+            )
             PocketContentSheet(modifier = Modifier.weight(1f)) {
                 when (uiState) {
                     HomeUiState.Loading -> LoadingContent()
@@ -162,6 +144,7 @@ fun HomeScreen(
                         onCreateTransaction = onCreateTransaction,
                         onManageAccounts = onManageAccounts,
                         onOpenTransactions = onOpenTransactions,
+                        onStartRecord = onStartRecord,
                         onOpenProduct = onOpenProduct,
                     )
                 }
@@ -171,30 +154,28 @@ fun HomeScreen(
 }
 
 @Composable
-private fun HomeHeader(onNotificationsClick: () -> Unit) {
+private fun HomeHeader(displayName: String, onNotificationsClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = PocketSpacing.xl, vertical = PocketSpacing.lg),
+            .padding(horizontal = PocketSpacing.lg, vertical = PocketSpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         PocketBrandMark(
-            modifier = Modifier.size(52.dp),
+            modifier = Modifier.size(42.dp),
             contentDescription = stringResource(R.string.brand_mark_description),
         )
         Spacer(Modifier.width(PocketSpacing.md))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = stringResource(R.string.home_greeting),
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onPrimary,
-            )
-            Text(
-                text = stringResource(R.string.home_subtitle),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.82f),
-            )
-        }
+        Text(
+            text = if (displayName.isBlank()) {
+                stringResource(R.string.home_greeting)
+            } else {
+                stringResource(R.string.home_greeting_named, displayName)
+            },
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onPrimary,
+        )
         IconButton(onClick = onNotificationsClick) {
             Icon(
                 imageVector = Icons.Rounded.Notifications,
@@ -223,6 +204,7 @@ private fun DashboardContent(
     onCreateTransaction: (TransactionType) -> Unit,
     onManageAccounts: () -> Unit,
     onOpenTransactions: () -> Unit,
+    onStartRecord: () -> Unit,
     onOpenProduct: (String) -> Unit,
 ) {
     val quickActions = listOf(
@@ -232,9 +214,7 @@ private fun DashboardContent(
         QuickAction(R.string.home_action_income, Icons.AutoMirrored.Rounded.TrendingUp) {
             onCreateTransaction(TransactionType.INCOME)
         },
-        QuickAction(R.string.home_action_cards, Icons.Rounded.CreditCard, onManageAccounts),
-        QuickAction(R.string.home_action_savings, Icons.Rounded.Savings, onManageAccounts),
-        QuickAction(R.string.home_action_accounts, Icons.Rounded.AccountBalanceWallet, onManageAccounts),
+        QuickAction(R.string.home_action_products, Icons.Rounded.AccountBalanceWallet, onManageAccounts),
         QuickAction(R.string.home_action_movements, Icons.AutoMirrored.Rounded.ReceiptLong, onOpenTransactions),
     )
     LazyColumn(
@@ -248,7 +228,7 @@ private fun DashboardContent(
         verticalArrangement = Arrangement.spacedBy(PocketSpacing.xl),
     ) {
         item { AccountWalletCarousel(summary, accounts, onOpenProduct) }
-        item { CaptureCard(onClick = { onCreateTransaction(TransactionType.EXPENSE) }) }
+        item { CaptureCard(onClick = onStartRecord) }
         item {
             Text(
                 text = stringResource(R.string.home_quick_actions_title),
@@ -659,11 +639,10 @@ private fun HomePreview() {
                     monthlyExpense = Money(1_350_000, CurrencyCode.COP),
                 ),
             ),
-            onOpenProfile = {},
             onOpenTransactions = {},
             onCreateTransaction = {},
             onManageAccounts = {},
-            onOpenAnalysis = {},
+            onStartRecord = {},
             onOpenProduct = {},
         )
     }

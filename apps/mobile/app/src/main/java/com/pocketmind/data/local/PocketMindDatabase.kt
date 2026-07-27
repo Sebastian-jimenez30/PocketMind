@@ -19,6 +19,8 @@ import com.pocketmind.data.local.entity.RecurringObligationEntity
 import com.pocketmind.data.local.entity.SavingsPlanEntity
 import com.pocketmind.data.local.entity.SavingsMovementEntity
 import com.pocketmind.data.local.entity.SavingsProfileEntity
+import com.pocketmind.data.local.entity.LoanPaymentEntity
+import com.pocketmind.data.local.entity.LoanProfileEntity
 import com.pocketmind.data.local.entity.TransactionEntity
 
 @Database(
@@ -35,8 +37,10 @@ import com.pocketmind.data.local.entity.TransactionEntity
         CreditCardPaymentEntity::class,
         SavingsProfileEntity::class,
         SavingsMovementEntity::class,
+        LoanProfileEntity::class,
+        LoanPaymentEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class PocketMindDatabase : RoomDatabase() {
@@ -137,6 +141,43 @@ abstract class PocketMindDatabase : RoomDatabase() {
                 database.execSQL(
                     "INSERT OR IGNORE INTO `accounts` (`id`, `name`, `type`, `currency`, `openingBalanceMinorUnits`, `isArchived`) " +
                         "SELECT `id`, `name`, 'LOAN', `currency`, `outstandingBalanceMinorUnits`, 0 FROM `debts`",
+                )
+            }
+        }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `loan_profiles` (`accountId` TEXT NOT NULL, " +
+                        "`annualInterestBasisPoints` INTEGER NOT NULL, `monthlyPaymentMinorUnits` INTEGER NOT NULL, " +
+                        "`currency` TEXT NOT NULL, `paymentDueDay` INTEGER NOT NULL, " +
+                        "`openedAtEpochMillis` INTEGER NOT NULL, PRIMARY KEY(`accountId`), " +
+                        "FOREIGN KEY(`accountId`) REFERENCES `accounts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)",
+                )
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `loan_payments` (`id` TEXT NOT NULL, `accountId` TEXT NOT NULL, " +
+                        "`amountMinorUnits` INTEGER NOT NULL, `currency` TEXT NOT NULL, " +
+                        "`paidAtEpochMillis` INTEGER NOT NULL, `sourceAccountId` TEXT, `note` TEXT, " +
+                        "PRIMARY KEY(`id`), FOREIGN KEY(`accountId`) REFERENCES `accounts`(`id`) " +
+                        "ON UPDATE NO ACTION ON DELETE CASCADE)",
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_loan_payments_accountId` ON `loan_payments` (`accountId`)",
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_loan_payments_paidAtEpochMillis` ON `loan_payments` (`paidAtEpochMillis`)",
+                )
+                database.execSQL(
+                    "INSERT OR IGNORE INTO `loan_profiles` " +
+                        "(`accountId`, `annualInterestBasisPoints`, `monthlyPaymentMinorUnits`, `currency`, " +
+                        "`paymentDueDay`, `openedAtEpochMillis`) " +
+                        "SELECT `accounts`.`id`, COALESCE(`debts`.`interestRateAnnualBasisPoints`, 0), " +
+                        "COALESCE(`debts`.`installmentAmountMinorUnits`, 0), `accounts`.`currency`, " +
+                        "COALESCE(`debts`.`dueDayOfMonth`, 1), " +
+                        "COALESCE((SELECT `completedAtEpochMillis` FROM `financial_setup` WHERE `id` = 1), " +
+                        "CAST(strftime('%s','now') AS INTEGER) * 1000) " +
+                        "FROM `accounts` LEFT JOIN `debts` ON `debts`.`id` = `accounts`.`id` " +
+                        "WHERE `accounts`.`type` = 'LOAN'",
                 )
             }
         }

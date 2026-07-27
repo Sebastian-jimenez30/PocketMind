@@ -131,6 +131,51 @@ data class CreditCardOverview(
     val paidInstallments: Map<String, Int>,
 )
 
+data class SavingsDailyBalance(
+    val atEpochMillis: Long,
+    val balance: Money,
+    val estimatedYield: Money,
+)
+
+data class LoanProfile(
+    val accountId: String,
+    val annualInterestBasisPoints: Int,
+    val monthlyPayment: Money,
+    val paymentDueDay: Int,
+    val openedAtEpochMillis: Long,
+) {
+    init {
+        require(accountId.isNotBlank())
+        require(annualInterestBasisPoints >= 0)
+        require(monthlyPayment.minorUnits >= 0)
+        require(paymentDueDay in 1..31)
+        require(openedAtEpochMillis > 0)
+    }
+}
+
+data class LoanPayment(
+    val id: String,
+    val accountId: String,
+    val amount: Money,
+    val paidAtEpochMillis: Long,
+    val sourceAccountId: String?,
+    val note: String?,
+) {
+    init {
+        require(id.isNotBlank())
+        require(accountId.isNotBlank())
+        require(amount.isPositive)
+        require(paidAtEpochMillis > 0)
+    }
+}
+
+data class LoanOverview(
+    val profile: LoanProfile,
+    val currentDebt: Money,
+    val nextPayment: Money,
+    val estimatedInterest: Money,
+)
+
 data class SavingsProjection(
     val currentBalance: Money,
     val contributedBalance: Money,
@@ -242,6 +287,83 @@ fun calculateSavingsProjection(
     )
 }
 
+fun calculateSavingsDailyProgress(
+    profile: SavingsProfile,
+    openingBalance: Money,
+    movements: List<SavingsMovement>,
+    fromEpochMillis: Long,
+    toEpochMillis: Long,
+): List<SavingsDailyBalance> {
+    require(fromEpochMillis <= toEpochMillis)
+    val start = maxOf(fromEpochMillis, profile.openedAtEpochMillis)
+    return generateSequence(start) { previous ->
+        (previous + MILLIS_PER_DAY_LONG).takeIf { it <= toEpochMillis }
+    }.map { timestamp ->
+        val projection = calculateSavingsProjection(profile, openingBalance, movements, timestamp)
+        SavingsDailyBalance(
+            atEpochMillis = timestamp,
+            balance = projection.currentBalance,
+            estimatedYield = projection.estimatedYield,
+        )
+    }.toList().let { progress ->
+        if (progress.lastOrNull()?.atEpochMillis == toEpochMillis) {
+            progress
+        } else {
+            progress + calculateSavingsProjection(
+                profile,
+                openingBalance,
+                movements,
+                toEpochMillis,
+            ).let { projection ->
+                SavingsDailyBalance(toEpochMillis, projection.currentBalance, projection.estimatedYield)
+            }
+        }
+    }
+}
+
+fun calculateLoanOverview(
+    profile: LoanProfile,
+    openingDebt: Money,
+    payments: List<LoanPayment>,
+    atEpochMillis: Long,
+): LoanOverview {
+    var debt = openingDebt.minorUnits.toDouble()
+    var lastTimestamp = profile.openedAtEpochMillis
+    val annualRate = profile.annualInterestBasisPoints / 10_000.0
+    val loanPayments = payments
+        .filter { it.accountId == profile.accountId && it.paidAtEpochMillis <= atEpochMillis }
+        .sortedBy { it.paidAtEpochMillis }
+
+    fun accrue(until: Long) {
+        if (until <= lastTimestamp || debt <= 0 || annualRate == 0.0) {
+            lastTimestamp = maxOf(lastTimestamp, until)
+            return
+        }
+        val days = (until - lastTimestamp).toDouble() / MILLIS_PER_DAY
+        debt *= (1.0 + annualRate).pow(days / 365.0)
+        lastTimestamp = until
+    }
+
+    loanPayments.forEach { payment ->
+        accrue(payment.paidAtEpochMillis)
+        debt = (debt - payment.amount.minorUnits).coerceAtLeast(0.0)
+    }
+    accrue(atEpochMillis)
+
+    val paid = loanPayments.sumOf { it.amount.minorUnits }
+    val currentDebt = debt.toLong().coerceAtLeast(0)
+    val interest = (currentDebt - openingDebt.minorUnits + paid).coerceAtLeast(0)
+    return LoanOverview(
+        profile = profile,
+        currentDebt = Money(currentDebt, openingDebt.currency),
+        nextPayment = Money(
+            profile.monthlyPayment.minorUnits.coerceAtMost(currentDebt),
+            openingDebt.currency,
+        ),
+        estimatedInterest = Money(interest, openingDebt.currency),
+    )
+}
+
 private fun monthlyRate(annualBasisPoints: Int): Double {
     if (annualBasisPoints == 0) return 0.0
     val annualRate = annualBasisPoints / 10_000.0
@@ -249,3 +371,4 @@ private fun monthlyRate(annualBasisPoints: Int): Double {
 }
 
 private const val MILLIS_PER_DAY = 86_400_000.0
+private const val MILLIS_PER_DAY_LONG = 86_400_000L

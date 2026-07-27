@@ -8,6 +8,7 @@ import com.pocketmind.shared.domain.model.Money
 import com.pocketmind.shared.domain.model.TransactionType
 import com.pocketmind.shared.domain.model.calculateCreditCardOverview
 import com.pocketmind.shared.domain.model.calculateSavingsProjection
+import com.pocketmind.shared.domain.model.calculateLoanOverview
 import com.pocketmind.shared.domain.usecase.ManualFinanceUseCases
 import com.pocketmind.shared.domain.repository.TransactionRepository
 import com.pocketmind.shared.domain.usecase.ObserveActiveFinancialAccountsUseCase
@@ -37,6 +38,8 @@ class AccountsViewModel @Inject constructor(
         manualFinance.observeCreditCardPayments(),
         manualFinance.observeSavingsProfiles(),
         manualFinance.observeSavingsMovements(),
+        manualFinance.observeLoanProfiles(),
+        manualFinance.observeLoanPayments(),
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         val accounts = values[0] as List<FinancialAccount>
@@ -52,6 +55,10 @@ class AccountsViewModel @Inject constructor(
         val savings = values[5] as List<com.pocketmind.shared.domain.model.SavingsProfile>
         @Suppress("UNCHECKED_CAST")
         val savingsMovements = values[6] as List<com.pocketmind.shared.domain.model.SavingsMovement>
+        @Suppress("UNCHECKED_CAST")
+        val loanProfiles = values[7] as List<com.pocketmind.shared.domain.model.LoanProfile>
+        @Suppress("UNCHECKED_CAST")
+        val loanPayments = values[8] as List<com.pocketmind.shared.domain.model.LoanPayment>
         accounts.map { account ->
             val amount = when (account.type) {
                 FinancialAccountType.CREDIT_CARD -> cards.firstOrNull { it.accountId == account.id }?.let { profile ->
@@ -64,6 +71,14 @@ class AccountsViewModel @Inject constructor(
                         savingsMovements,
                         System.currentTimeMillis(),
                     ).currentBalance
+                } ?: account.openingBalance
+                FinancialAccountType.LOAN -> loanProfiles.firstOrNull { it.accountId == account.id }?.let { profile ->
+                    calculateLoanOverview(
+                        profile,
+                        account.openingBalance,
+                        loanPayments,
+                        System.currentTimeMillis(),
+                    ).currentDebt
                 } ?: account.openingBalance
                 else -> {
                     val accountTransactions = transactions.filter { it.accountId == account.id }
