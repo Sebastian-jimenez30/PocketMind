@@ -51,6 +51,7 @@ private fun TransactionEntity.toDomain() = FinancialTransaction(
     TransactionSource.valueOf(source),
     TransactionStatus.valueOf(status),
     relatedAccountId,
+    manualRevision,
 )
 private fun FinancialTransaction.toEntity() = TransactionEntity(
     id,
@@ -65,4 +66,5 @@ private fun FinancialTransaction.toEntity() = TransactionEntity(
     source.name,
     status.name,
     relatedAccountId,
+    manualRevision,
 )

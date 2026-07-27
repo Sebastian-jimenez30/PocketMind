@@ -1,6 +1,7 @@
 package com.pocketmind.data.local.entity
 
 import androidx.room.Entity
+import androidx.room.ColumnInfo
 import androidx.room.PrimaryKey
 import kotlinx.serialization.Serializable
 
@@ -13,4 +14,6 @@ data class AccountEntity(
     val currency: String,
     val openingBalanceMinorUnits: Long,
     val isArchived: Boolean,
+    @ColumnInfo(defaultValue = "'[]'")
+    val aliasesJson: String = "[]",
 )

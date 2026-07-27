@@ -118,11 +118,20 @@ deuda para evitar duplicar flujos internos.
 - Para tasa cero, la cuota es `principal / cuotas`.
 - Con tasa, se usa una cuota fija calculada con la tasa mensual equivalente de
   la tasa efectiva anual.
+- Una compra puede conservar periodos promocionales inclusivos. Por ejemplo,
+  cuotas 1 a 3 con tasa cero y las restantes con la tasa vigente de la tarjeta.
+  Cuando cambia la tasa entre periodos, el saldo pendiente se reamortiza de
+  forma determinista para las cuotas restantes.
+- Cada cronograma conserva `calculationRuleVersion`; cambiar el algoritmo exige
+  una nueva versión y no reinterpreta compras históricas.
 - La deuda actual es deuda inicial más valores financiados menos pagos.
 - Los pagos se distribuyen cronológicamente entre cuotas pendientes. Cuando
   todas las cuotas de una compra quedan cubiertas, se muestra como pagada.
 - El cupo disponible nunca puede quedar por debajo de cero y una compra que
   supera el cupo se rechaza.
+- Los pagos distinguen `SCHEDULED_INSTALLMENT`, `FULL_BALANCE`,
+  `EXTRA_PRINCIPAL` y `CUSTOM`. En cuota o pago total el dominio obtiene el
+  valor desde el estado vigente; un monto contradictorio se rechaza.
 
 Los valores son estimaciones de organización personal. El extracto oficial del
 banco prevalece porque pueden existir seguros, impuestos, avances o reglas
@@ -155,6 +164,20 @@ de pago y fecha de apertura. PocketMind aplica la tasa E.A. de forma equivalente
 al tiempo transcurrido, descuenta cada pago o abono en su fecha y muestra deuda,
 interés estimado y próximo pago. Es una estimación organizativa; el extracto de
 la entidad sigue siendo la fuente contractual.
+
+Los pagos de préstamo usan los mismos tipos explícitos de tarjeta. Cuota y saldo
+total se calculan en el dominio; los abonos extraordinarios requieren un monto.
+
+### Referencias y flujo de dinero
+
+- Cada producto puede guardar alias confirmados, únicos sin distinguir
+  mayúsculas, como «mi Bancolombia».
+- La resolución prioriza nombre exacto, luego alias; una coincidencia múltiple
+  nunca se elige automáticamente.
+- Depósitos de ahorro conservan el producto origen y retiros el producto
+  destino. Tarjetas y préstamos conservan el producto que financia el pago.
+- Cada edición explícita incrementa `manualRevision`. Los clasificadores futuros
+  no pueden reemplazar campos corregidos cuando esta revisión sea mayor que cero.
 
 ## Experiencia
 
@@ -189,6 +212,8 @@ la entidad sigue siendo la fuente contractual.
   del onboarding en productos visibles.
 - La migración Room `3 → 4` incorpora perfiles y pagos de préstamo sin eliminar
   los productos existentes.
+- La migración Room `5 → 6` agrega alias, promociones, tipos de pago y versiones
+  de reglas con valores retrocompatibles.
 - Las futuras notificaciones crearán candidatos revisables que, después de la
   confirmación, escribirán en los mismos contratos del dominio.
 
@@ -196,12 +221,12 @@ la entidad sigue siendo la fuente contractual.
 
 | Componente | Casos |
 |---|---|
-| Cuotas | tasa cero; tasa positiva; varias compras; compra finalizada |
-| Tarjeta | deuda inicial; cupo; pago parcial; pago total; exceso de cupo |
+| Cuotas | tasa cero; tasa positiva; periodo promocional; varias compras; compra finalizada |
+| Tarjeta | deuda inicial; cupo; cuota; abono; pago total; exceso de cupo |
 | Ahorro | sin tasa; rendimiento anual; progreso diario; aporte; retiro; cambio de tasa |
 | Préstamo | tasa; interés acumulado; cuota; abono parcial; pago total |
 | Transferencia | origen disminuye; destino aumenta; no altera ingresos/gastos |
-| Room | migraciones 2→3 y 3→4; claves foráneas; datos del onboarding conservados |
+| Room | migraciones 2→3, 3→4 y 5→6; claves foráneas; datos previos conservados |
 | UI | vacío, contenido, error, texto ampliado, oscuro y teclado abierto |
 
 ## Límites conocidos antes de automatización

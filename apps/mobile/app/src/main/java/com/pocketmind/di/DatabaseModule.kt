@@ -28,6 +28,7 @@ object DatabaseModule {
             .addMigrations(PocketMindDatabase.MIGRATION_2_3)
             .addMigrations(PocketMindDatabase.MIGRATION_3_4)
             .addMigrations(PocketMindDatabase.MIGRATION_4_5)
+            .addMigrations(PocketMindDatabase.MIGRATION_5_6)
             .addCallback(
                 object : RoomDatabase.Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) {

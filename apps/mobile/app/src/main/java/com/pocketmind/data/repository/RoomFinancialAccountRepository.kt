@@ -6,6 +6,7 @@ import com.pocketmind.shared.domain.model.CurrencyCode
 import com.pocketmind.shared.domain.model.FinancialAccount
 import com.pocketmind.shared.domain.model.FinancialAccountType
 import com.pocketmind.shared.domain.model.Money
+import com.pocketmind.shared.domain.model.ProductAliasCodec
 import com.pocketmind.shared.domain.repository.FinancialAccountRepository
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
@@ -29,6 +30,7 @@ private fun AccountEntity.toDomain() = FinancialAccount(
     type = FinancialAccountType.valueOf(type),
     currency = CurrencyCode.valueOf(currency),
     openingBalance = Money(openingBalanceMinorUnits, CurrencyCode.valueOf(currency)),
+    aliases = ProductAliasCodec.decode(aliasesJson),
     isArchived = isArchived,
 )
 
@@ -39,4 +41,5 @@ internal fun FinancialAccount.toAccountEntity() = AccountEntity(
     currency = currency.name,
     openingBalanceMinorUnits = openingBalance.minorUnits,
     isArchived = isArchived,
+    aliasesJson = ProductAliasCodec.encode(aliases),
 )

@@ -14,9 +14,11 @@ import com.pocketmind.data.local.entity.LoanProfileEntity
 import com.pocketmind.shared.domain.model.CreditCardPayment
 import com.pocketmind.shared.domain.model.CreditCardProfile
 import com.pocketmind.shared.domain.model.CurrencyCode
+import com.pocketmind.shared.domain.model.DebtPaymentType
 import com.pocketmind.shared.domain.model.FinancialAccount
 import com.pocketmind.shared.domain.model.FinancialProductConfiguration
 import com.pocketmind.shared.domain.model.InstallmentPurchase
+import com.pocketmind.shared.domain.model.InstallmentRatePeriodCodec
 import com.pocketmind.shared.domain.model.FinancialTransaction
 import com.pocketmind.shared.domain.model.Money
 import com.pocketmind.shared.domain.model.LoanPayment
@@ -144,6 +146,7 @@ private fun CreditCardProfileEntity.toDomain() = CreditCardProfile(
     paymentDueDay = paymentDueDay,
     openingDebtInstallmentCount = openingDebtInstallmentCount,
     openingDebtFirstPaymentAtEpochMillis = openingDebtFirstPaymentAtEpochMillis,
+    scheduleRuleVersion = scheduleRuleVersion,
 )
 
 private fun CreditCardProfile.toEntity() = CreditCardProfileEntity(
@@ -155,6 +158,7 @@ private fun CreditCardProfile.toEntity() = CreditCardProfileEntity(
     paymentDueDay = paymentDueDay,
     openingDebtInstallmentCount = openingDebtInstallmentCount,
     openingDebtFirstPaymentAtEpochMillis = openingDebtFirstPaymentAtEpochMillis,
+    scheduleRuleVersion = scheduleRuleVersion,
 )
 
 private fun InstallmentPurchaseEntity.toDomain() = InstallmentPurchase(
@@ -168,6 +172,8 @@ private fun InstallmentPurchaseEntity.toDomain() = InstallmentPurchase(
     firstPaymentAtEpochMillis = firstPaymentAtEpochMillis,
     categoryId = categoryId,
     note = note,
+    promotionalRatePeriods = InstallmentRatePeriodCodec.decode(promotionalRatePeriodsJson),
+    calculationRuleVersion = calculationRuleVersion,
 )
 
 private fun InstallmentPurchase.toEntity() = InstallmentPurchaseEntity(
@@ -182,6 +188,8 @@ private fun InstallmentPurchase.toEntity() = InstallmentPurchaseEntity(
     firstPaymentAtEpochMillis = firstPaymentAtEpochMillis,
     categoryId = categoryId,
     note = note,
+    promotionalRatePeriodsJson = InstallmentRatePeriodCodec.encode(promotionalRatePeriods),
+    calculationRuleVersion = calculationRuleVersion,
 )
 
 private fun CreditCardPaymentEntity.toDomain() = CreditCardPayment(
@@ -191,6 +199,8 @@ private fun CreditCardPaymentEntity.toDomain() = CreditCardPayment(
     paidAtEpochMillis = paidAtEpochMillis,
     sourceAccountId = sourceAccountId,
     note = note,
+    type = DebtPaymentType.valueOf(paymentType),
+    calculationRuleVersion = calculationRuleVersion,
 )
 
 private fun CreditCardPayment.toEntity() = CreditCardPaymentEntity(
@@ -201,6 +211,8 @@ private fun CreditCardPayment.toEntity() = CreditCardPaymentEntity(
     paidAtEpochMillis = paidAtEpochMillis,
     sourceAccountId = sourceAccountId,
     note = note,
+    paymentType = type.name,
+    calculationRuleVersion = calculationRuleVersion,
 )
 
 private fun SavingsProfileEntity.toDomain() = SavingsProfile(
@@ -209,6 +221,7 @@ private fun SavingsProfileEntity.toDomain() = SavingsProfile(
     annualYieldBasisPoints = annualYieldBasisPoints,
     openedAtEpochMillis = openedAtEpochMillis,
     maturityAtEpochMillis = maturityAtEpochMillis,
+    calculationRuleVersion = calculationRuleVersion,
 )
 
 private fun SavingsProfile.toEntity() = SavingsProfileEntity(
@@ -217,6 +230,7 @@ private fun SavingsProfile.toEntity() = SavingsProfileEntity(
     annualYieldBasisPoints = annualYieldBasisPoints,
     openedAtEpochMillis = openedAtEpochMillis,
     maturityAtEpochMillis = maturityAtEpochMillis,
+    calculationRuleVersion = calculationRuleVersion,
 )
 
 private fun SavingsMovementEntity.toDomain() = SavingsMovement(
@@ -227,6 +241,7 @@ private fun SavingsMovementEntity.toDomain() = SavingsMovement(
     annualYieldBasisPoints = annualYieldBasisPoints,
     occurredAtEpochMillis = occurredAtEpochMillis,
     note = note,
+    calculationRuleVersion = calculationRuleVersion,
 )
 
 private fun SavingsMovement.toEntity() = SavingsMovementEntity(
@@ -238,6 +253,7 @@ private fun SavingsMovement.toEntity() = SavingsMovementEntity(
     annualYieldBasisPoints = annualYieldBasisPoints,
     occurredAtEpochMillis = occurredAtEpochMillis,
     note = note,
+    calculationRuleVersion = calculationRuleVersion,
 )
 
 private fun LoanProfileEntity.toDomain() = LoanProfile(
@@ -246,6 +262,7 @@ private fun LoanProfileEntity.toDomain() = LoanProfile(
     monthlyPayment = Money(monthlyPaymentMinorUnits, CurrencyCode.valueOf(currency)),
     paymentDueDay = paymentDueDay,
     openedAtEpochMillis = openedAtEpochMillis,
+    scheduleRuleVersion = scheduleRuleVersion,
 )
 
 private fun LoanProfile.toEntity() = LoanProfileEntity(
@@ -255,6 +272,7 @@ private fun LoanProfile.toEntity() = LoanProfileEntity(
     currency = monthlyPayment.currency.name,
     paymentDueDay = paymentDueDay,
     openedAtEpochMillis = openedAtEpochMillis,
+    scheduleRuleVersion = scheduleRuleVersion,
 )
 
 private fun LoanPaymentEntity.toDomain() = LoanPayment(
@@ -264,6 +282,8 @@ private fun LoanPaymentEntity.toDomain() = LoanPayment(
     paidAtEpochMillis = paidAtEpochMillis,
     sourceAccountId = sourceAccountId,
     note = note,
+    type = DebtPaymentType.valueOf(paymentType),
+    calculationRuleVersion = calculationRuleVersion,
 )
 
 private fun LoanPayment.toEntity() = LoanPaymentEntity(
@@ -274,4 +294,6 @@ private fun LoanPayment.toEntity() = LoanPaymentEntity(
     paidAtEpochMillis = paidAtEpochMillis,
     sourceAccountId = sourceAccountId,
     note = note,
+    paymentType = type.name,
+    calculationRuleVersion = calculationRuleVersion,
 )

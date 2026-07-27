@@ -45,7 +45,7 @@ import com.pocketmind.data.local.entity.SyncOutboxEntity
         SyncOutboxEntity::class,
         SyncControlEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class PocketMindDatabase : RoomDatabase() {
@@ -57,7 +57,8 @@ abstract class PocketMindDatabase : RoomDatabase() {
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
-            override fun migrate(database: SupportSQLiteDatabase) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val database = db
                 database.execSQL(
                     "CREATE TABLE IF NOT EXISTS `financial_setup` (`id` INTEGER NOT NULL, " +
                         "`completedAtEpochMillis` INTEGER NOT NULL, PRIMARY KEY(`id`))",
@@ -91,7 +92,8 @@ abstract class PocketMindDatabase : RoomDatabase() {
         }
 
         val MIGRATION_2_3 = object : Migration(2, 3) {
-            override fun migrate(database: SupportSQLiteDatabase) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val database = db
                 database.execSQL("ALTER TABLE `transactions` ADD COLUMN `relatedAccountId` TEXT")
                 database.execSQL(
                     "CREATE TABLE IF NOT EXISTS `credit_card_profiles` (`accountId` TEXT NOT NULL, " +
@@ -152,7 +154,8 @@ abstract class PocketMindDatabase : RoomDatabase() {
         }
 
         val MIGRATION_3_4 = object : Migration(3, 4) {
-            override fun migrate(database: SupportSQLiteDatabase) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val database = db
                 database.execSQL(
                     "CREATE TABLE IF NOT EXISTS `loan_profiles` (`accountId` TEXT NOT NULL, " +
                         "`annualInterestBasisPoints` INTEGER NOT NULL, `monthlyPaymentMinorUnits` INTEGER NOT NULL, " +
@@ -189,7 +192,8 @@ abstract class PocketMindDatabase : RoomDatabase() {
         }
 
         val MIGRATION_4_5 = object : Migration(4, 5) {
-            override fun migrate(database: SupportSQLiteDatabase) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val database = db
                 database.execSQL(
                     "CREATE TABLE IF NOT EXISTS `sync_outbox` (" +
                         "`entityType` TEXT NOT NULL, `entityId` TEXT NOT NULL, `operation` TEXT NOT NULL, " +
@@ -203,6 +207,55 @@ abstract class PocketMindDatabase : RoomDatabase() {
                         "`lastSyncedAtEpochMillis` INTEGER, `lastError` TEXT, PRIMARY KEY(`id`))",
                 )
                 ensureSyncInfrastructure(database)
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `accounts` ADD COLUMN `aliasesJson` TEXT NOT NULL DEFAULT '[]'")
+                db.execSQL(
+                    "ALTER TABLE `transactions` ADD COLUMN `manualRevision` INTEGER NOT NULL DEFAULT 0",
+                )
+                db.execSQL(
+                    "ALTER TABLE `credit_card_profiles` ADD COLUMN " +
+                        "`scheduleRuleVersion` INTEGER NOT NULL DEFAULT 1",
+                )
+                db.execSQL(
+                    "ALTER TABLE `installment_purchases` ADD COLUMN " +
+                        "`promotionalRatePeriodsJson` TEXT NOT NULL DEFAULT '[]'",
+                )
+                db.execSQL(
+                    "ALTER TABLE `installment_purchases` ADD COLUMN " +
+                        "`calculationRuleVersion` INTEGER NOT NULL DEFAULT 1",
+                )
+                db.execSQL(
+                    "ALTER TABLE `credit_card_payments` ADD COLUMN " +
+                        "`paymentType` TEXT NOT NULL DEFAULT 'CUSTOM'",
+                )
+                db.execSQL(
+                    "ALTER TABLE `credit_card_payments` ADD COLUMN " +
+                        "`calculationRuleVersion` INTEGER NOT NULL DEFAULT 1",
+                )
+                db.execSQL(
+                    "ALTER TABLE `savings_profiles` ADD COLUMN " +
+                        "`calculationRuleVersion` INTEGER NOT NULL DEFAULT 1",
+                )
+                db.execSQL(
+                    "ALTER TABLE `savings_movements` ADD COLUMN " +
+                        "`calculationRuleVersion` INTEGER NOT NULL DEFAULT 1",
+                )
+                db.execSQL(
+                    "ALTER TABLE `loan_profiles` ADD COLUMN " +
+                        "`scheduleRuleVersion` INTEGER NOT NULL DEFAULT 1",
+                )
+                db.execSQL(
+                    "ALTER TABLE `loan_payments` ADD COLUMN " +
+                        "`paymentType` TEXT NOT NULL DEFAULT 'CUSTOM'",
+                )
+                db.execSQL(
+                    "ALTER TABLE `loan_payments` ADD COLUMN " +
+                        "`calculationRuleVersion` INTEGER NOT NULL DEFAULT 1",
+                )
             }
         }
 

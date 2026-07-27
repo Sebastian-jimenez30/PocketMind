@@ -1,6 +1,7 @@
 package com.pocketmind.data.local.entity
 
 import androidx.room.Entity
+import androidx.room.ColumnInfo
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -27,6 +28,8 @@ data class CreditCardProfileEntity(
     val paymentDueDay: Int,
     val openingDebtInstallmentCount: Int,
     val openingDebtFirstPaymentAtEpochMillis: Long?,
+    @ColumnInfo(defaultValue = "1")
+    val scheduleRuleVersion: Int = 1,
 )
 
 @Serializable
@@ -54,6 +57,10 @@ data class InstallmentPurchaseEntity(
     val firstPaymentAtEpochMillis: Long,
     val categoryId: String?,
     val note: String?,
+    @ColumnInfo(defaultValue = "'[]'")
+    val promotionalRatePeriodsJson: String = "[]",
+    @ColumnInfo(defaultValue = "1")
+    val calculationRuleVersion: Int = 1,
 )
 
 @Serializable
@@ -77,6 +84,10 @@ data class CreditCardPaymentEntity(
     val paidAtEpochMillis: Long,
     val sourceAccountId: String?,
     val note: String?,
+    @ColumnInfo(defaultValue = "'CUSTOM'")
+    val paymentType: String = "CUSTOM",
+    @ColumnInfo(defaultValue = "1")
+    val calculationRuleVersion: Int = 1,
 )
 
 @Serializable
@@ -97,6 +108,8 @@ data class SavingsProfileEntity(
     val annualYieldBasisPoints: Int,
     val openedAtEpochMillis: Long,
     val maturityAtEpochMillis: Long?,
+    @ColumnInfo(defaultValue = "1")
+    val calculationRuleVersion: Int = 1,
 )
 
 @Serializable
@@ -121,6 +134,8 @@ data class SavingsMovementEntity(
     val annualYieldBasisPoints: Int?,
     val occurredAtEpochMillis: Long,
     val note: String?,
+    @ColumnInfo(defaultValue = "1")
+    val calculationRuleVersion: Int = 1,
 )
 
 @Serializable
@@ -142,6 +157,8 @@ data class LoanProfileEntity(
     val currency: String,
     val paymentDueDay: Int,
     val openedAtEpochMillis: Long,
+    @ColumnInfo(defaultValue = "1")
+    val scheduleRuleVersion: Int = 1,
 )
 
 @Serializable
@@ -165,4 +182,8 @@ data class LoanPaymentEntity(
     val paidAtEpochMillis: Long,
     val sourceAccountId: String?,
     val note: String?,
+    @ColumnInfo(defaultValue = "'CUSTOM'")
+    val paymentType: String = "CUSTOM",
+    @ColumnInfo(defaultValue = "1")
+    val calculationRuleVersion: Int = 1,
 )
