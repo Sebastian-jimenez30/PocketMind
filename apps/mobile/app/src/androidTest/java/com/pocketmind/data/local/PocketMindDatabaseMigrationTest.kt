@@ -51,6 +51,38 @@ class PocketMindDatabaseMigrationTest {
         migrated.close()
     }
 
+    @Test
+    fun migration3To4_createsLoanProfileForExistingLoanProduct() {
+        helper.createDatabase("migration-loan-test", 3).apply {
+            execSQL(
+                "INSERT INTO financial_setup (id, completedAtEpochMillis) VALUES (1, 1000000)",
+            )
+            execSQL(
+                "INSERT INTO accounts " +
+                    "(id, name, type, currency, openingBalanceMinorUnits, isArchived) " +
+                    "VALUES ('loan', 'Libre inversión', 'LOAN', 'COP', 5000000, 0)",
+            )
+            execSQL(
+                "INSERT INTO debts " +
+                    "(id, name, outstandingBalanceMinorUnits, currency, interestRateAnnualBasisPoints, " +
+                    "installmentAmountMinorUnits, dueDayOfMonth, nextDueAtEpochMillis, isActive) " +
+                    "VALUES ('loan', 'Libre inversión', 5000000, 'COP', 1800, 350000, 20, NULL, 1)",
+            )
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(
+            "migration-loan-test",
+            4,
+            true,
+            PocketMindDatabase.MIGRATION_3_4,
+        )
+
+        assertEquals(1, migrated.singleLong("SELECT COUNT(*) FROM loan_profiles WHERE accountId = 'loan'"))
+        assertEquals(350000, migrated.singleLong("SELECT monthlyPaymentMinorUnits FROM loan_profiles WHERE accountId = 'loan'"))
+        migrated.close()
+    }
+
     private fun SupportSQLiteDatabase.singleLong(query: String): Long =
         this.query(query).use { cursor ->
             check(cursor.moveToFirst())

@@ -64,7 +64,9 @@ class TransactionEditorViewModel @Inject constructor(
         viewModelScope.launch {
             observeAccounts().collect { accounts ->
                 val manualAccounts = accounts.filter {
-                    it.type != FinancialAccountType.CREDIT_CARD && it.type != FinancialAccountType.SAVINGS
+                    it.type != FinancialAccountType.CREDIT_CARD &&
+                        it.type != FinancialAccountType.SAVINGS &&
+                        it.type != FinancialAccountType.LOAN
                 }
                 _uiState.update { state ->
                     state.copy(
@@ -102,7 +104,7 @@ class TransactionEditorViewModel @Inject constructor(
         val amount = state.amount.toLongOrNull()?.takeIf { it > 0 }
         val occurredAt = state.date.parseDisplayDate()
         if (amount == null || state.accountId.isBlank() || occurredAt == null) {
-            _uiState.update { it.copy(error = "Completa una cuenta y un valor mayor que cero.") }
+            _uiState.update { it.copy(error = "Completa un producto y un valor mayor que cero.") }
             return
         }
         viewModelScope.launch {

@@ -25,6 +25,7 @@ import androidx.compose.material.icons.rounded.CreditCard
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Percent
 import androidx.compose.material.icons.rounded.Savings
+import androidx.compose.material.icons.rounded.Payments
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -49,6 +50,7 @@ import com.pocketmind.shared.domain.model.FinancialAccountType
 import com.pocketmind.shared.domain.model.Money
 import com.pocketmind.shared.domain.model.SavingsMovement
 import com.pocketmind.shared.domain.model.SavingsMovementType
+import com.pocketmind.shared.domain.model.SavingsProductType
 import com.pocketmind.ui.components.PocketPrimaryButton
 import com.pocketmind.ui.theme.PocketSpacing
 import java.text.NumberFormat
@@ -91,6 +93,7 @@ private fun ProductDetailScreen(
                 )
                 account.type == FinancialAccountType.CREDIT_CARD -> CardProductContent(state, onAction)
                 account.type == FinancialAccountType.SAVINGS -> SavingsProductContent(state, onAction)
+                account.type == FinancialAccountType.LOAN -> LoanProductContent(state, onAction)
                 else -> StandardProductContent(state)
             }
         }
@@ -103,7 +106,7 @@ private fun ProductHeader(title: String, onBack: () -> Unit, onEdit: () -> Unit)
         Modifier.fillMaxWidth()
             .background(MaterialTheme.colorScheme.primary)
             .statusBarsPadding()
-            .padding(horizontal = PocketSpacing.md, vertical = PocketSpacing.sm),
+            .padding(horizontal = PocketSpacing.sm, vertical = PocketSpacing.xxs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onBack) {
@@ -112,7 +115,7 @@ private fun ProductHeader(title: String, onBack: () -> Unit, onEdit: () -> Unit)
         Text(
             title,
             modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -237,10 +240,14 @@ private fun SavingsProductContent(
                 icon = { Icon(Icons.Rounded.Savings, null, tint = MaterialTheme.colorScheme.secondary) },
                 title = stringResource(R.string.product_detail_saved),
                 primaryValue = money(projection?.currentBalance ?: account.openingBalance),
-                supporting = stringResource(
-                    R.string.product_detail_rate,
-                    ((projection?.annualYieldBasisPoints ?: 0) / 100.0).toString(),
-                ),
+                supporting = if (state.savingsProfile?.type == SavingsProductType.SIMPLE) {
+                    ""
+                } else {
+                    stringResource(
+                        R.string.product_detail_rate,
+                        ((projection?.annualYieldBasisPoints ?: 0) / 100.0).toString(),
+                    )
+                },
             ) {
                 SummaryStat(stringResource(R.string.product_detail_contributed), money(projection?.contributedBalance))
                 SummaryStat(stringResource(R.string.product_detail_yield), money(projection?.estimatedYield))
@@ -259,14 +266,37 @@ private fun SavingsProductContent(
                 ) { Text(stringResource(R.string.product_detail_withdraw)) }
             }
         }
-        item {
-            OutlinedButton(
-                onClick = { onAction(account.id, ManualActionType.SAVINGS_RATE) },
-                modifier = Modifier.fillMaxWidth().height(PocketSpacing.primaryButtonHeight),
-            ) {
-                Icon(Icons.Rounded.Percent, null)
-                Spacer(Modifier.width(PocketSpacing.xs))
-                Text(stringResource(R.string.product_detail_change_rate))
+        if (state.savingsProfile?.type != SavingsProductType.SIMPLE) {
+            item {
+                OutlinedButton(
+                    onClick = { onAction(account.id, ManualActionType.SAVINGS_RATE) },
+                    modifier = Modifier.fillMaxWidth().height(PocketSpacing.primaryButtonHeight),
+                ) {
+                    Icon(Icons.Rounded.Percent, null)
+                    Spacer(Modifier.width(PocketSpacing.xs))
+                    Text(stringResource(R.string.product_detail_change_rate))
+                }
+            }
+        }
+        if (state.savingsDailyProgress.isNotEmpty()) {
+            item { SectionTitle(stringResource(R.string.product_detail_daily_progress)) }
+            items(state.savingsDailyProgress, key = { it.atEpochMillis }) { day ->
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(PocketSpacing.md),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(date(day.atEpochMillis), style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                stringResource(R.string.product_detail_daily_yield, money(day.estimatedYield)),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Text(money(day.balance), fontWeight = FontWeight.SemiBold)
+                    }
+                }
             }
         }
         item { SectionTitle(stringResource(R.string.product_detail_history)) }
@@ -274,6 +304,64 @@ private fun SavingsProductContent(
             item { EmptyMessage(stringResource(R.string.product_detail_no_history)) }
         } else {
             items(state.savingsMovements, key = { it.id }) { movement -> SavingsMovementRow(movement) }
+        }
+    }
+}
+
+@Composable
+private fun LoanProductContent(
+    state: ProductDetailUiState,
+    onAction: (String, ManualActionType) -> Unit,
+) {
+    val account = state.account ?: return
+    val overview = state.loanOverview
+    LazyColumn(
+        contentPadding = PaddingValues(PocketSpacing.xl),
+        verticalArrangement = Arrangement.spacedBy(PocketSpacing.md),
+    ) {
+        item {
+            ProductSummaryCard(
+                icon = { Icon(Icons.Rounded.Payments, null, tint = MaterialTheme.colorScheme.primary) },
+                title = stringResource(R.string.product_detail_debt),
+                primaryValue = money(overview?.currentDebt ?: account.openingBalance),
+                supporting = overview?.profile?.let {
+                    stringResource(
+                        R.string.product_detail_loan_terms,
+                        (it.annualInterestBasisPoints / 100.0).toString(),
+                        it.paymentDueDay,
+                    )
+                }.orEmpty(),
+            ) {
+                SummaryStat(stringResource(R.string.product_detail_next_payment), money(overview?.nextPayment))
+                SummaryStat(stringResource(R.string.product_detail_interest), money(overview?.estimatedInterest))
+            }
+        }
+        item {
+            PocketPrimaryButton(
+                text = stringResource(R.string.product_detail_loan_payment),
+                onClick = { onAction(account.id, ManualActionType.LOAN_PAYMENT) },
+            )
+        }
+        item { SectionTitle(stringResource(R.string.product_detail_payments)) }
+        if (state.loanPayments.isEmpty()) {
+            item { EmptyMessage(stringResource(R.string.product_detail_no_history)) }
+        } else {
+            items(state.loanPayments, key = { it.id }) { payment ->
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(PocketSpacing.md),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.AutoMirrored.Rounded.TrendingUp, null, tint = MaterialTheme.colorScheme.secondary)
+                        Spacer(Modifier.width(PocketSpacing.sm))
+                        Column(Modifier.weight(1f)) {
+                            Text(stringResource(R.string.manual_action_loan_payment), style = MaterialTheme.typography.titleMedium)
+                            Text(date(payment.paidAtEpochMillis), style = MaterialTheme.typography.bodySmall)
+                        }
+                        Text(money(payment.amount), fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
         }
     }
 }
@@ -350,9 +438,16 @@ private fun ProductSummaryCard(
     ) {
         Column(Modifier.padding(PocketSpacing.lg), verticalArrangement = Arrangement.spacedBy(PocketSpacing.sm)) {
             icon()
-            Text(title, style = MaterialTheme.typography.bodyMedium)
-            Text(primaryValue, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold)
-            if (supporting.isNotBlank()) Text(supporting, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            Text(
+                primaryValue,
+                style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            if (supporting.isNotBlank()) {
+                Text(supporting, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.78f))
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(PocketSpacing.sm)) { stats() }
         }
     }

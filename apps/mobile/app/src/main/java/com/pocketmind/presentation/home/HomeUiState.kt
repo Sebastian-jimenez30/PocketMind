@@ -11,6 +11,7 @@ sealed interface HomeUiState {
         val summary: DashboardSummary,
         val accounts: List<AccountOverview> = emptyList(),
         val recentTransactions: List<FinancialTransaction> = emptyList(),
+        val displayName: String = "",
     ) : HomeUiState
 }
 

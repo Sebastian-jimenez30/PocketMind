@@ -1,5 +1,7 @@
 package com.pocketmind.presentation.home
 
+import com.pocketmind.data.profile.ProfileRepository
+import com.pocketmind.data.profile.ProfileSettings
 import com.pocketmind.shared.domain.model.CreditCardPayment
 import com.pocketmind.shared.domain.model.CreditCardProfile
 import com.pocketmind.shared.domain.model.FinancialAccount
@@ -7,6 +9,8 @@ import com.pocketmind.shared.domain.model.FinancialTransaction
 import com.pocketmind.shared.domain.model.InstallmentPurchase
 import com.pocketmind.shared.domain.model.SavingsMovement
 import com.pocketmind.shared.domain.model.SavingsProfile
+import com.pocketmind.shared.domain.model.LoanPayment
+import com.pocketmind.shared.domain.model.LoanProfile
 import com.pocketmind.shared.domain.repository.FinancialAccountRepository
 import com.pocketmind.shared.domain.repository.ManualFinanceRepository
 import com.pocketmind.shared.domain.repository.TransactionRepository
@@ -36,10 +40,14 @@ class HomeViewModelTest {
             override fun observeCreditCardPayments() = emptyFlow<List<CreditCardPayment>>()
             override fun observeSavingsProfiles() = emptyFlow<List<SavingsProfile>>()
             override fun observeSavingsMovements() = emptyFlow<List<SavingsMovement>>()
+            override fun observeLoanProfiles() = emptyFlow<List<LoanProfile>>()
+            override fun observeLoanPayments() = emptyFlow<List<LoanPayment>>()
             override suspend fun getCreditCardProfile(accountId: String): CreditCardProfile? = null
             override suspend fun getSavingsProfile(accountId: String): SavingsProfile? = null
+            override suspend fun getLoanProfile(accountId: String): LoanProfile? = null
             override suspend fun saveCreditCardProfile(profile: CreditCardProfile) = Unit
             override suspend fun saveSavingsProfile(profile: SavingsProfile) = Unit
+            override suspend fun saveLoanProfile(profile: LoanProfile) = Unit
             override suspend fun saveInstallmentPurchase(
                 purchase: InstallmentPurchase,
                 ledgerTransaction: FinancialTransaction,
@@ -52,12 +60,29 @@ class HomeViewModelTest {
                 movement: SavingsMovement,
                 ledgerTransaction: FinancialTransaction?,
             ) = Unit
+            override suspend fun saveLoanPayment(
+                payment: LoanPayment,
+                ledgerTransaction: FinancialTransaction,
+            ) = Unit
         }
 
         val viewModel = HomeViewModel(
             ObserveActiveFinancialAccountsUseCase(accounts),
             transactions,
             ManualFinanceUseCases(manualFinance),
+            object : ProfileRepository {
+                override suspend fun load() = ProfileSettings(
+                    email = "anderson@example.com",
+                    displayName = "Anderson",
+                    currencyCode = "COP",
+                    weekStartsOn = 1,
+                    monthlySummaryNotificationsEnabled = false,
+                )
+                override suspend fun save(settings: ProfileSettings) = Unit
+                override suspend fun changeEmail(email: String) = Unit
+                override suspend fun changePassword(password: String) = Unit
+                override suspend fun signOut() = Unit
+            },
         )
 
         assertEquals(HomeUiState.Loading, viewModel.uiState.value)

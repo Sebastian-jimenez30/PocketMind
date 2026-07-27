@@ -51,13 +51,14 @@ fun AnalysisRoute(onBack: () -> Unit, viewModel: AnalysisViewModel = hiltViewMod
 private fun AnalysisScreen(state: AnalysisUiState, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Row(
-            Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primary).statusBarsPadding().padding(PocketSpacing.md),
+            Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primary).statusBarsPadding()
+                .padding(horizontal = PocketSpacing.sm, vertical = PocketSpacing.xxs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.accounts_back), tint = MaterialTheme.colorScheme.onPrimary)
             }
-            Text(stringResource(R.string.analysis_title), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary)
+            Text(stringResource(R.string.analysis_title), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
         }
         if (state.isLoading) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }

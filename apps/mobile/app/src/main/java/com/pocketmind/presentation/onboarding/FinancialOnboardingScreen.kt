@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,6 +41,7 @@ import com.pocketmind.ui.components.PocketContentSheet
 import com.pocketmind.ui.components.PocketChoiceChip
 import com.pocketmind.ui.components.PocketMessage
 import com.pocketmind.ui.components.PocketPrimaryButton
+import com.pocketmind.ui.components.pocketBringIntoViewOnFocus
 import com.pocketmind.ui.theme.PocketSpacing
 
 @Composable
@@ -95,13 +97,17 @@ fun FinancialOnboardingScreen(
 @Composable
 private fun OnboardingHeader(step: Int) {
     Row(
-        modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(PocketSpacing.xl),
+        modifier = Modifier.fillMaxWidth().statusBarsPadding()
+            .padding(horizontal = PocketSpacing.lg, vertical = PocketSpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(PocketSpacing.md),
     ) {
-        PocketBrandMark(contentDescription = stringResource(R.string.brand_mark_description))
+        PocketBrandMark(
+            modifier = Modifier.size(42.dp),
+            contentDescription = stringResource(R.string.brand_mark_description),
+        )
         Column {
-            Text(stringResource(R.string.onboarding_header_title), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary)
+            Text(stringResource(R.string.onboarding_header_title), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
             Text(
                 stringResource(R.string.onboarding_progress, step + 1, 6),
                 style = MaterialTheme.typography.bodySmall,
@@ -200,7 +206,7 @@ private fun TextField(value: String, onChange: (String) -> Unit, label: Int, pla
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         singleLine = true,
         shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().pocketBringIntoViewOnFocus(),
     )
 }
 

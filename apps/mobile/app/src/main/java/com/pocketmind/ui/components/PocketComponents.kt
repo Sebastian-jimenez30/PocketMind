@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronRight
@@ -35,9 +37,13 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.composed
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
@@ -49,6 +55,25 @@ import androidx.compose.ui.unit.dp
 import com.pocketmind.R
 import com.pocketmind.ui.theme.PocketMindTheme
 import com.pocketmind.ui.theme.PocketSpacing
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+/**
+ * Keeps the focused field visible after the IME finishes resizing the window.
+ * Use together with a scrollable parent and `adjustResize`.
+ */
+fun Modifier.pocketBringIntoViewOnFocus(): Modifier = composed {
+    val requester = remember { BringIntoViewRequester() }
+    val scope = rememberCoroutineScope()
+    bringIntoViewRequester(requester).onFocusChanged { focusState ->
+        if (focusState.isFocused) {
+            scope.launch {
+                delay(250)
+                requester.bringIntoView()
+            }
+        }
+    }
+}
 
 @Composable
 fun PocketBrandMark(
@@ -263,7 +288,7 @@ fun PocketBottomNavigation(
     NavigationBar(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.surface,
-        tonalElevation = 6.dp,
+        tonalElevation = 0.dp,
     ) {
         items.forEach { item ->
             NavigationBarItem(

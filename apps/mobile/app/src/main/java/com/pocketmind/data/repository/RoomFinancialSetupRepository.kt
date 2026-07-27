@@ -11,6 +11,7 @@ import com.pocketmind.data.local.entity.IncomeSourceEntity
 import com.pocketmind.data.local.entity.RecurringObligationEntity
 import com.pocketmind.data.local.entity.SavingsPlanEntity
 import com.pocketmind.data.local.entity.SavingsProfileEntity
+import com.pocketmind.data.local.entity.LoanProfileEntity
 import com.pocketmind.shared.domain.model.Debt
 import com.pocketmind.shared.domain.model.FinancialAccount
 import com.pocketmind.shared.domain.model.FinancialSetup
@@ -34,6 +35,18 @@ class RoomFinancialSetupRepository @Inject constructor(
             setup.accounts.forEach { account -> database.accountDao().upsert(account.toEntity()) }
             financialSetupDao.upsertIncomeSources(setup.incomeSources.map(IncomeSource::toEntity))
             financialSetupDao.upsertDebts(setup.debts.map(Debt::toEntity))
+            setup.debts.forEach { debt ->
+                manualFinanceDao.upsertLoanProfile(
+                    LoanProfileEntity(
+                        accountId = debt.id,
+                        annualInterestBasisPoints = debt.interestRateAnnualBasisPoints ?: 0,
+                        monthlyPaymentMinorUnits = debt.installmentAmount?.minorUnits ?: 0,
+                        currency = debt.outstandingBalance.currency.name,
+                        paymentDueDay = debt.dueDayOfMonth ?: 1,
+                        openedAtEpochMillis = System.currentTimeMillis(),
+                    ),
+                )
+            }
             financialSetupDao.upsertSavingsPlans(setup.savingsPlans.map(SavingsPlan::toEntity))
             setup.savingsPlans.forEach { plan ->
                 manualFinanceDao.upsertSavingsProfile(

@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -57,6 +56,7 @@ import com.pocketmind.ui.components.PocketBrandMark
 import com.pocketmind.ui.components.PocketContentSheet
 import com.pocketmind.ui.components.PocketMessage
 import com.pocketmind.ui.components.PocketPrimaryButton
+import com.pocketmind.ui.components.pocketBringIntoViewOnFocus
 import com.pocketmind.ui.theme.PocketSpacing
 import com.pocketmind.ui.theme.PocketMindTheme
 import androidx.compose.ui.res.stringResource
@@ -103,8 +103,7 @@ fun AuthScreen(
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .imePadding()
-                    .imePadding()
-                    .padding(horizontal = PocketSpacing.xl, vertical = PocketSpacing.xl)
+                    .padding(horizontal = PocketSpacing.xl, vertical = PocketSpacing.lg)
                     .widthIn(max = 480.dp)
                     .align(Alignment.CenterHorizontally),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -134,7 +133,7 @@ fun AuthScreen(
                     enabled = !state.isLoading,
                     shape = RoundedCornerShape(16.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().pocketBringIntoViewOnFocus(),
                 )
                 if (state.mode != AuthMode.RECOVERY) {
                     Spacer(Modifier.height(PocketSpacing.sm))
@@ -212,12 +211,12 @@ private fun AuthBrandHeader(mode: AuthMode) {
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = PocketSpacing.xl, vertical = PocketSpacing.md),
+            .padding(horizontal = PocketSpacing.lg, vertical = PocketSpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(PocketSpacing.sm),
     ) {
         PocketBrandMark(
-            modifier = Modifier.size(44.dp),
+            modifier = Modifier.size(40.dp),
             contentDescription = stringResource(R.string.brand_mark_description),
         )
         Column {
@@ -302,7 +301,7 @@ private fun PasswordField(
                 )
             }
         },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().pocketBringIntoViewOnFocus(),
     )
 }
 

@@ -2,6 +2,8 @@ package com.pocketmind.presentation.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pocketmind.data.profile.ProfileRepository
+import com.pocketmind.data.profile.ProfileSettings
 import com.pocketmind.shared.domain.model.DashboardSummary
 import com.pocketmind.shared.domain.model.CurrencyCode
 import com.pocketmind.shared.domain.model.Money
@@ -11,23 +13,36 @@ import com.pocketmind.shared.domain.model.FinancialAccountType
 import com.pocketmind.shared.domain.model.TransactionCategoryId
 import com.pocketmind.shared.domain.model.calculateCreditCardOverview
 import com.pocketmind.shared.domain.model.calculateSavingsProjection
+import com.pocketmind.shared.domain.model.calculateLoanOverview
 import com.pocketmind.shared.domain.usecase.ManualFinanceUseCases
 import com.pocketmind.shared.domain.repository.TransactionRepository
 import com.pocketmind.shared.domain.usecase.ObserveActiveFinancialAccountsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     observeAccounts: ObserveActiveFinancialAccountsUseCase,
     transactionRepository: TransactionRepository,
     manualFinance: ManualFinanceUseCases,
+    private val profileRepository: ProfileRepository,
 ) : ViewModel() {
+    private val profileName = MutableStateFlow("")
+
+    fun refreshProfile() {
+        viewModelScope.launch {
+            profileName.value = runCatching {
+                profileRepository.load().greetingName()
+            }.getOrDefault("")
+        }
+    }
+
     val uiState: StateFlow<HomeUiState> = combine(
         observeAccounts(),
         transactionRepository.observeAll(),
@@ -36,6 +51,9 @@ class HomeViewModel @Inject constructor(
         manualFinance.observeCreditCardPayments(),
         manualFinance.observeSavingsProfiles(),
         manualFinance.observeSavingsMovements(),
+        manualFinance.observeLoanProfiles(),
+        manualFinance.observeLoanPayments(),
+        profileName,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         val accounts = values[0] as List<com.pocketmind.shared.domain.model.FinancialAccount>
@@ -51,6 +69,11 @@ class HomeViewModel @Inject constructor(
         val savingsProfiles = values[5] as List<com.pocketmind.shared.domain.model.SavingsProfile>
         @Suppress("UNCHECKED_CAST")
         val savingsMovements = values[6] as List<com.pocketmind.shared.domain.model.SavingsMovement>
+        @Suppress("UNCHECKED_CAST")
+        val loanProfiles = values[7] as List<com.pocketmind.shared.domain.model.LoanProfile>
+        @Suppress("UNCHECKED_CAST")
+        val loanPayments = values[8] as List<com.pocketmind.shared.domain.model.LoanPayment>
+        val displayName = values[9] as String
         val posted = transactions.filter { it.status == TransactionStatus.POSTED }
         val accountOverviews = accounts.map { account ->
             val accountTransactions = posted.filter { it.accountId == account.id }
@@ -66,10 +89,14 @@ class HomeViewModel @Inject constructor(
             val savingsProjection = savingsProfiles.firstOrNull { it.accountId == account.id }?.let { profile ->
                 calculateSavingsProjection(profile, account.openingBalance, savingsMovements, System.currentTimeMillis())
             }
+            val loanOverview = loanProfiles.firstOrNull { it.accountId == account.id }?.let { profile ->
+                calculateLoanOverview(profile, account.openingBalance, loanPayments, System.currentTimeMillis())
+            }
             val current = when (account.type) {
                 FinancialAccountType.CREDIT_CARD -> cardOverview?.currentDebt ?: account.openingBalance
                 FinancialAccountType.SAVINGS -> savingsProjection?.currentBalance
                     ?: Money(account.openingBalance.minorUnits + income - expense - outgoingTransfers + incomingTransfers, CurrencyCode.COP)
+                FinancialAccountType.LOAN -> loanOverview?.currentDebt ?: account.openingBalance
                 else -> Money(account.openingBalance.minorUnits + income - expense - outgoingTransfers + incomingTransfers, CurrencyCode.COP)
             }
             AccountOverview(
@@ -97,11 +124,26 @@ class HomeViewModel @Inject constructor(
             monthlyIncome = Money(monthlyIncome, CurrencyCode.COP),
             monthlyExpense = Money(monthlyExpense, CurrencyCode.COP),
         )
-        HomeUiState.Content(summary, accountOverviews, posted.take(3))
+        HomeUiState.Content(summary, accountOverviews, posted.take(3), displayName)
     }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000),
             initialValue = HomeUiState.Loading,
         )
+}
+
+private fun ProfileSettings.greetingName(): String {
+    val candidate = displayName.trim().ifBlank {
+        email.substringBefore("@")
+            .replace(".", " ")
+            .replace("_", " ")
+            .replace("-", " ")
+            .trim()
+    }
+    return candidate.split(Regex("\\s+"))
+        .filter(String::isNotBlank)
+        .joinToString(" ") { word ->
+            word.lowercase().replaceFirstChar(Char::titlecase)
+        }
 }

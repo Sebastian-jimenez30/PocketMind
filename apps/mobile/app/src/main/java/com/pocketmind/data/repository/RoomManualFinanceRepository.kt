@@ -8,12 +8,16 @@ import com.pocketmind.data.local.entity.CreditCardProfileEntity
 import com.pocketmind.data.local.entity.InstallmentPurchaseEntity
 import com.pocketmind.data.local.entity.SavingsMovementEntity
 import com.pocketmind.data.local.entity.SavingsProfileEntity
+import com.pocketmind.data.local.entity.LoanPaymentEntity
+import com.pocketmind.data.local.entity.LoanProfileEntity
 import com.pocketmind.shared.domain.model.CreditCardPayment
 import com.pocketmind.shared.domain.model.CreditCardProfile
 import com.pocketmind.shared.domain.model.CurrencyCode
 import com.pocketmind.shared.domain.model.InstallmentPurchase
 import com.pocketmind.shared.domain.model.FinancialTransaction
 import com.pocketmind.shared.domain.model.Money
+import com.pocketmind.shared.domain.model.LoanPayment
+import com.pocketmind.shared.domain.model.LoanProfile
 import com.pocketmind.shared.domain.model.SavingsMovement
 import com.pocketmind.shared.domain.model.SavingsMovementType
 import com.pocketmind.shared.domain.model.SavingsProductType
@@ -44,17 +48,29 @@ class RoomManualFinanceRepository @Inject constructor(
     override fun observeSavingsMovements(): Flow<List<SavingsMovement>> =
         dao.observeSavingsMovements().map { items -> items.map(SavingsMovementEntity::toDomain) }
 
+    override fun observeLoanProfiles(): Flow<List<LoanProfile>> =
+        dao.observeLoanProfiles().map { items -> items.map(LoanProfileEntity::toDomain) }
+
+    override fun observeLoanPayments(): Flow<List<LoanPayment>> =
+        dao.observeLoanPayments().map { items -> items.map(LoanPaymentEntity::toDomain) }
+
     override suspend fun getCreditCardProfile(accountId: String): CreditCardProfile? =
         dao.getCreditCardProfile(accountId)?.toDomain()
 
     override suspend fun getSavingsProfile(accountId: String): SavingsProfile? =
         dao.getSavingsProfile(accountId)?.toDomain()
 
+    override suspend fun getLoanProfile(accountId: String): LoanProfile? =
+        dao.getLoanProfile(accountId)?.toDomain()
+
     override suspend fun saveCreditCardProfile(profile: CreditCardProfile) =
         dao.upsertCreditCardProfile(profile.toEntity())
 
     override suspend fun saveSavingsProfile(profile: SavingsProfile) =
         dao.upsertSavingsProfile(profile.toEntity())
+
+    override suspend fun saveLoanProfile(profile: LoanProfile) =
+        dao.upsertLoanProfile(profile.toEntity())
 
     override suspend fun saveInstallmentPurchase(
         purchase: InstallmentPurchase,
@@ -79,6 +95,14 @@ class RoomManualFinanceRepository @Inject constructor(
         dao.upsertSavingsMovement(movement.toEntity())
         ledgerTransaction?.let { transactionRepository.save(it) }
         Unit
+    }
+
+    override suspend fun saveLoanPayment(
+        payment: LoanPayment,
+        ledgerTransaction: FinancialTransaction,
+    ) = database.withTransaction {
+        dao.upsertLoanPayment(payment.toEntity())
+        transactionRepository.save(ledgerTransaction)
     }
 }
 
@@ -183,5 +207,41 @@ private fun SavingsMovement.toEntity() = SavingsMovementEntity(
     currency = amount.currency.name,
     annualYieldBasisPoints = annualYieldBasisPoints,
     occurredAtEpochMillis = occurredAtEpochMillis,
+    note = note,
+)
+
+private fun LoanProfileEntity.toDomain() = LoanProfile(
+    accountId = accountId,
+    annualInterestBasisPoints = annualInterestBasisPoints,
+    monthlyPayment = Money(monthlyPaymentMinorUnits, CurrencyCode.valueOf(currency)),
+    paymentDueDay = paymentDueDay,
+    openedAtEpochMillis = openedAtEpochMillis,
+)
+
+private fun LoanProfile.toEntity() = LoanProfileEntity(
+    accountId = accountId,
+    annualInterestBasisPoints = annualInterestBasisPoints,
+    monthlyPaymentMinorUnits = monthlyPayment.minorUnits,
+    currency = monthlyPayment.currency.name,
+    paymentDueDay = paymentDueDay,
+    openedAtEpochMillis = openedAtEpochMillis,
+)
+
+private fun LoanPaymentEntity.toDomain() = LoanPayment(
+    id = id,
+    accountId = accountId,
+    amount = Money(amountMinorUnits, CurrencyCode.valueOf(currency)),
+    paidAtEpochMillis = paidAtEpochMillis,
+    sourceAccountId = sourceAccountId,
+    note = note,
+)
+
+private fun LoanPayment.toEntity() = LoanPaymentEntity(
+    id = id,
+    accountId = accountId,
+    amountMinorUnits = amount.minorUnits,
+    currency = amount.currency.name,
+    paidAtEpochMillis = paidAtEpochMillis,
+    sourceAccountId = sourceAccountId,
     note = note,
 )

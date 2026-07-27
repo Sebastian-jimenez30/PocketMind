@@ -41,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -111,15 +112,13 @@ private fun ProductsList(accounts: List<ProductListItem>, onOpen: (String) -> Un
 
 @Composable
 private fun AccountsHeader(onBack: () -> Unit) = Row(
-    modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primary).statusBarsPadding().padding(PocketSpacing.md),
+    modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primary).statusBarsPadding()
+        .padding(horizontal = PocketSpacing.sm, vertical = PocketSpacing.xxs),
     verticalAlignment = Alignment.CenterVertically,
 ) {
     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.accounts_back), tint = MaterialTheme.colorScheme.onPrimary) }
     Spacer(Modifier.width(PocketSpacing.xs))
-    Column {
-        Text(stringResource(R.string.accounts_title), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary)
-        Text(stringResource(R.string.accounts_subtitle), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.82f))
-    }
+    Text(stringResource(R.string.accounts_title), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
 }
 
 @Composable
@@ -155,10 +154,20 @@ private fun AccountRow(item: ProductListItem, onOpen: (String) -> Unit) = Card(
         )
         Spacer(Modifier.width(PocketSpacing.md))
         Column(Modifier.weight(1f)) {
-            Text(item.account.name, style = MaterialTheme.typography.titleMedium)
+            Text(
+                item.account.name,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             Text(stringResource(item.account.type.labelRes()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Text(formatMoney(item.currentAmount), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text(
+            formatMoney(item.currentAmount),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
         Icon(Icons.Rounded.ChevronRight, stringResource(R.string.accounts_open), Modifier.padding(start = PocketSpacing.sm).size(20.dp), MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

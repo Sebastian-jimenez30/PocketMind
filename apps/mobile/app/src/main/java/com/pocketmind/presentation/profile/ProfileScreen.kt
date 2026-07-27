@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -70,6 +69,7 @@ import com.pocketmind.R
 import com.pocketmind.ui.components.PocketContentSheet
 import com.pocketmind.ui.components.PocketMessage
 import com.pocketmind.ui.components.PocketPrimaryButton
+import com.pocketmind.ui.components.pocketBringIntoViewOnFocus
 import com.pocketmind.ui.components.PocketRowDivider
 import com.pocketmind.ui.components.PocketSectionCard
 import com.pocketmind.ui.components.PocketSettingsRow
@@ -196,7 +196,7 @@ private fun ProfileHeader(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = PocketSpacing.xl, vertical = PocketSpacing.md),
+            .padding(horizontal = PocketSpacing.lg, vertical = PocketSpacing.xs),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Row(
@@ -212,7 +212,7 @@ private fun ProfileHeader(
             }
             Text(
                 text = stringResource(R.string.profile_title),
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.weight(1f),
                 textAlign = TextAlign.Center,
@@ -220,12 +220,12 @@ private fun ProfileHeader(
             Spacer(Modifier.size(PocketSpacing.touchTarget))
         }
         if (!state.isLoading) {
-            Spacer(Modifier.height(PocketSpacing.sm))
+            Spacer(Modifier.height(PocketSpacing.xxs))
             ProfileAvatar(state.displayName)
-            Spacer(Modifier.height(PocketSpacing.sm))
+            Spacer(Modifier.height(PocketSpacing.xs))
             Text(
                 text = state.displayName.ifBlank { stringResource(R.string.profile_default_name) },
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onPrimary,
             )
             Text(
@@ -233,14 +233,8 @@ private fun ProfileHeader(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.82f),
             )
-            Spacer(Modifier.height(PocketSpacing.xxs))
-            Text(
-                text = stringResource(R.string.profile_member_label),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.72f),
-            )
         }
-        Spacer(Modifier.height(PocketSpacing.md))
+        Spacer(Modifier.height(PocketSpacing.xxs))
     }
 }
 
@@ -249,14 +243,14 @@ private fun ProfileAvatar(displayName: String) {
     val initial = displayName.trim().firstOrNull()?.uppercase() ?: "P"
     Box(
         modifier = Modifier
-            .size(76.dp)
+            .size(52.dp)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.primaryContainer),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = initial,
-            style = MaterialTheme.typography.headlineMedium,
+            style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onPrimaryContainer,
             fontWeight = FontWeight.SemiBold,
         )
@@ -363,7 +357,6 @@ private fun PersonalDataSheet(
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .imePadding()
-            .imePadding()
             .padding(horizontal = PocketSpacing.xl)
             .padding(bottom = PocketSpacing.xxl),
         verticalArrangement = Arrangement.spacedBy(PocketSpacing.md),
@@ -377,7 +370,7 @@ private fun PersonalDataSheet(
             enabled = !state.isSaving,
             singleLine = true,
             shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().pocketBringIntoViewOnFocus(),
         )
         PocketPrimaryButton(
             text = stringResource(R.string.profile_save_name),
@@ -393,7 +386,7 @@ private fun PersonalDataSheet(
             singleLine = true,
             shape = RoundedCornerShape(16.dp),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().pocketBringIntoViewOnFocus(),
         )
         OutlinedButton(
             onClick = onChangeEmail,
@@ -507,7 +500,10 @@ private fun ChangePasswordDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.profile_change_password)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(PocketSpacing.sm)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()).imePadding(),
+                verticalArrangement = Arrangement.spacedBy(PocketSpacing.sm),
+            ) {
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
@@ -522,6 +518,7 @@ private fun ChangePasswordDialog(
                         }
                     },
                     singleLine = true,
+                    modifier = Modifier.fillMaxWidth().pocketBringIntoViewOnFocus(),
                 )
                 OutlinedTextField(
                     value = confirmation,
@@ -529,6 +526,7 @@ private fun ChangePasswordDialog(
                     label = { Text(stringResource(R.string.profile_confirm_password)) },
                     visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     singleLine = true,
+                    modifier = Modifier.fillMaxWidth().pocketBringIntoViewOnFocus(),
                 )
                 if (state.message != null) PocketMessage(state.message, state.isError)
             }

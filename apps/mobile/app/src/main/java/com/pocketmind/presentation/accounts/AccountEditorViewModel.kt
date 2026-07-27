@@ -10,6 +10,7 @@ import com.pocketmind.shared.domain.model.Money
 import com.pocketmind.shared.domain.model.CreditCardProfile
 import com.pocketmind.shared.domain.model.SavingsProductType
 import com.pocketmind.shared.domain.model.SavingsProfile
+import com.pocketmind.shared.domain.model.LoanProfile
 import com.pocketmind.shared.domain.usecase.ManualFinanceUseCases
 import com.pocketmind.shared.domain.usecase.GetFinancialAccountUseCase
 import com.pocketmind.shared.domain.usecase.SaveFinancialAccountUseCase
@@ -38,6 +39,8 @@ data class AccountEditorUiState(
     val savingsType: SavingsProductType = SavingsProductType.SIMPLE,
     val maturityDate: String = "",
     val savingsOpenedAtEpochMillis: Long? = null,
+    val monthlyPayment: String = "",
+    val loanOpenedAtEpochMillis: Long? = null,
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
     val error: String? = null,
@@ -61,21 +64,26 @@ class AccountEditorViewModel @Inject constructor(
                 getAccount(id)?.let { account ->
                     val card = manualFinance.getCreditCardProfile(id)
                     val savings = manualFinance.getSavingsProfile(id)
+                    val loan = manualFinance.getLoanProfile(id)
                     _uiState.update {
                         it.copy(
                             name = account.name,
                             balance = account.openingBalance.minorUnits.toString(),
                             type = account.type,
                             creditLimit = card?.creditLimit?.minorUnits?.toString().orEmpty(),
-                            annualRate = ((card?.annualInterestBasisPoints
-                                ?: savings?.annualYieldBasisPoints)?.div(100.0))?.toString().orEmpty(),
                             closingDay = card?.statementClosingDay?.toString().orEmpty(),
-                            paymentDay = card?.paymentDueDay?.toString().orEmpty(),
                             debtInstallments = card?.openingDebtInstallmentCount?.toString() ?: "1",
                             debtFirstPaymentDate = card?.openingDebtFirstPaymentAtEpochMillis?.toLocalDateText().orEmpty(),
                             savingsType = savings?.type ?: SavingsProductType.SIMPLE,
                             maturityDate = savings?.maturityAtEpochMillis?.toLocalDateText().orEmpty(),
                             savingsOpenedAtEpochMillis = savings?.openedAtEpochMillis,
+                            monthlyPayment = loan?.monthlyPayment?.minorUnits?.toString().orEmpty(),
+                            loanOpenedAtEpochMillis = loan?.openedAtEpochMillis,
+                            paymentDay = card?.paymentDueDay?.toString()
+                                ?: loan?.paymentDueDay?.toString().orEmpty(),
+                            annualRate = ((card?.annualInterestBasisPoints
+                                ?: savings?.annualYieldBasisPoints
+                                ?: loan?.annualInterestBasisPoints)?.div(100.0))?.toString().orEmpty(),
                         )
                     }
                 }
@@ -98,6 +106,14 @@ class AccountEditorViewModel @Inject constructor(
             ?.times(100)
             ?.toInt()
             ?: 0
+        if (state.type == FinancialAccountType.LOAN) {
+            val monthlyPayment = state.monthlyPayment.toLongOrNull()
+            val paymentDay = state.paymentDay.toIntOrNull()
+            if (monthlyPayment == null || monthlyPayment < 0 || paymentDay !in 1..31) {
+                _uiState.update { it.copy(error = "Completa la cuota y el día de pago con valores válidos.") }
+                return
+            }
+        }
         if (state.type == FinancialAccountType.CREDIT_CARD) {
             val limit = state.creditLimit.toLongOrNull()
             val closingDay = state.closingDay.toIntOrNull()
@@ -152,15 +168,28 @@ class AccountEditorViewModel @Inject constructor(
                         SavingsProfile(
                             accountId = id,
                             type = state.savingsType,
-                            annualYieldBasisPoints = annualRateBasisPoints,
+                            annualYieldBasisPoints = if (state.savingsType == SavingsProductType.SIMPLE) {
+                                0
+                            } else {
+                                annualRateBasisPoints
+                            },
                             openedAtEpochMillis = state.savingsOpenedAtEpochMillis ?: System.currentTimeMillis(),
                             maturityAtEpochMillis = maturity?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli(),
+                        ),
+                    )
+                    FinancialAccountType.LOAN -> manualFinance.saveLoanProfile(
+                        LoanProfile(
+                            accountId = id,
+                            annualInterestBasisPoints = annualRateBasisPoints,
+                            monthlyPayment = Money(state.monthlyPayment.toLong(), CurrencyCode.COP),
+                            paymentDueDay = state.paymentDay.toInt(),
+                            openedAtEpochMillis = state.loanOpenedAtEpochMillis ?: System.currentTimeMillis(),
                         ),
                     )
                     else -> Unit
                 }
             }.onSuccess { _uiState.update { it.copy(isSaving = false, saved = true) } }
-                .onFailure { _uiState.update { it.copy(isSaving = false, error = "No pudimos guardar la cuenta. Inténtalo de nuevo.") } }
+                .onFailure { _uiState.update { it.copy(isSaving = false, error = "No pudimos guardar el producto. Inténtalo de nuevo.") } }
         }
     }
 }
