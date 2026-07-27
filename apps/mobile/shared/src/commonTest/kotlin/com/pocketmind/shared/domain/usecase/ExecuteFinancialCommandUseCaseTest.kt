@@ -6,11 +6,13 @@ import com.pocketmind.shared.domain.command.FinancialCommandResult
 import com.pocketmind.shared.domain.model.CreditCardPayment
 import com.pocketmind.shared.domain.model.CreditCardProfile
 import com.pocketmind.shared.domain.model.CurrencyCode
+import com.pocketmind.shared.domain.model.DebtPaymentType
 import com.pocketmind.shared.domain.model.FinancialAccount
 import com.pocketmind.shared.domain.model.FinancialAccountType
 import com.pocketmind.shared.domain.model.FinancialProductConfiguration
 import com.pocketmind.shared.domain.model.FinancialTransaction
 import com.pocketmind.shared.domain.model.InstallmentPurchase
+import com.pocketmind.shared.domain.model.InstallmentRatePeriod
 import com.pocketmind.shared.domain.model.LoanPayment
 import com.pocketmind.shared.domain.model.LoanProfile
 import com.pocketmind.shared.domain.model.Money
@@ -131,6 +133,34 @@ class ExecuteFinancialCommandUseCaseTest {
     }
 
     @Test
+    fun `card purchase persists promotional rate periods for deterministic calculation`() = runTest {
+        accountRepository.accounts[CARD.id] = CARD
+        manualFinanceRepository.cardProfiles[CARD.id] = CARD_PROFILE
+        val promotion = InstallmentRatePeriod(
+            firstInstallment = 1,
+            lastInstallment = 3,
+            annualInterestBasisPoints = 0,
+        )
+
+        val result = useCase(
+            FinancialCommand.RecordCardPurchase(
+                commandId = "purchase-promotion",
+                cardId = CARD.id,
+                merchant = "Computador",
+                principal = money(600_000),
+                installmentCount = 6,
+                purchasedAtEpochMillis = NOW,
+                source = TransactionSource.VOICE,
+                promotionalRatePeriods = listOf(promotion),
+            ),
+        )
+
+        assertIs<FinancialCommandResult.Success>(result)
+        assertEquals(listOf(promotion), manualFinanceRepository.savedPurchase?.first?.promotionalRatePeriods)
+        assertEquals(0, manualFinanceRepository.savedPurchase?.first?.installmentSchedule?.first()?.interest?.minorUnits)
+    }
+
+    @Test
     fun `card purchase exceeding available credit is rejected without writes`() = runTest {
         accountRepository.accounts[CARD.id] = CARD
         manualFinanceRepository.cardProfiles[CARD.id] = CARD_PROFILE
@@ -178,6 +208,58 @@ class ExecuteFinancialCommandUseCaseTest {
     }
 
     @Test
+    fun `scheduled card payment derives the current installment without model calculation`() = runTest {
+        val cardWithDebt = CARD.copy(openingBalance = money(200_000))
+        accountRepository.accounts[cardWithDebt.id] = cardWithDebt
+        accountRepository.accounts[BANK.id] = BANK
+        manualFinanceRepository.cardProfiles[cardWithDebt.id] = CARD_PROFILE.copy(
+            openingDebtInstallmentCount = 2,
+        )
+
+        val result = useCase(
+            FinancialCommand.RecordCardPayment(
+                commandId = "scheduled-card-payment",
+                cardId = cardWithDebt.id,
+                paymentType = DebtPaymentType.SCHEDULED_INSTALLMENT,
+                paidAtEpochMillis = NOW,
+                source = TransactionSource.VOICE,
+                sourceProductId = BANK.id,
+            ),
+        )
+
+        assertIs<FinancialCommandResult.Success>(result)
+        assertEquals(money(100_000), manualFinanceRepository.savedCardPayment?.first?.amount)
+        assertEquals(
+            DebtPaymentType.SCHEDULED_INSTALLMENT,
+            manualFinanceRepository.savedCardPayment?.first?.type,
+        )
+    }
+
+    @Test
+    fun `scheduled card payment rejects a stale amount instead of executing it`() = runTest {
+        val cardWithDebt = CARD.copy(openingBalance = money(200_000))
+        accountRepository.accounts[cardWithDebt.id] = cardWithDebt
+        manualFinanceRepository.cardProfiles[cardWithDebt.id] = CARD_PROFILE.copy(
+            openingDebtInstallmentCount = 2,
+        )
+
+        val result = useCase(
+            FinancialCommand.RecordCardPayment(
+                commandId = "stale-card-payment",
+                cardId = cardWithDebt.id,
+                amount = money(90_000),
+                paymentType = DebtPaymentType.SCHEDULED_INSTALLMENT,
+                paidAtEpochMillis = NOW,
+                source = TransactionSource.VOICE,
+            ),
+        )
+
+        val rejected = assertIs<FinancialCommandResult.Rejected>(result)
+        assertTrue(FinancialCommandError.PAYMENT_AMOUNT_MISMATCH in rejected.errors)
+        assertEquals(null, manualFinanceRepository.savedCardPayment)
+    }
+
+    @Test
     fun `card payment from savings records the matching savings withdrawal`() = runTest {
         val cardWithDebt = CARD.copy(openingBalance = money(200_000))
         accountRepository.accounts[cardWithDebt.id] = cardWithDebt
@@ -218,7 +300,7 @@ class ExecuteFinancialCommandUseCaseTest {
                 amount = money(50_000),
                 occurredAtEpochMillis = NOW,
                 source = TransactionSource.MANUAL,
-                relatedProductId = BANK.id,
+                sourceProductId = BANK.id,
             ),
         )
 
@@ -295,6 +377,49 @@ class ExecuteFinancialCommandUseCaseTest {
     }
 
     @Test
+    fun `full loan payment derives the current balance`() = runTest {
+        accountRepository.accounts[LOAN.id] = LOAN
+        manualFinanceRepository.loanProfiles[LOAN.id] = LOAN_PROFILE
+
+        val result = useCase(
+            FinancialCommand.RecordLoanPayment(
+                commandId = "full-loan-payment",
+                loanId = LOAN.id,
+                paymentType = DebtPaymentType.FULL_BALANCE,
+                paidAtEpochMillis = NOW,
+                source = TransactionSource.VOICE,
+            ),
+        )
+
+        assertIs<FinancialCommandResult.Success>(result)
+        assertEquals(LOAN.openingBalance, manualFinanceRepository.savedLoanPayment?.first?.amount)
+        assertEquals(DebtPaymentType.FULL_BALANCE, manualFinanceRepository.savedLoanPayment?.first?.type)
+    }
+
+    @Test
+    fun `command with an unknown calculation rule is rejected before persistence`() = runTest {
+        accountRepository.accounts[CARD.id] = CARD
+        manualFinanceRepository.cardProfiles[CARD.id] = CARD_PROFILE
+
+        val result = useCase(
+            FinancialCommand.RecordCardPurchase(
+                commandId = "future-rule-purchase",
+                cardId = CARD.id,
+                merchant = "Tienda",
+                principal = money(100_000),
+                installmentCount = 2,
+                purchasedAtEpochMillis = NOW,
+                source = TransactionSource.VOICE,
+                calculationRuleVersion = 99,
+            ),
+        )
+
+        val rejected = assertIs<FinancialCommandResult.Rejected>(result)
+        assertTrue(FinancialCommandError.UNSUPPORTED_RULE_VERSION in rejected.errors)
+        assertEquals(null, manualFinanceRepository.savedPurchase)
+    }
+
+    @Test
     fun `linked ledger transaction cannot be deleted independently`() = runTest {
         val linked = FinancialTransaction(
             id = "purchase-linked",
@@ -316,6 +441,38 @@ class ExecuteFinancialCommandUseCaseTest {
         val rejected = assertIs<FinancialCommandResult.Rejected>(result)
         assertTrue(FinancialCommandError.LINKED_TRANSACTION_REQUIRES_PRODUCT_ACTION in rejected.errors)
         assertEquals(linked, transactionRepository.transactions[linked.id])
+    }
+
+    @Test
+    fun `explicit transaction edit increments manual revision`() = runTest {
+        accountRepository.accounts[BANK.id] = BANK
+        val existing = FinancialTransaction(
+            id = "transaction-editable",
+            accountId = BANK.id,
+            type = TransactionType.EXPENSE,
+            amount = money(20_000),
+            occurredAtEpochMillis = NOW,
+            source = TransactionSource.BANK_NOTIFICATION,
+            manualRevision = 1,
+        )
+        transactionRepository.transactions[existing.id] = existing
+
+        val result = useCase(
+            FinancialCommand.UpdateTransaction(
+                commandId = "edit-1",
+                transactionId = existing.id,
+                productId = BANK.id,
+                type = TransactionType.EXPENSE,
+                amount = money(25_000),
+                occurredAtEpochMillis = NOW,
+                source = existing.source,
+                merchant = "Comercio corregido",
+            ),
+        )
+
+        assertIs<FinancialCommandResult.Success>(result)
+        assertEquals(2, transactionRepository.transactions[existing.id]?.manualRevision)
+        assertEquals("Comercio corregido", transactionRepository.transactions[existing.id]?.merchant)
     }
 
     private class FakeAccountRepository : FinancialAccountRepository {

@@ -1,8 +1,15 @@
 package com.pocketmind.shared.domain.model
 
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
 /** ISO currencies currently supported by PocketMind's financial domain. */
+@Serializable
 enum class CurrencyCode {
+    @SerialName("COP")
     COP,
+
+    @SerialName("USD")
     USD,
 }
 
@@ -12,7 +19,9 @@ enum class CurrencyCode {
  * Transaction amounts are validated as positive by [FinancialTransaction]. Aggregates such as
  * an account balance can be negative, which represents debt or an overdraft.
  */
+@Serializable
 data class Money(
+    @SerialName("minor_units")
     val minorUnits: Long,
     val currency: CurrencyCode,
 ) {

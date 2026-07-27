@@ -117,10 +117,46 @@ class PocketMindDatabaseMigrationTest {
         migrated.close()
     }
 
+    @Test
+    fun migration5To6_addsVersionedDomainFieldsWithoutChangingExistingValues() {
+        helper.createDatabase("migration-domain-gaps-test", 5).apply {
+            execSQL(
+                "INSERT INTO accounts " +
+                    "(id, name, type, currency, openingBalanceMinorUnits, isArchived) " +
+                    "VALUES ('cash', 'Efectivo', 'CASH', 'COP', 250000, 0)",
+            )
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(
+            "migration-domain-gaps-test",
+            6,
+            true,
+            PocketMindDatabase.MIGRATION_5_6,
+        )
+
+        assertEquals(250000, migrated.singleLong("SELECT openingBalanceMinorUnits FROM accounts WHERE id = 'cash'"))
+        assertEquals("[]", migrated.singleString("SELECT aliasesJson FROM accounts WHERE id = 'cash'"))
+        assertEquals(
+            1,
+            migrated.singleLong(
+                "SELECT COUNT(*) FROM pragma_table_info('transactions') " +
+                    "WHERE name = 'manualRevision' AND dflt_value = '0'",
+            ),
+        )
+        migrated.close()
+    }
+
     private fun SupportSQLiteDatabase.singleLong(query: String): Long =
         this.query(query).use { cursor ->
             check(cursor.moveToFirst())
             cursor.getLong(0)
+        }
+
+    private fun SupportSQLiteDatabase.singleString(query: String): String =
+        this.query(query).use { cursor ->
+            check(cursor.moveToFirst())
+            cursor.getString(0)
         }
 
     private companion object {

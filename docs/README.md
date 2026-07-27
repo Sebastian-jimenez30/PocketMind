@@ -25,7 +25,7 @@ aquí debe actualizarse en el mismo cambio que la implemente.
   estados, validación multidispositivo y diagnóstico.
 - [ADR-001](architecture/ADR-001-SINCRONIZACION-OFFLINE-FIRST.md): decisión,
   seguridad, conflictos y límites de la arquitectura Room/Supabase.
-- [Contrato sync v1](architecture/CONTRATO-SYNC-V1.md): payloads canónicos,
+- [Contrato sync v2](architecture/CONTRATO-SYNC-V2.md): payloads canónicos,
   unidades, compatibilidad y reglas para Android/iOS.
 - [Integración Firebase](INTEGRACION_FIREBASE.md): responsabilidad frente a
   Supabase, Crashlytics, privacidad y servicios futuros.

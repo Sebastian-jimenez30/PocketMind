@@ -4,11 +4,14 @@ import com.pocketmind.shared.domain.command.FinancialCommand
 import com.pocketmind.shared.domain.command.FinancialCommandError
 import com.pocketmind.shared.domain.command.FinancialCommandResult
 import com.pocketmind.shared.domain.model.CreditCardPayment
+import com.pocketmind.shared.domain.model.CURRENT_FINANCIAL_RULE_VERSION
+import com.pocketmind.shared.domain.model.DebtPaymentType
 import com.pocketmind.shared.domain.model.FinancialAccount
 import com.pocketmind.shared.domain.model.FinancialAccountType
 import com.pocketmind.shared.domain.model.FinancialProductConfiguration
 import com.pocketmind.shared.domain.model.FinancialTransaction
 import com.pocketmind.shared.domain.model.InstallmentPurchase
+import com.pocketmind.shared.domain.model.InstallmentRatePeriod
 import com.pocketmind.shared.domain.model.LoanPayment
 import com.pocketmind.shared.domain.model.Money
 import com.pocketmind.shared.domain.model.SavingsMovement
@@ -108,6 +111,7 @@ class ExecuteFinancialCommandUseCase(
         relatedProductId: String?,
         source: TransactionSource,
         transactionId: String = command.commandId,
+        manualRevision: Int = 0,
     ): FinancialCommandResult {
         val product = accountRepository.getById(productId)
             ?: return command.rejected(FinancialCommandError.PRODUCT_NOT_FOUND)
@@ -131,6 +135,7 @@ class ExecuteFinancialCommandUseCase(
                 source = source,
                 status = TransactionStatus.POSTED,
                 relatedAccountId = relatedProductId.normalized(),
+                manualRevision = manualRevision,
             ),
         )
         return command.succeeded(transactionId)
@@ -194,6 +199,9 @@ class ExecuteFinancialCommandUseCase(
         if (!configuration.matches(account)) {
             return command.rejected(FinancialCommandError.INVALID_PRODUCT_CONFIGURATION)
         }
+        if (configuration.ruleVersion() != CURRENT_FINANCIAL_RULE_VERSION) {
+            return command.rejected(FinancialCommandError.UNSUPPORTED_RULE_VERSION)
+        }
         manualFinanceRepository.saveProduct(account, configuration)
         return command.succeeded(account.id)
     }
@@ -222,6 +230,12 @@ class ExecuteFinancialCommandUseCase(
         if (command.installmentCount !in 1..60) {
             return command.rejected(FinancialCommandError.INVALID_INSTALLMENTS)
         }
+        if (command.calculationRuleVersion != CURRENT_FINANCIAL_RULE_VERSION) {
+            return command.rejected(FinancialCommandError.UNSUPPORTED_RULE_VERSION)
+        }
+        if (!command.promotionalRatePeriods.areValidFor(command.installmentCount)) {
+            return command.rejected(FinancialCommandError.INVALID_PROMOTIONAL_RATE_PERIODS)
+        }
         val merchant = command.merchant.normalized()
             ?: return command.rejected(FinancialCommandError.INVALID_MERCHANT)
         val purchases = manualFinanceRepository.observeInstallmentPurchases().first()
@@ -242,6 +256,8 @@ class ExecuteFinancialCommandUseCase(
             ),
             categoryId = command.categoryId.normalized(),
             note = command.note.normalized(),
+            promotionalRatePeriods = command.promotionalRatePeriods,
+            calculationRuleVersion = command.calculationRuleVersion,
         )
         if (purchase.financedTotal.minorUnits > overview.availableCredit.minorUnits) {
             return command.rejected(FinancialCommandError.PURCHASE_EXCEEDS_AVAILABLE_CREDIT)
@@ -272,15 +288,30 @@ class ExecuteFinancialCommandUseCase(
             ?: return command.rejected(FinancialCommandError.PRODUCT_NOT_FOUND)
         val profile = manualFinanceRepository.getCreditCardProfile(account.id)
             ?: return command.rejected(FinancialCommandError.MISSING_CARD_PROFILE)
-        validateTransactionValues(command, command.amount, command.paidAtEpochMillis)?.let { return it }
-        validateRelatedCurrency(command, command.sourceProductId, command.amount, account)?.let { return it }
+        if (command.calculationRuleVersion != CURRENT_FINANCIAL_RULE_VERSION) {
+            return command.rejected(FinancialCommandError.UNSUPPORTED_RULE_VERSION)
+        }
         val overview = calculateCreditCardOverview(
             profile = profile,
             openingDebt = account.openingBalance,
             purchases = manualFinanceRepository.observeInstallmentPurchases().first(),
             payments = manualFinanceRepository.observeCreditCardPayments().first(),
         )
-        if (command.amount.minorUnits > overview.currentDebt.minorUnits) {
+        val amount = when (
+            val resolution = resolveDebtPaymentAmount(
+                command = command,
+                requestedAmount = command.amount,
+                paymentType = command.paymentType,
+                scheduledAmount = overview.nextPayment,
+                fullBalance = overview.currentDebt,
+            )
+        ) {
+            is PaymentAmountResolution.Ready -> resolution.amount
+            is PaymentAmountResolution.Rejected -> return resolution.result
+        }
+        validateTransactionValues(command, amount, command.paidAtEpochMillis)?.let { return it }
+        validateRelatedCurrency(command, command.sourceProductId, amount, account)?.let { return it }
+        if (amount.minorUnits > overview.currentDebt.minorUnits) {
             return command.rejected(FinancialCommandError.PAYMENT_EXCEEDS_CARD_DEBT)
         }
         val sourceSavings = when (
@@ -288,7 +319,7 @@ class ExecuteFinancialCommandUseCase(
                 command = command,
                 relatedProductId = command.sourceProductId,
                 movementType = SavingsMovementType.WITHDRAWAL,
-                amount = command.amount,
+                amount = amount,
                 occurredAtEpochMillis = command.paidAtEpochMillis,
                 movementId = "source-savings-${command.commandId}",
                 note = "Pago de tarjeta. ${command.note.orEmpty()}",
@@ -301,10 +332,12 @@ class ExecuteFinancialCommandUseCase(
         val payment = CreditCardPayment(
             id = command.commandId,
             accountId = account.id,
-            amount = command.amount,
+            amount = amount,
             paidAtEpochMillis = command.paidAtEpochMillis,
             sourceAccountId = command.sourceProductId.normalized(),
             note = command.note.normalized(),
+            type = command.paymentType,
+            calculationRuleVersion = command.calculationRuleVersion,
         )
         val ledgerId = "card-payment-${command.commandId}"
         manualFinanceRepository.saveCreditCardPayment(
@@ -312,7 +345,7 @@ class ExecuteFinancialCommandUseCase(
             ledgerTransaction = debtPaymentLedger(
                 id = ledgerId,
                 debtProduct = account,
-                amount = command.amount,
+                amount = amount,
                 occurredAtEpochMillis = command.paidAtEpochMillis,
                 sourceProductId = command.sourceProductId,
                 merchant = "Pago de tarjeta",
@@ -334,13 +367,36 @@ class ExecuteFinancialCommandUseCase(
             ?: return command.rejected(FinancialCommandError.PRODUCT_NOT_FOUND)
         val profile = manualFinanceRepository.getSavingsProfile(account.id)
             ?: return command.rejected(FinancialCommandError.MISSING_SAVINGS_PROFILE)
+        if (command.calculationRuleVersion != CURRENT_FINANCIAL_RULE_VERSION) {
+            return command.rejected(FinancialCommandError.UNSUPPORTED_RULE_VERSION)
+        }
         if (command.occurredAtEpochMillis <= 0) {
             return command.rejected(FinancialCommandError.INVALID_DATE)
         }
         if (command.amount.currency != account.currency) {
             return command.rejected(FinancialCommandError.CURRENCY_MISMATCH)
         }
-        validateRelatedCurrency(command, command.relatedProductId, command.amount, account)?.let { return it }
+        val relatedProductId = when (command.movementType) {
+            SavingsMovementType.DEPOSIT -> {
+                if (command.destinationProductId.normalized()?.let { it != account.id } == true) {
+                    return command.rejected(FinancialCommandError.INVALID_MONEY_FLOW_ENDPOINTS)
+                }
+                command.sourceProductId.normalized()
+            }
+            SavingsMovementType.WITHDRAWAL -> {
+                if (command.sourceProductId.normalized()?.let { it != account.id } == true) {
+                    return command.rejected(FinancialCommandError.INVALID_MONEY_FLOW_ENDPOINTS)
+                }
+                command.destinationProductId.normalized()
+            }
+            SavingsMovementType.RATE_CHANGE -> {
+                if (command.sourceProductId.normalized() != null || command.destinationProductId.normalized() != null) {
+                    return command.rejected(FinancialCommandError.INVALID_MONEY_FLOW_ENDPOINTS)
+                }
+                null
+            }
+        }
+        validateRelatedCurrency(command, relatedProductId, command.amount, account)?.let { return it }
         when (command.movementType) {
             SavingsMovementType.DEPOSIT, SavingsMovementType.WITHDRAWAL -> {
                 if (!command.amount.isPositive) {
@@ -372,6 +428,7 @@ class ExecuteFinancialCommandUseCase(
             annualYieldBasisPoints = command.annualYieldBasisPoints,
             occurredAtEpochMillis = command.occurredAtEpochMillis,
             note = command.note.normalized(),
+            calculationRuleVersion = command.calculationRuleVersion,
         )
         val relatedSavings = if (command.movementType == SavingsMovementType.RATE_CHANGE) {
             null
@@ -379,7 +436,7 @@ class ExecuteFinancialCommandUseCase(
             when (
                 val result = relatedSavingsMovement(
                     command = command,
-                    relatedProductId = command.relatedProductId,
+                    relatedProductId = relatedProductId,
                     movementType = if (command.movementType == SavingsMovementType.DEPOSIT) {
                         SavingsMovementType.WITHDRAWAL
                     } else {
@@ -396,7 +453,7 @@ class ExecuteFinancialCommandUseCase(
                 is RelatedSavingsMovement.Rejected -> return result.result
             }
         }
-        val ledger = savingsLedger(command, account)
+        val ledger = savingsLedger(command, account, relatedProductId)
         manualFinanceRepository.saveSavingsMovement(
             movement = movement,
             ledgerTransaction = ledger,
@@ -415,15 +472,30 @@ class ExecuteFinancialCommandUseCase(
             ?: return command.rejected(FinancialCommandError.PRODUCT_NOT_FOUND)
         val profile = manualFinanceRepository.getLoanProfile(account.id)
             ?: return command.rejected(FinancialCommandError.MISSING_LOAN_PROFILE)
-        validateTransactionValues(command, command.amount, command.paidAtEpochMillis)?.let { return it }
-        validateRelatedCurrency(command, command.sourceProductId, command.amount, account)?.let { return it }
+        if (command.calculationRuleVersion != CURRENT_FINANCIAL_RULE_VERSION) {
+            return command.rejected(FinancialCommandError.UNSUPPORTED_RULE_VERSION)
+        }
         val overview = calculateLoanOverview(
             profile = profile,
             openingDebt = account.openingBalance,
             payments = manualFinanceRepository.observeLoanPayments().first(),
             atEpochMillis = command.paidAtEpochMillis,
         )
-        if (command.amount.minorUnits > overview.currentDebt.minorUnits) {
+        val amount = when (
+            val resolution = resolveDebtPaymentAmount(
+                command = command,
+                requestedAmount = command.amount,
+                paymentType = command.paymentType,
+                scheduledAmount = overview.nextPayment,
+                fullBalance = overview.currentDebt,
+            )
+        ) {
+            is PaymentAmountResolution.Ready -> resolution.amount
+            is PaymentAmountResolution.Rejected -> return resolution.result
+        }
+        validateTransactionValues(command, amount, command.paidAtEpochMillis)?.let { return it }
+        validateRelatedCurrency(command, command.sourceProductId, amount, account)?.let { return it }
+        if (amount.minorUnits > overview.currentDebt.minorUnits) {
             return command.rejected(FinancialCommandError.PAYMENT_EXCEEDS_LOAN_DEBT)
         }
         val sourceSavings = when (
@@ -431,7 +503,7 @@ class ExecuteFinancialCommandUseCase(
                 command = command,
                 relatedProductId = command.sourceProductId,
                 movementType = SavingsMovementType.WITHDRAWAL,
-                amount = command.amount,
+                amount = amount,
                 occurredAtEpochMillis = command.paidAtEpochMillis,
                 movementId = "source-savings-${command.commandId}",
                 note = "Pago de préstamo. ${command.note.orEmpty()}",
@@ -444,10 +516,12 @@ class ExecuteFinancialCommandUseCase(
         val payment = LoanPayment(
             id = command.commandId,
             accountId = account.id,
-            amount = command.amount,
+            amount = amount,
             paidAtEpochMillis = command.paidAtEpochMillis,
             sourceAccountId = command.sourceProductId.normalized(),
             note = command.note.normalized(),
+            type = command.paymentType,
+            calculationRuleVersion = command.calculationRuleVersion,
         )
         val ledgerId = "loan-payment-${command.commandId}"
         manualFinanceRepository.saveLoanPayment(
@@ -455,7 +529,7 @@ class ExecuteFinancialCommandUseCase(
             ledgerTransaction = debtPaymentLedger(
                 id = ledgerId,
                 debtProduct = account,
-                amount = command.amount,
+                amount = amount,
                 occurredAtEpochMillis = command.paidAtEpochMillis,
                 sourceProductId = command.sourceProductId,
                 merchant = "Pago de préstamo",
@@ -502,6 +576,7 @@ class ExecuteFinancialCommandUseCase(
             relatedProductId = command.relatedProductId,
             source = command.source,
             transactionId = existing.id,
+            manualRevision = existing.manualRevision + 1,
         )
     }
 
@@ -582,6 +657,7 @@ class ExecuteFinancialCommandUseCase(
                 annualYieldBasisPoints = null,
                 occurredAtEpochMillis = occurredAtEpochMillis,
                 note = note.normalized(),
+                calculationRuleVersion = CURRENT_FINANCIAL_RULE_VERSION,
             ),
         )
     }
@@ -589,9 +665,10 @@ class ExecuteFinancialCommandUseCase(
     private fun savingsLedger(
         command: FinancialCommand.RecordSavingsMovement,
         savings: FinancialAccount,
+        relatedProductId: String?,
     ): FinancialTransaction? {
         if (command.movementType == SavingsMovementType.RATE_CHANGE) return null
-        val related = command.relatedProductId.normalized()
+        val related = relatedProductId.normalized()
         val isDeposit = command.movementType == SavingsMovementType.DEPOSIT
         return FinancialTransaction(
             id = "savings-${command.commandId}",
@@ -653,6 +730,34 @@ class ExecuteFinancialCommandUseCase(
         occurredAtEpochMillis <= 0 -> command.rejected(FinancialCommandError.INVALID_DATE)
         else -> null
     }
+
+    private fun resolveDebtPaymentAmount(
+        command: FinancialCommand,
+        requestedAmount: Money?,
+        paymentType: DebtPaymentType,
+        scheduledAmount: Money,
+        fullBalance: Money,
+    ): PaymentAmountResolution {
+        val expected = when (paymentType) {
+            DebtPaymentType.SCHEDULED_INSTALLMENT -> scheduledAmount
+            DebtPaymentType.FULL_BALANCE -> fullBalance
+            DebtPaymentType.EXTRA_PRINCIPAL,
+            DebtPaymentType.CUSTOM -> null
+        }
+        if (expected == null) {
+            return requestedAmount
+                ?.let(PaymentAmountResolution::Ready)
+                ?: PaymentAmountResolution.Rejected(
+                    command.rejected(FinancialCommandError.MISSING_PAYMENT_AMOUNT),
+                )
+        }
+        if (requestedAmount != null && requestedAmount != expected) {
+            return PaymentAmountResolution.Rejected(
+                command.rejected(FinancialCommandError.PAYMENT_AMOUNT_MISMATCH),
+            )
+        }
+        return PaymentAmountResolution.Ready(expected)
+    }
 }
 
 private fun FinancialProductConfiguration.matches(account: FinancialAccount): Boolean = when (this) {
@@ -664,6 +769,19 @@ private fun FinancialProductConfiguration.matches(account: FinancialAccount): Bo
         account.type == FinancialAccountType.SAVINGS && profile.accountId == account.id
     is FinancialProductConfiguration.Loan ->
         account.type == FinancialAccountType.LOAN && profile.accountId == account.id
+}
+
+private fun FinancialProductConfiguration.ruleVersion(): Int = when (this) {
+    FinancialProductConfiguration.Standard -> CURRENT_FINANCIAL_RULE_VERSION
+    is FinancialProductConfiguration.CreditCard -> profile.scheduleRuleVersion
+    is FinancialProductConfiguration.Savings -> profile.calculationRuleVersion
+    is FinancialProductConfiguration.Loan -> profile.scheduleRuleVersion
+}
+
+private fun List<InstallmentRatePeriod>.areValidFor(installmentCount: Int): Boolean {
+    if (any { it.lastInstallment > installmentCount }) return false
+    val coveredInstallments = flatMap { it.firstInstallment..it.lastInstallment }
+    return coveredInstallments.distinct().size == coveredInstallments.size
 }
 
 private fun FinancialAccountType.isLiquidProduct(): Boolean =
@@ -696,4 +814,9 @@ private sealed interface RelatedSavingsMovement {
     data object None : RelatedSavingsMovement
     data class Ready(val movement: SavingsMovement) : RelatedSavingsMovement
     data class Rejected(val result: FinancialCommandResult.Rejected) : RelatedSavingsMovement
+}
+
+private sealed interface PaymentAmountResolution {
+    data class Ready(val amount: Money) : PaymentAmountResolution
+    data class Rejected(val result: FinancialCommandResult.Rejected) : PaymentAmountResolution
 }

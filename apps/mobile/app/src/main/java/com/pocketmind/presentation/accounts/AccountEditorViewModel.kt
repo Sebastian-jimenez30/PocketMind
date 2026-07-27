@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pocketmind.shared.domain.model.CurrencyCode
+import com.pocketmind.shared.domain.model.CURRENT_FINANCIAL_RULE_VERSION
 import com.pocketmind.shared.domain.command.FinancialCommand
 import com.pocketmind.shared.domain.command.FinancialCommandResult
 import com.pocketmind.shared.domain.model.FinancialAccount
@@ -32,6 +33,7 @@ import kotlinx.coroutines.launch
 data class AccountEditorUiState(
     val accountId: String? = null,
     val name: String = "",
+    val aliases: List<String> = emptyList(),
     val balance: String = "",
     val type: FinancialAccountType = FinancialAccountType.BANK_ACCOUNT,
     val creditLimit: String = "",
@@ -45,6 +47,9 @@ data class AccountEditorUiState(
     val savingsOpenedAtEpochMillis: Long? = null,
     val monthlyPayment: String = "",
     val loanOpenedAtEpochMillis: Long? = null,
+    val cardRuleVersion: Int = CURRENT_FINANCIAL_RULE_VERSION,
+    val savingsRuleVersion: Int = CURRENT_FINANCIAL_RULE_VERSION,
+    val loanRuleVersion: Int = CURRENT_FINANCIAL_RULE_VERSION,
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
     val error: String? = null,
@@ -72,6 +77,7 @@ class AccountEditorViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             name = account.name,
+                            aliases = account.aliases,
                             balance = account.openingBalance.minorUnits.toString(),
                             type = account.type,
                             creditLimit = card?.creditLimit?.minorUnits?.toString().orEmpty(),
@@ -83,6 +89,9 @@ class AccountEditorViewModel @Inject constructor(
                             savingsOpenedAtEpochMillis = savings?.openedAtEpochMillis,
                             monthlyPayment = loan?.monthlyPayment?.minorUnits?.toString().orEmpty(),
                             loanOpenedAtEpochMillis = loan?.openedAtEpochMillis,
+                            cardRuleVersion = card?.scheduleRuleVersion ?: CURRENT_FINANCIAL_RULE_VERSION,
+                            savingsRuleVersion = savings?.calculationRuleVersion ?: CURRENT_FINANCIAL_RULE_VERSION,
+                            loanRuleVersion = loan?.scheduleRuleVersion ?: CURRENT_FINANCIAL_RULE_VERSION,
                             paymentDay = card?.paymentDueDay?.toString()
                                 ?: loan?.paymentDueDay?.toString().orEmpty(),
                             annualRate = ((card?.annualInterestBasisPoints
@@ -152,6 +161,7 @@ class AccountEditorViewModel @Inject constructor(
                     type = state.type,
                     currency = CurrencyCode.COP,
                     openingBalance = Money(balance, CurrencyCode.COP),
+                    aliases = state.aliases,
                 )
                 val configuration = when (state.type) {
                     FinancialAccountType.CREDIT_CARD -> FinancialProductConfiguration.CreditCard(
@@ -164,6 +174,7 @@ class AccountEditorViewModel @Inject constructor(
                             openingDebtInstallmentCount = state.debtInstallments.toInt(),
                             openingDebtFirstPaymentAtEpochMillis = state.debtFirstPaymentDate.parseLocalDate()
                                 ?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli(),
+                            scheduleRuleVersion = state.cardRuleVersion,
                         ),
                     )
                     FinancialAccountType.SAVINGS -> FinancialProductConfiguration.Savings(
@@ -177,6 +188,7 @@ class AccountEditorViewModel @Inject constructor(
                             },
                             openedAtEpochMillis = state.savingsOpenedAtEpochMillis ?: System.currentTimeMillis(),
                             maturityAtEpochMillis = maturity?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli(),
+                            calculationRuleVersion = state.savingsRuleVersion,
                         ),
                     )
                     FinancialAccountType.LOAN -> FinancialProductConfiguration.Loan(
@@ -186,6 +198,7 @@ class AccountEditorViewModel @Inject constructor(
                             monthlyPayment = Money(state.monthlyPayment.toLong(), CurrencyCode.COP),
                             paymentDueDay = state.paymentDay.toInt(),
                             openedAtEpochMillis = state.loanOpenedAtEpochMillis ?: System.currentTimeMillis(),
+                            scheduleRuleVersion = state.loanRuleVersion,
                         ),
                     )
                     else -> FinancialProductConfiguration.Standard

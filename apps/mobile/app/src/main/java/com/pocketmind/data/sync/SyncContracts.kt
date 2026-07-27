@@ -60,4 +60,4 @@ data class RemoteFinanceRecord(
     @SerialName("updated_at_epoch_millis") val updatedAtEpochMillis: Long,
 )
 
-const val CURRENT_SCHEMA_VERSION = 1
+const val CURRENT_SCHEMA_VERSION = 2

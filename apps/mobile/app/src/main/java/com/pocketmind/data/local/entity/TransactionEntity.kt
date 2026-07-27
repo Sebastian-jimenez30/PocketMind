@@ -1,6 +1,7 @@
 package com.pocketmind.data.local.entity
 
 import androidx.room.Entity
+import androidx.room.ColumnInfo
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -17,4 +18,6 @@ data class TransactionEntity(
     val occurredAtEpochMillis: Long,
     val categoryId: String?, val merchant: String?, val note: String?, val source: String, val status: String,
     val relatedAccountId: String? = null,
+    @ColumnInfo(defaultValue = "0")
+    val manualRevision: Int = 0,
 )

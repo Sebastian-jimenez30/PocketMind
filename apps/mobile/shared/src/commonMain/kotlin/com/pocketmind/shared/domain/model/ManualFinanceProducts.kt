@@ -1,27 +1,52 @@
 package com.pocketmind.shared.domain.model
 
 import kotlin.math.pow
+import kotlin.math.roundToLong
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
+@Serializable
 enum class SavingsProductType {
+    @SerialName("simple")
     SIMPLE,
+
+    @SerialName("pocket")
     POCKET,
+
+    @SerialName("term_deposit")
     TERM_DEPOSIT,
 }
 
+@Serializable
 enum class SavingsMovementType {
+    @SerialName("deposit")
     DEPOSIT,
+
+    @SerialName("withdrawal")
     WITHDRAWAL,
+
+    @SerialName("rate_change")
     RATE_CHANGE,
 }
 
+@Serializable
 data class CreditCardProfile(
+    @SerialName("account_id")
     val accountId: String,
+    @SerialName("credit_limit")
     val creditLimit: Money,
+    @SerialName("annual_interest_basis_points")
     val annualInterestBasisPoints: Int,
+    @SerialName("statement_closing_day")
     val statementClosingDay: Int,
+    @SerialName("payment_due_day")
     val paymentDueDay: Int,
+    @SerialName("opening_debt_installment_count")
     val openingDebtInstallmentCount: Int = 1,
+    @SerialName("opening_debt_first_payment_at_epoch_millis")
     val openingDebtFirstPaymentAtEpochMillis: Long? = null,
+    @SerialName("schedule_rule_version")
+    val scheduleRuleVersion: Int = CURRENT_FINANCIAL_RULE_VERSION,
 ) {
     init {
         require(accountId.isNotBlank())
@@ -31,9 +56,11 @@ data class CreditCardProfile(
         require(paymentDueDay in 1..31)
         require(openingDebtInstallmentCount in 1..60)
         require(openingDebtFirstPaymentAtEpochMillis == null || openingDebtFirstPaymentAtEpochMillis > 0)
+        require(scheduleRuleVersion > 0)
     }
 }
 
+@Serializable
 data class InstallmentPurchase(
     val id: String,
     val accountId: String,
@@ -45,6 +72,10 @@ data class InstallmentPurchase(
     val firstPaymentAtEpochMillis: Long,
     val categoryId: String?,
     val note: String?,
+    @SerialName("promotional_rate_periods")
+    val promotionalRatePeriods: List<InstallmentRatePeriod> = emptyList(),
+    @SerialName("calculation_rule_version")
+    val calculationRuleVersion: Int = CURRENT_FINANCIAL_RULE_VERSION,
 ) {
     init {
         require(id.isNotBlank())
@@ -55,24 +86,64 @@ data class InstallmentPurchase(
         require(annualInterestBasisPoints >= 0)
         require(purchasedAtEpochMillis > 0)
         require(firstPaymentAtEpochMillis > 0)
+        require(calculationRuleVersion > 0)
+        require(promotionalRatePeriods.all { it.lastInstallment <= installmentCount })
+        require(
+            promotionalRatePeriods
+                .flatMap { it.firstInstallment..it.lastInstallment }
+                .distinct()
+                .size == promotionalRatePeriods.sumOf {
+                it.lastInstallment - it.firstInstallment + 1
+            },
+        ) { "Promotional installment periods cannot overlap." }
     }
 
+    val installmentSchedule: List<InstallmentScheduleEntry>
+        get() = calculateInstallmentSchedule()
+
     val installmentAmount: Money
-        get() {
-            val monthlyRate = monthlyRate(annualInterestBasisPoints)
-            val payment = if (monthlyRate == 0.0) {
-                principal.minorUnits.toDouble() / installmentCount
-            } else {
-                val factor = (1.0 + monthlyRate).pow(installmentCount)
-                principal.minorUnits * monthlyRate * factor / (factor - 1.0)
-            }
-            return Money(payment.toLong().coerceAtLeast(1), principal.currency)
-        }
+        get() = installmentSchedule.first().amount
 
     val financedTotal: Money
-        get() = Money(installmentAmount.minorUnits * installmentCount, principal.currency)
+        get() = Money(installmentSchedule.sumOf { it.amount.minorUnits }, principal.currency)
+
+    private fun calculateInstallmentSchedule(): List<InstallmentScheduleEntry> {
+        var outstandingPrincipal = principal.minorUnits
+        return (1..installmentCount).map { installmentNumber ->
+            val remainingInstallments = installmentCount - installmentNumber + 1
+            val appliedRate = promotionalRatePeriods
+                .firstOrNull { installmentNumber in it }
+                ?.annualInterestBasisPoints
+                ?: annualInterestBasisPoints
+            val periodicRate = monthlyRate(appliedRate)
+            val rawPayment = if (periodicRate == 0.0) {
+                outstandingPrincipal.toDouble() / remainingInstallments
+            } else {
+                val factor = (1.0 + periodicRate).pow(remainingInstallments)
+                outstandingPrincipal * periodicRate * factor / (factor - 1.0)
+            }
+            val interest = (outstandingPrincipal * periodicRate).roundToLong().coerceAtLeast(0)
+            val principalPayment = if (installmentNumber == installmentCount) {
+                outstandingPrincipal
+            } else {
+                (rawPayment.roundToLong() - interest)
+                    .coerceAtLeast(1)
+                    .coerceAtMost(outstandingPrincipal)
+            }
+            outstandingPrincipal = (outstandingPrincipal - principalPayment).coerceAtLeast(0)
+            InstallmentScheduleEntry(
+                installmentNumber = installmentNumber,
+                amount = Money(principalPayment + interest, principal.currency),
+                principal = Money(principalPayment, principal.currency),
+                interest = Money(interest, principal.currency),
+                annualInterestBasisPoints = appliedRate,
+                calculationRuleVersion = calculationRuleVersion,
+            )
+        }
+    }
 }
 
+@Serializable
 data class CreditCardPayment(
     val id: String,
     val accountId: String,
@@ -80,30 +151,39 @@ data class CreditCardPayment(
     val paidAtEpochMillis: Long,
     val sourceAccountId: String?,
     val note: String?,
+    val type: DebtPaymentType = DebtPaymentType.CUSTOM,
+    @SerialName("calculation_rule_version")
+    val calculationRuleVersion: Int = CURRENT_FINANCIAL_RULE_VERSION,
 ) {
     init {
         require(id.isNotBlank())
         require(accountId.isNotBlank())
         require(amount.isPositive)
         require(paidAtEpochMillis > 0)
+        require(calculationRuleVersion > 0)
     }
 }
 
+@Serializable
 data class SavingsProfile(
     val accountId: String,
     val type: SavingsProductType,
     val annualYieldBasisPoints: Int,
     val openedAtEpochMillis: Long,
     val maturityAtEpochMillis: Long?,
+    @SerialName("calculation_rule_version")
+    val calculationRuleVersion: Int = CURRENT_FINANCIAL_RULE_VERSION,
 ) {
     init {
         require(accountId.isNotBlank())
         require(annualYieldBasisPoints >= 0)
         require(openedAtEpochMillis > 0)
         require(maturityAtEpochMillis == null || maturityAtEpochMillis > openedAtEpochMillis)
+        require(calculationRuleVersion > 0)
     }
 }
 
+@Serializable
 data class SavingsMovement(
     val id: String,
     val accountId: String,
@@ -112,6 +192,8 @@ data class SavingsMovement(
     val annualYieldBasisPoints: Int?,
     val occurredAtEpochMillis: Long,
     val note: String?,
+    @SerialName("calculation_rule_version")
+    val calculationRuleVersion: Int = CURRENT_FINANCIAL_RULE_VERSION,
 ) {
     init {
         require(id.isNotBlank())
@@ -120,6 +202,7 @@ data class SavingsMovement(
         require(annualYieldBasisPoints == null || annualYieldBasisPoints >= 0)
         require(occurredAtEpochMillis > 0)
         require(type != SavingsMovementType.RATE_CHANGE || annualYieldBasisPoints != null)
+        require(calculationRuleVersion > 0)
     }
 }
 
@@ -137,12 +220,15 @@ data class SavingsDailyBalance(
     val estimatedYield: Money,
 )
 
+@Serializable
 data class LoanProfile(
     val accountId: String,
     val annualInterestBasisPoints: Int,
     val monthlyPayment: Money,
     val paymentDueDay: Int,
     val openedAtEpochMillis: Long,
+    @SerialName("schedule_rule_version")
+    val scheduleRuleVersion: Int = CURRENT_FINANCIAL_RULE_VERSION,
 ) {
     init {
         require(accountId.isNotBlank())
@@ -150,9 +236,11 @@ data class LoanProfile(
         require(monthlyPayment.minorUnits >= 0)
         require(paymentDueDay in 1..31)
         require(openedAtEpochMillis > 0)
+        require(scheduleRuleVersion > 0)
     }
 }
 
+@Serializable
 data class LoanPayment(
     val id: String,
     val accountId: String,
@@ -160,12 +248,16 @@ data class LoanPayment(
     val paidAtEpochMillis: Long,
     val sourceAccountId: String?,
     val note: String?,
+    val type: DebtPaymentType = DebtPaymentType.CUSTOM,
+    @SerialName("calculation_rule_version")
+    val calculationRuleVersion: Int = CURRENT_FINANCIAL_RULE_VERSION,
 ) {
     init {
         require(id.isNotBlank())
         require(accountId.isNotBlank())
         require(amount.isPositive)
         require(paidAtEpochMillis > 0)
+        require(calculationRuleVersion > 0)
     }
 }
 
@@ -214,15 +306,22 @@ fun calculateCreditCardOverview(
     }
 
     cardPurchases.sortedBy { it.firstPaymentAtEpochMillis }.forEach { purchase ->
-        val installment = purchase.installmentAmount.minorUnits
-        val paid = (unallocatedPayments / installment).toInt().coerceAtMost(purchase.installmentCount)
-        paidInstallments[purchase.id] = paid
-        val allocatedToFullInstallments = installment * paid
-        unallocatedPayments = (unallocatedPayments - allocatedToFullInstallments).coerceAtLeast(0)
-        if (paid < purchase.installmentCount) {
-            nextPayment += (installment - unallocatedPayments.coerceAtMost(installment)).coerceAtLeast(0)
-            unallocatedPayments = 0
+        var paid = 0
+        var nextInstallmentCaptured = false
+        purchase.installmentSchedule.forEach { installment ->
+            if (unallocatedPayments >= installment.amount.minorUnits) {
+                unallocatedPayments -= installment.amount.minorUnits
+                paid += 1
+            } else if (!nextInstallmentCaptured) {
+                nextPayment += (
+                    installment.amount.minorUnits -
+                        unallocatedPayments.coerceAtMost(installment.amount.minorUnits)
+                    ).coerceAtLeast(0)
+                unallocatedPayments = 0
+                nextInstallmentCaptured = true
+            }
         }
+        paidInstallments[purchase.id] = paid
     }
 
     val totalDebt = openingDebt.minorUnits + cardPurchases.sumOf { it.financedTotal.minorUnits }

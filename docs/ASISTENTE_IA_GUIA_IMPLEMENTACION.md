@@ -445,6 +445,8 @@ Salida: ninguna pantalla escribe por un camino alternativo.
 
 Rama: `feat/financial-command-domain-gaps`.
 
+Estado: implementada y validada localmente; pendiente de merge.
+
 - Tasas promocionales por período.
 - Pago de cuota, total y abono.
 - Origen y destino de efectivo.

@@ -14,6 +14,34 @@ class ManualFinanceProductsTest {
     }
 
     @Test
+    fun `promotional installments use zero rate before the configured card rate`() {
+        val purchase = InstallmentPurchase(
+            id = "promotion",
+            accountId = "card",
+            merchant = "Comercio",
+            principal = money(1_200_000),
+            installmentCount = 12,
+            annualInterestBasisPoints = 2_400,
+            purchasedAtEpochMillis = 1L,
+            firstPaymentAtEpochMillis = 2L,
+            categoryId = null,
+            note = null,
+            promotionalRatePeriods = listOf(
+                InstallmentRatePeriod(
+                    firstInstallment = 1,
+                    lastInstallment = 3,
+                    annualInterestBasisPoints = 0,
+                ),
+            ),
+        )
+
+        assertEquals(listOf(0, 0, 0), purchase.installmentSchedule.take(3).map { it.annualInterestBasisPoints })
+        assertEquals(2_400, purchase.installmentSchedule[3].annualInterestBasisPoints)
+        assertTrue(purchase.financedTotal.minorUnits > purchase.principal.minorUnits)
+        assertEquals(CURRENT_FINANCIAL_RULE_VERSION, purchase.installmentSchedule.last().calculationRuleVersion)
+    }
+
+    @Test
     fun `card overview aggregates purchases with different installment plans`() {
         val profile = CreditCardProfile(
             accountId = "card",

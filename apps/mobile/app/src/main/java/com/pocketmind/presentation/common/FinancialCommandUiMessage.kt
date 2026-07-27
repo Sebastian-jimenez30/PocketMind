@@ -19,6 +19,8 @@ internal fun FinancialCommandResult.Rejected.toUserMessage(): String = when {
         "Usa una fecha válida."
     FinancialCommandError.INVALID_INSTALLMENTS in errors ->
         "Usa entre 1 y 60 cuotas."
+    FinancialCommandError.INVALID_PROMOTIONAL_RATE_PERIODS in errors ->
+        "Revisa las cuotas y tasas del periodo promocional."
     FinancialCommandError.INVALID_MERCHANT in errors ->
         "Escribe el comercio o concepto."
     FinancialCommandError.CURRENCY_MISMATCH in errors ->
@@ -35,12 +37,20 @@ internal fun FinancialCommandResult.Rejected.toUserMessage(): String = when {
         "La compra supera el cupo disponible."
     FinancialCommandError.PAYMENT_EXCEEDS_CARD_DEBT in errors ->
         "El pago no puede superar la deuda actual."
+    FinancialCommandError.MISSING_PAYMENT_AMOUNT in errors ->
+        "Agrega el valor del abono."
+    FinancialCommandError.PAYMENT_AMOUNT_MISMATCH in errors ->
+        "El valor cambió. Revisa la cuota o el saldo actualizado."
     FinancialCommandError.WITHDRAWAL_EXCEEDS_SAVINGS in errors ->
         "El retiro no puede superar el ahorro disponible."
     FinancialCommandError.INVALID_SAVINGS_RATE in errors ->
         "Agrega una tasa válida."
     FinancialCommandError.PAYMENT_EXCEEDS_LOAN_DEBT in errors ->
         "El abono no puede superar la deuda actual."
+    FinancialCommandError.INVALID_MONEY_FLOW_ENDPOINTS in errors ->
+        "Revisa los productos de origen y destino."
+    FinancialCommandError.UNSUPPORTED_RULE_VERSION in errors ->
+        "Actualiza PocketMind para usar esta operación."
     FinancialCommandError.TRANSACTION_NOT_FOUND in errors ->
         "No encontramos el movimiento."
     FinancialCommandError.LINKED_TRANSACTION_REQUIRES_PRODUCT_ACTION in errors ->

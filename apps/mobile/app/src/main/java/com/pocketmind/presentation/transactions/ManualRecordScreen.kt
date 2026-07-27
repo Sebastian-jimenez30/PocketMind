@@ -290,7 +290,12 @@ private fun ManualRecordUiState.toCommand(
         amount = amount,
         occurredAtEpochMillis = occurredAtEpochMillis,
         source = TransactionSource.MANUAL,
-        relatedProductId = sourceProductId,
+        sourceProductId = sourceProductId.takeIf {
+            operation == ManualRecordType.SAVINGS_DEPOSIT
+        },
+        destinationProductId = sourceProductId.takeIf {
+            operation == ManualRecordType.SAVINGS_WITHDRAWAL
+        },
         note = note,
     )
     ManualRecordType.LOAN_PAYMENT -> FinancialCommand.RecordLoanPayment(
