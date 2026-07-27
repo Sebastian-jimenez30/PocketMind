@@ -53,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -75,6 +76,7 @@ import com.pocketmind.ui.components.PocketPrimaryButton
 import com.pocketmind.ui.components.PocketSectionCard
 import com.pocketmind.ui.theme.PocketMindTheme
 import com.pocketmind.ui.theme.PocketSpacing
+import com.pocketmind.ui.testing.PocketMindTestTags
 import java.text.NumberFormat
 import java.util.Locale
 import kotlinx.coroutines.launch
@@ -218,7 +220,9 @@ private fun DashboardContent(
         QuickAction(R.string.home_action_movements, Icons.AutoMirrored.Rounded.ReceiptLong, onOpenTransactions),
     )
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag(PocketMindTestTags.HOME_CONTENT),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(
             start = PocketSpacing.xl,
             top = PocketSpacing.xl,

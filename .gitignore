@@ -30,3 +30,4 @@ replay_pid*
 .idea
 .agents
 skills-lock.json
+supabase/.temp/

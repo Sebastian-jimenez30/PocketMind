@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pocketmind.data.profile.ProfileRepository
 import com.pocketmind.data.profile.ProfileSettings
+import com.pocketmind.data.sync.SyncCoordinator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,16 +23,23 @@ data class ProfileUiState(
     val isSaving: Boolean = false,
     val message: String? = null,
     val isError: Boolean = false,
+    val isSyncing: Boolean = false,
+    val pendingSyncChanges: Int = 0,
+    val initialSyncCompleted: Boolean = false,
+    val lastSyncedAtEpochMillis: Long? = null,
+    val syncError: String? = null,
 )
 
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val profileRepository: ProfileRepository,
+    private val syncCoordinator: SyncCoordinator,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
     init {
+        observeSync()
         load()
     }
 
@@ -96,10 +104,41 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    fun syncNow() {
+        viewModelScope.launch {
+            syncCoordinator.syncCurrentSession()
+        }
+    }
+
+    private fun observeSync() {
+        viewModelScope.launch {
+            syncCoordinator.status.collect { sync ->
+                _uiState.update {
+                    it.copy(
+                        isSyncing = sync.isSyncing,
+                        pendingSyncChanges = sync.pendingChanges,
+                        initialSyncCompleted = sync.initialSyncCompleted,
+                        lastSyncedAtEpochMillis = sync.lastSyncedAtEpochMillis,
+                        syncError = sync.lastError,
+                    )
+                }
+            }
+        }
+    }
+
     private fun load() {
         viewModelScope.launch {
             try {
-                _uiState.value = profileRepository.load().toUiState()
+                val loaded = profileRepository.load().toUiState()
+                _uiState.update { current ->
+                    loaded.copy(
+                        isSyncing = current.isSyncing,
+                        pendingSyncChanges = current.pendingSyncChanges,
+                        initialSyncCompleted = current.initialSyncCompleted,
+                        lastSyncedAtEpochMillis = current.lastSyncedAtEpochMillis,
+                        syncError = current.syncError,
+                    )
+                }
             } catch (exception: Exception) {
                 _uiState.update { it.copy(isLoading = false, message = exception.toSafeMessage(), isError = true) }
             }

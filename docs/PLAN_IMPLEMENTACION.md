@@ -308,6 +308,13 @@ Reglas:
 
 **Salida:** movimientos de prueba locales sincronizables de forma segura.
 
+**Estado Android (2026-07-27):** implementada la base offline-first completa:
+Room 5, outbox transaccional, Supabase con RLS, tombstones, bootstrap por
+usuario, sincronización inmediata/periódica/manual y estado visible. Antes de
+marcar la fase como validada falta ejecutar la matriz automatizada y la prueba
+manual en dos dispositivos descrita en `SINCRONIZACION_DATOS.md`. iOS continúa
+pendiente y debe respetar el mismo contrato remoto.
+
 ### Fase 3 — Ingestión bancaria y clasificación
 
 - Construir onboarding común; añadir comprobación de acceso a notificaciones

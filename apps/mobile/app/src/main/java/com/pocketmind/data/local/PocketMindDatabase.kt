@@ -7,6 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.pocketmind.data.local.dao.AccountDao
 import com.pocketmind.data.local.dao.FinancialSetupDao
 import com.pocketmind.data.local.dao.ManualFinanceDao
+import com.pocketmind.data.local.dao.SyncDao
 import com.pocketmind.data.local.dao.TransactionDao
 import com.pocketmind.data.local.entity.AccountEntity
 import com.pocketmind.data.local.entity.DebtEntity
@@ -22,6 +23,8 @@ import com.pocketmind.data.local.entity.SavingsProfileEntity
 import com.pocketmind.data.local.entity.LoanPaymentEntity
 import com.pocketmind.data.local.entity.LoanProfileEntity
 import com.pocketmind.data.local.entity.TransactionEntity
+import com.pocketmind.data.local.entity.SyncControlEntity
+import com.pocketmind.data.local.entity.SyncOutboxEntity
 
 @Database(
     entities = [
@@ -39,8 +42,10 @@ import com.pocketmind.data.local.entity.TransactionEntity
         SavingsMovementEntity::class,
         LoanProfileEntity::class,
         LoanPaymentEntity::class,
+        SyncOutboxEntity::class,
+        SyncControlEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class PocketMindDatabase : RoomDatabase() {
@@ -48,6 +53,7 @@ abstract class PocketMindDatabase : RoomDatabase() {
     abstract fun transactionDao(): TransactionDao
     abstract fun financialSetupDao(): FinancialSetupDao
     abstract fun manualFinanceDao(): ManualFinanceDao
+    abstract fun syncDao(): SyncDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -180,6 +186,92 @@ abstract class PocketMindDatabase : RoomDatabase() {
                         "WHERE `accounts`.`type` = 'LOAN'",
                 )
             }
+        }
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `sync_outbox` (" +
+                        "`entityType` TEXT NOT NULL, `entityId` TEXT NOT NULL, `operation` TEXT NOT NULL, " +
+                        "`queuedAtEpochMillis` INTEGER NOT NULL, `attemptCount` INTEGER NOT NULL, " +
+                        "`lastError` TEXT, PRIMARY KEY(`entityType`, `entityId`))",
+                )
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `sync_control` (" +
+                        "`id` INTEGER NOT NULL, `userId` TEXT, `isApplyingRemote` INTEGER NOT NULL, " +
+                        "`isInitialSyncCompleted` INTEGER NOT NULL, `isSyncing` INTEGER NOT NULL, " +
+                        "`lastSyncedAtEpochMillis` INTEGER, `lastError` TEXT, PRIMARY KEY(`id`))",
+                )
+                ensureSyncInfrastructure(database)
+            }
+        }
+
+        /**
+         * Migrations install this infrastructure for upgraded databases, while
+         * the Room callback invokes it for both fresh and restored databases.
+         */
+        fun ensureSyncInfrastructure(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                "INSERT OR IGNORE INTO `sync_control` " +
+                    "(`id`, `userId`, `isApplyingRemote`, `isInitialSyncCompleted`, `isSyncing`, " +
+                    "`lastSyncedAtEpochMillis`, `lastError`) VALUES (1, NULL, 0, 0, 0, NULL, NULL)",
+            )
+            listOf(
+                SyncTrigger("financial_setup", "id", "FINANCIAL_SETUP"),
+                SyncTrigger("accounts", "id", "ACCOUNT"),
+                SyncTrigger("transactions", "id", "TRANSACTION"),
+                SyncTrigger("income_sources", "id", "INCOME_SOURCE"),
+                SyncTrigger("debts", "id", "DEBT"),
+                SyncTrigger("savings_plans", "id", "SAVINGS_PLAN"),
+                SyncTrigger("recurring_obligations", "id", "RECURRING_OBLIGATION"),
+                SyncTrigger("credit_card_profiles", "accountId", "CREDIT_CARD_PROFILE"),
+                SyncTrigger("installment_purchases", "id", "INSTALLMENT_PURCHASE"),
+                SyncTrigger("credit_card_payments", "id", "CREDIT_CARD_PAYMENT"),
+                SyncTrigger("savings_profiles", "accountId", "SAVINGS_PROFILE"),
+                SyncTrigger("savings_movements", "id", "SAVINGS_MOVEMENT"),
+                SyncTrigger("loan_profiles", "accountId", "LOAN_PROFILE"),
+                SyncTrigger("loan_payments", "id", "LOAN_PAYMENT"),
+            ).forEach { trigger ->
+                createSyncTriggers(database, trigger)
+            }
+        }
+
+        private data class SyncTrigger(
+            val table: String,
+            val idColumn: String,
+            val entityType: String,
+        )
+
+        private fun createSyncTriggers(
+            database: SupportSQLiteDatabase,
+            trigger: SyncTrigger,
+        ) {
+            listOf("INSERT", "UPDATE").forEach { action ->
+                database.execSQL(
+                    "CREATE TRIGGER IF NOT EXISTS `sync_${trigger.table}_${action.lowercase()}` " +
+                        "AFTER $action ON `${trigger.table}` " +
+                        "WHEN COALESCE((SELECT `isApplyingRemote` FROM `sync_control` WHERE `id` = 1), 0) = 0 " +
+                        "BEGIN INSERT OR REPLACE INTO `sync_outbox` " +
+                        "(`entityType`, `entityId`, `operation`, `queuedAtEpochMillis`, `attemptCount`, `lastError`) " +
+                        "VALUES ('${trigger.entityType}', CAST(NEW.`${trigger.idColumn}` AS TEXT), 'UPSERT', " +
+                        "COALESCE((SELECT `queuedAtEpochMillis` + 1 FROM `sync_outbox` " +
+                        "WHERE `entityType` = '${trigger.entityType}' AND " +
+                        "`entityId` = CAST(NEW.`${trigger.idColumn}` AS TEXT)), " +
+                        "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)), 0, NULL); END",
+                )
+            }
+            database.execSQL(
+                "CREATE TRIGGER IF NOT EXISTS `sync_${trigger.table}_delete` " +
+                    "AFTER DELETE ON `${trigger.table}` " +
+                    "WHEN COALESCE((SELECT `isApplyingRemote` FROM `sync_control` WHERE `id` = 1), 0) = 0 " +
+                    "BEGIN INSERT OR REPLACE INTO `sync_outbox` " +
+                    "(`entityType`, `entityId`, `operation`, `queuedAtEpochMillis`, `attemptCount`, `lastError`) " +
+                    "VALUES ('${trigger.entityType}', CAST(OLD.`${trigger.idColumn}` AS TEXT), 'DELETE', " +
+                    "COALESCE((SELECT `queuedAtEpochMillis` + 1 FROM `sync_outbox` " +
+                    "WHERE `entityType` = '${trigger.entityType}' AND " +
+                    "`entityId` = CAST(OLD.`${trigger.idColumn}` AS TEXT)), " +
+                    "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)), 0, NULL); END",
+            )
         }
     }
 }
