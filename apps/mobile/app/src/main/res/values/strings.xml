@@ -100,6 +100,11 @@
     <string name="profile_cancel">Cancelar</string>
     <string name="profile_close_sheet">Cerrar</string>
     <string name="profile_coming_soon">Esta opción llegará en una próxima entrega.</string>
+    <string name="profile_sync_title">Sincronización</string>
+    <string name="profile_sync_syncing">Guardando tus cambios…</string>
+    <string name="profile_sync_pending">%1$d cambios pendientes. Toca para reintentar.</string>
+    <string name="profile_sync_ready">Datos guardados en todos tus dispositivos</string>
+    <string name="profile_sync_never">Toca para guardar tus datos en la nube</string>
     <string name="onboarding_header_title">Tu punto de partida</string>
     <string name="onboarding_progress">Paso %1$d de %2$d</string>
     <string name="onboarding_intro_title">Organicemos tu panorama</string>

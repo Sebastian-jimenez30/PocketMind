@@ -1,6 +1,7 @@
 package com.pocketmind.data.profile
 
 import io.github.jan.supabase.SupabaseClient
+import com.pocketmind.data.sync.SyncCoordinator
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
@@ -10,6 +11,7 @@ import javax.inject.Inject
 
 class SupabaseProfileRepository @Inject constructor(
     private val supabase: SupabaseClient,
+    private val syncCoordinator: SyncCoordinator,
 ) : ProfileRepository {
     override suspend fun load(): ProfileSettings {
         val user = supabase.auth.retrieveUserForCurrentSession()
@@ -57,7 +59,9 @@ class SupabaseProfileRepository @Inject constructor(
     }
 
     override suspend fun signOut() {
+        syncCoordinator.prepareSignOut().getOrThrow()
         supabase.auth.signOut()
+        syncCoordinator.clearAfterSignOut()
     }
 
     private companion object {

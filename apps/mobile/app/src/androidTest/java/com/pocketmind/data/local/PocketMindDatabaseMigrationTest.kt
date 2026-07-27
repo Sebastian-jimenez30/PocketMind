@@ -83,6 +83,40 @@ class PocketMindDatabaseMigrationTest {
         migrated.close()
     }
 
+    @Test
+    fun migration4To5_preservesDataAndQueuesSubsequentChanges() {
+        helper.createDatabase("migration-sync-test", 4).apply {
+            execSQL(
+                "INSERT INTO accounts " +
+                    "(id, name, type, currency, openingBalanceMinorUnits, isArchived) " +
+                    "VALUES ('cash', 'Efectivo', 'CASH', 'COP', 250000, 0)",
+            )
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(
+            "migration-sync-test",
+            5,
+            true,
+            PocketMindDatabase.MIGRATION_4_5,
+        )
+
+        assertEquals(1, migrated.singleLong("SELECT COUNT(*) FROM accounts WHERE id = 'cash'"))
+        assertEquals(0, migrated.singleLong("SELECT COUNT(*) FROM sync_outbox"))
+
+        migrated.execSQL(
+            "UPDATE accounts SET openingBalanceMinorUnits = 300000 WHERE id = 'cash'",
+        )
+        assertEquals(
+            1,
+            migrated.singleLong(
+                "SELECT COUNT(*) FROM sync_outbox " +
+                    "WHERE entityType = 'ACCOUNT' AND entityId = 'cash' AND operation = 'UPSERT'",
+            ),
+        )
+        migrated.close()
+    }
+
     private fun SupportSQLiteDatabase.singleLong(query: String): Long =
         this.query(query).use { cursor ->
             check(cursor.moveToFirst())

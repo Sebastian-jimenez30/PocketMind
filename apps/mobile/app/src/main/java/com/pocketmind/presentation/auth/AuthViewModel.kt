@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pocketmind.data.auth.AuthOperationResult
 import com.pocketmind.data.auth.AuthRepository
+import com.pocketmind.data.sync.SyncCoordinator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +30,7 @@ data class AuthUiState(
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val authRepository: AuthRepository,
+    private val syncCoordinator: SyncCoordinator,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AuthUiState())
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
@@ -39,6 +41,10 @@ class AuthViewModel @Inject constructor(
                 .observeAuthentication()
                 .distinctUntilChanged()
                 .collect { isAuthenticated ->
+                    if (isAuthenticated) {
+                        _uiState.update { it.copy(isLoading = true, isAuthenticated = false) }
+                        syncCoordinator.bootstrapCurrentSession()
+                    }
                     _uiState.update {
                         it.copy(
                             isLoading = false,
@@ -81,11 +87,18 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    private fun handle(result: AuthOperationResult, mode: AuthMode) {
+    private suspend fun handle(result: AuthOperationResult, mode: AuthMode) {
+        if (result == AuthOperationResult.Success && mode == AuthMode.SIGN_IN) {
+            syncCoordinator.bootstrapCurrentSession()
+            _uiState.update {
+                it.copy(isLoading = false, isAuthenticated = true, message = null, isError = false)
+            }
+            return
+        }
         _uiState.update { state ->
             when (result) {
                 AuthOperationResult.Success -> when (mode) {
-                    AuthMode.SIGN_IN -> state.copy(isLoading = false, isAuthenticated = true)
+                    AuthMode.SIGN_IN -> state
                     AuthMode.SIGN_UP -> state.copy(
                         isLoading = false,
                         message = "Revisa tu correo para confirmar tu cuenta antes de iniciar sesión.",

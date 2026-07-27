@@ -26,6 +26,7 @@ import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Security
+import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
@@ -55,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -74,6 +76,7 @@ import com.pocketmind.ui.components.PocketRowDivider
 import com.pocketmind.ui.components.PocketSectionCard
 import com.pocketmind.ui.components.PocketSettingsRow
 import com.pocketmind.ui.theme.PocketSpacing
+import com.pocketmind.ui.testing.PocketMindTestTags
 import com.pocketmind.ui.theme.PocketMindTheme
 import kotlinx.coroutines.launch
 
@@ -97,6 +100,7 @@ fun ProfileRoute(
         onSave = viewModel::saveProfileAndPreferences,
         onChangeEmail = viewModel::changeEmail,
         onChangePassword = viewModel::changePassword,
+        onSyncNow = viewModel::syncNow,
         onSignOut = { viewModel.signOut(onSignedOut) },
     )
 }
@@ -114,6 +118,7 @@ fun ProfileScreen(
     onSave: () -> Unit,
     onChangeEmail: () -> Unit,
     onChangePassword: (String, String) -> Unit,
+    onSyncNow: () -> Unit,
     onSignOut: () -> Unit,
 ) {
     var activeSheet by rememberSaveable { mutableStateOf<ProfileSheet?>(null) }
@@ -149,6 +154,7 @@ fun ProfileScreen(
                         onOpenPersonal = { activeSheet = ProfileSheet.PERSONAL },
                         onOpenPreferences = { activeSheet = ProfileSheet.PREFERENCES },
                         onOpenSecurity = { showPasswordDialog = true },
+                        onSyncNow = onSyncNow,
                         onComingSoon = onComingSoon,
                         onSignOut = onSignOut,
                     )
@@ -263,11 +269,14 @@ private fun ProfileContent(
     onOpenPersonal: () -> Unit,
     onOpenPreferences: () -> Unit,
     onOpenSecurity: () -> Unit,
+    onSyncNow: () -> Unit,
     onComingSoon: () -> Unit,
     onSignOut: () -> Unit,
 ) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag(PocketMindTestTags.PROFILE_CONTENT),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(
             start = PocketSpacing.xl,
             top = PocketSpacing.xl,
@@ -278,6 +287,16 @@ private fun ProfileContent(
     ) {
         if (state.message != null) {
             item { PocketMessage(message = state.message, isError = state.isError) }
+        }
+        item {
+            PocketSectionCard {
+                PocketSettingsRow(
+                    icon = Icons.Rounded.Sync,
+                    title = stringResource(R.string.profile_sync_title),
+                    description = profileSyncDescription(state),
+                    onClick = onSyncNow,
+                )
+            }
         }
         item {
             PocketSectionCard {
@@ -567,7 +586,20 @@ private fun ProfilePreview() {
             onSave = {},
             onChangeEmail = {},
             onChangePassword = { _, _ -> },
+            onSyncNow = {},
             onSignOut = {},
         )
     }
+}
+
+@Composable
+private fun profileSyncDescription(state: ProfileUiState): String = when {
+    state.isSyncing -> stringResource(R.string.profile_sync_syncing)
+    state.pendingSyncChanges > 0 -> stringResource(
+        R.string.profile_sync_pending,
+        state.pendingSyncChanges,
+    )
+    state.syncError != null -> state.syncError
+    state.initialSyncCompleted -> stringResource(R.string.profile_sync_ready)
+    else -> stringResource(R.string.profile_sync_never)
 }

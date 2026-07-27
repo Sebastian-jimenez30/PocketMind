@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import com.pocketmind.data.sync.SyncCoordinator
 import dagger.hilt.android.AndroidEntryPoint
 import com.pocketmind.presentation.navigation.PocketMindApp
 import com.pocketmind.ui.theme.PocketMindTheme
@@ -15,6 +16,7 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject lateinit var supabase: SupabaseClient
+    @Inject lateinit var syncCoordinator: SyncCoordinator
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -30,5 +32,10 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         supabase.handleDeeplinks(intent)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        syncCoordinator.requestForegroundSync()
     }
 }

@@ -4,7 +4,9 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 
+@Serializable
 @Entity(
     tableName = "credit_card_profiles",
     foreignKeys = [
@@ -27,6 +29,7 @@ data class CreditCardProfileEntity(
     val openingDebtFirstPaymentAtEpochMillis: Long?,
 )
 
+@Serializable
 @Entity(
     tableName = "installment_purchases",
     foreignKeys = [
@@ -53,6 +56,7 @@ data class InstallmentPurchaseEntity(
     val note: String?,
 )
 
+@Serializable
 @Entity(
     tableName = "credit_card_payments",
     foreignKeys = [
@@ -75,6 +79,7 @@ data class CreditCardPaymentEntity(
     val note: String?,
 )
 
+@Serializable
 @Entity(
     tableName = "savings_profiles",
     foreignKeys = [
@@ -94,6 +99,7 @@ data class SavingsProfileEntity(
     val maturityAtEpochMillis: Long?,
 )
 
+@Serializable
 @Entity(
     tableName = "savings_movements",
     foreignKeys = [
@@ -117,6 +123,7 @@ data class SavingsMovementEntity(
     val note: String?,
 )
 
+@Serializable
 @Entity(
     tableName = "loan_profiles",
     foreignKeys = [
@@ -137,6 +144,7 @@ data class LoanProfileEntity(
     val openedAtEpochMillis: Long,
 )
 
+@Serializable
 @Entity(
     tableName = "loan_payments",
     foreignKeys = [

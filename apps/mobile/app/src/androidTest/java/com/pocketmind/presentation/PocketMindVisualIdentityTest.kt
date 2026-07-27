@@ -1,9 +1,13 @@
 package com.pocketmind.presentation
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import com.pocketmind.presentation.auth.AuthScreen
 import com.pocketmind.presentation.auth.AuthUiState
 import com.pocketmind.presentation.home.HomeScreen
@@ -14,6 +18,7 @@ import com.pocketmind.shared.domain.model.CurrencyCode
 import com.pocketmind.shared.domain.model.DashboardSummary
 import com.pocketmind.shared.domain.model.Money
 import com.pocketmind.ui.theme.PocketMindTheme
+import com.pocketmind.ui.testing.PocketMindTestTags
 import org.junit.Rule
 import org.junit.Test
 
@@ -39,7 +44,7 @@ class PocketMindVisualIdentityTest {
         }
 
         composeRule.onNodeWithText("Qué bueno verte").assertIsDisplayed()
-        composeRule.onNodeWithText("Iniciar sesión").assertIsDisplayed()
+        composeRule.onNode(hasText("Iniciar sesión") and hasClickAction()).assertIsDisplayed()
         composeRule.onNodeWithText("Continuar con Google").assertIsDisplayed()
     }
 
@@ -58,8 +63,10 @@ class PocketMindVisualIdentityTest {
             }
         }
 
-        composeRule.onNodeWithText("Balance de este mes").assertIsDisplayed()
-        composeRule.onNodeWithText("Accesos rápidos").assertIsDisplayed()
+        composeRule.onNodeWithText("Panorama").assertIsDisplayed()
+        composeRule.onNodeWithText("Acciones").assertIsDisplayed()
+        composeRule.onNodeWithTag(PocketMindTestTags.HOME_CONTENT)
+            .performScrollToNode(hasText("Productos"))
         composeRule.onNodeWithText("Productos").assertIsDisplayed()
     }
 
@@ -82,13 +89,17 @@ class PocketMindVisualIdentityTest {
                     onSave = {},
                     onChangeEmail = {},
                     onChangePassword = { _, _ -> },
+                    onSyncNow = {},
                     onSignOut = {},
                 )
             }
         }
 
+        val profileContent = composeRule.onNodeWithTag(PocketMindTestTags.PROFILE_CONTENT)
+        profileContent.performScrollToNode(hasText("Cerrar sesión"))
         composeRule.onNodeWithText("Cerrar sesión").assertIsDisplayed()
-        composeRule.onNodeWithText("Datos personales").performClick()
+        profileContent.performScrollToNode(hasText("Datos"))
+        composeRule.onNodeWithText("Datos").performClick()
         composeRule.onNodeWithText("Guardar nombre").assertIsDisplayed()
     }
 
