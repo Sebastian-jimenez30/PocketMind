@@ -32,7 +32,7 @@ private fun AccountEntity.toDomain() = FinancialAccount(
     isArchived = isArchived,
 )
 
-private fun FinancialAccount.toEntity() = AccountEntity(
+internal fun FinancialAccount.toEntity() = AccountEntity(
     id = id,
     name = name,
     type = type.name,

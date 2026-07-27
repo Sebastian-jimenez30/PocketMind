@@ -1,5 +1,6 @@
 package com.pocketmind.presentation.transactions
 
+import com.pocketmind.data.time.JavaTimeCreditCardPaymentDateCalculator
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -7,11 +8,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class ManualRecordDateCalculatorTest {
+    private val calculator = JavaTimeCreditCardPaymentDateCalculator()
+
     @Test
     fun `purchase before closing date is due the following month`() {
         val purchase = dateMillis(2026, 7, 10)
 
-        val dueDate = estimatedCardDueDate(
+        val dueDate = calculator.firstPaymentAt(
             purchasedAtEpochMillis = purchase,
             closingDay = 20,
             paymentDay = 8,
@@ -24,7 +27,7 @@ class ManualRecordDateCalculatorTest {
     fun `purchase after closing date is due in two months`() {
         val purchase = dateMillis(2026, 7, 25)
 
-        val dueDate = estimatedCardDueDate(
+        val dueDate = calculator.firstPaymentAt(
             purchasedAtEpochMillis = purchase,
             closingDay = 20,
             paymentDay = 8,
@@ -37,7 +40,7 @@ class ManualRecordDateCalculatorTest {
     fun `payment day is limited to the last day of a short month`() {
         val purchase = dateMillis(2026, 1, 10)
 
-        val dueDate = estimatedCardDueDate(
+        val dueDate = calculator.firstPaymentAt(
             purchasedAtEpochMillis = purchase,
             closingDay = 20,
             paymentDay = 31,

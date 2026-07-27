@@ -5,6 +5,7 @@ import com.pocketmind.data.repository.RoomFinancialAccountRepository
 import com.pocketmind.data.repository.RoomFinancialSetupRepository
 import com.pocketmind.data.repository.RoomManualFinanceRepository
 import com.pocketmind.data.repository.RoomTransactionRepository
+import com.pocketmind.data.time.JavaTimeCreditCardPaymentDateCalculator
 import com.pocketmind.data.auth.AuthRepository
 import com.pocketmind.data.auth.SupabaseAuthRepository
 import com.pocketmind.data.profile.ProfileRepository
@@ -18,10 +19,10 @@ import com.pocketmind.shared.domain.usecase.ObserveDashboardSummaryUseCase
 import com.pocketmind.shared.domain.usecase.GetFinancialAccountUseCase
 import com.pocketmind.shared.domain.usecase.GetTransactionUseCase
 import com.pocketmind.shared.domain.usecase.ObserveActiveFinancialAccountsUseCase
-import com.pocketmind.shared.domain.usecase.CreateTransactionUseCase
+import com.pocketmind.shared.domain.usecase.CreditCardPaymentDateCalculator
+import com.pocketmind.shared.domain.usecase.ExecuteFinancialCommandUseCase
 import com.pocketmind.shared.domain.usecase.ObserveFinancialSetupCompletedUseCase
 import com.pocketmind.shared.domain.usecase.SaveInitialFinancialSetupUseCase
-import com.pocketmind.shared.domain.usecase.SaveFinancialAccountUseCase
 import com.pocketmind.shared.domain.usecase.ManualFinanceUseCases
 import dagger.Binds
 import dagger.Module
@@ -70,6 +71,12 @@ abstract class RepositoryModule {
     @Singleton
     abstract fun bindProfileRepository(implementation: SupabaseProfileRepository): ProfileRepository
 
+    @Binds
+    @Singleton
+    abstract fun bindCreditCardPaymentDateCalculator(
+        implementation: JavaTimeCreditCardPaymentDateCalculator,
+    ): CreditCardPaymentDateCalculator
+
     companion object {
         @Provides
         fun provideObserveDashboardSummaryUseCase(
@@ -97,23 +104,27 @@ abstract class RepositoryModule {
         ): GetFinancialAccountUseCase = GetFinancialAccountUseCase(repository)
 
         @Provides
-        fun provideSaveFinancialAccountUseCase(
-            repository: FinancialAccountRepository,
-        ): SaveFinancialAccountUseCase = SaveFinancialAccountUseCase(repository)
-
-        @Provides
         fun provideGetTransactionUseCase(
             repository: TransactionRepository,
         ): GetTransactionUseCase = GetTransactionUseCase(repository)
 
         @Provides
-        fun provideCreateTransactionUseCase(
-            repository: TransactionRepository,
-        ): CreateTransactionUseCase = CreateTransactionUseCase(repository)
-
-        @Provides
         fun provideManualFinanceUseCases(
             repository: ManualFinanceRepository,
         ): ManualFinanceUseCases = ManualFinanceUseCases(repository)
+
+        @Provides
+        @Singleton
+        fun provideExecuteFinancialCommandUseCase(
+            accountRepository: FinancialAccountRepository,
+            transactionRepository: TransactionRepository,
+            manualFinanceRepository: ManualFinanceRepository,
+            cardPaymentDateCalculator: CreditCardPaymentDateCalculator,
+        ): ExecuteFinancialCommandUseCase = ExecuteFinancialCommandUseCase(
+            accountRepository = accountRepository,
+            transactionRepository = transactionRepository,
+            manualFinanceRepository = manualFinanceRepository,
+            cardPaymentDateCalculator = cardPaymentDateCalculator,
+        )
     }
 }

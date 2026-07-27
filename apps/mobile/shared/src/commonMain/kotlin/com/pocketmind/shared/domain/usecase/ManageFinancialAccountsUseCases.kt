@@ -11,7 +11,3 @@ class ObserveActiveFinancialAccountsUseCase(private val repository: FinancialAcc
 class GetFinancialAccountUseCase(private val repository: FinancialAccountRepository) {
     suspend operator fun invoke(id: String): FinancialAccount? = repository.getById(id)
 }
-
-class SaveFinancialAccountUseCase(private val repository: FinancialAccountRepository) {
-    suspend operator fun invoke(account: FinancialAccount) = repository.save(account)
-}
