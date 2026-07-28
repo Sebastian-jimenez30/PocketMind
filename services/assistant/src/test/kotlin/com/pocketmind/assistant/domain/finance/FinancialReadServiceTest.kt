@@ -93,6 +93,31 @@ class FinancialReadServiceTest {
         }
 
     @Test
+    fun `type constraint resolves the unique liquid Bancolombia product`() =
+        runTest {
+            val service = readService(
+                snapshot = baseSnapshot().copy(
+                    accounts = baseSnapshot().accounts.map {
+                        if (it.id == CARD.id) it.copy(name = "Tarjeta Bancolombia") else it
+                    },
+                ),
+            )
+
+            val unrestricted = service.getProduct("Bancolombia")
+            val liquid = service.getProduct(
+                reference = "desde mi cuenta de Bancolombia",
+                allowedTypes = setOf(
+                    FinancialAccountType.CASH,
+                    FinancialAccountType.BANK_ACCOUNT,
+                ),
+            )
+
+            assertEquals("ambiguous", unrestricted.status)
+            assertEquals("resolved", liquid.status)
+            assertEquals(BANK.id, liquid.product?.id)
+        }
+
+    @Test
     fun `transaction query resolves product filters and reports truncation`() =
         runTest {
             val service = readService(snapshot = baseSnapshot())

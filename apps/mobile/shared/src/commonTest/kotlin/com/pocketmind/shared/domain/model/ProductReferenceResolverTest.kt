@@ -49,4 +49,46 @@ class ProductReferenceResolverTest {
 
         assertEquals(setOf(bank.id, card.id), result.candidates.map { it.id }.toSet())
     }
+
+    @Test
+    fun `unique words resolve a product from a natural reference`() {
+        val bancolombia = bank.copy(
+            name = "Ahorros Bancolombia",
+            aliases = emptyList(),
+        )
+        val result = assertIs<ProductReferenceResolution.Resolved>(
+            resolveProductReference(
+                "desde mi cuenta de bancolombia",
+                listOf(
+                    bancolombia,
+                    card.copy(name = "Tarjeta Nu", aliases = emptyList()),
+                ),
+            ),
+        )
+
+        assertEquals(bancolombia.id, result.product.id)
+    }
+
+    @Test
+    fun `partial reference remains ambiguous across matching products`() {
+        val bankProduct = bank.copy(
+            name = "Ahorros Bancolombia",
+            aliases = emptyList(),
+        )
+        val result = assertIs<ProductReferenceResolution.Ambiguous>(
+            resolveProductReference("Bancolombia", listOf(bankProduct, card)),
+        )
+
+        assertEquals(
+            setOf(bankProduct.id, card.id),
+            result.candidates.map { it.id }.toSet(),
+        )
+    }
+
+    @Test
+    fun `generic words alone never resolve a product`() {
+        assertIs<ProductReferenceResolution.NotFound>(
+            resolveProductReference("mi cuenta", listOf(bank, card)),
+        )
+    }
 }

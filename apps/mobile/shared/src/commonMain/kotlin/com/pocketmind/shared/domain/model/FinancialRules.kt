@@ -69,10 +69,12 @@ sealed interface ProductReferenceResolution {
 }
 
 /**
- * Resolves an exact product name first and then confirmed aliases.
+ * Resolves a product using progressively broader deterministic matches.
  *
- * Fuzzy or model-generated identifiers are intentionally excluded: ambiguous
- * references must be clarified with options belonging to the current user.
+ * Exact names and confirmed aliases always take priority. A natural reference
+ * such as "cuenta de Bancolombia" may then resolve "Ahorros Bancolombia" only
+ * when a single product contains all meaningful reference words. Ambiguous
+ * references are never guessed.
  */
 fun resolveProductReference(
     reference: String,
@@ -90,10 +92,31 @@ fun resolveProductReference(
     val aliasMatches = products.filter { product ->
         product.aliases.any { it.normalizedReference() == normalized }
     }
-    return when (aliasMatches.size) {
+    if (aliasMatches.size == 1) {
+        return ProductReferenceResolution.Resolved(
+            aliasMatches.single(),
+            matchedByAlias = true,
+        )
+    }
+    if (aliasMatches.size > 1) {
+        return ProductReferenceResolution.Ambiguous(aliasMatches)
+    }
+
+    val referenceWords = normalized.meaningfulReferenceWords()
+    if (referenceWords.isEmpty()) return ProductReferenceResolution.NotFound
+    val partialMatches = products.filter { product ->
+        product.referenceCandidates().any { candidate ->
+            val candidateWords = candidate.meaningfulReferenceWords()
+            referenceWords.all(candidateWords::contains)
+        }
+    }
+    return when (partialMatches.size) {
         0 -> ProductReferenceResolution.NotFound
-        1 -> ProductReferenceResolution.Resolved(aliasMatches.single(), matchedByAlias = true)
-        else -> ProductReferenceResolution.Ambiguous(aliasMatches)
+        1 -> ProductReferenceResolution.Resolved(
+            partialMatches.single(),
+            matchedByAlias = true,
+        )
+        else -> ProductReferenceResolution.Ambiguous(partialMatches)
     }
 }
 
@@ -119,5 +142,43 @@ object InstallmentRatePeriodCodec {
         Json.decodeFromString(serializer, value)
 }
 
+private fun FinancialAccount.referenceCandidates(): List<String> =
+    (listOf(name) + aliases).map(String::normalizedReference)
+
+private fun String.meaningfulReferenceWords(): Set<String> =
+    split(' ')
+        .asSequence()
+        .filter(String::isNotBlank)
+        .filterNot(GENERIC_PRODUCT_WORDS::contains)
+        .toSet()
+
 private fun String.normalizedReference(): String =
-    trim().lowercase().replace(Regex("\\s+"), " ")
+    trim()
+        .lowercase()
+        .replace('á', 'a')
+        .replace('é', 'e')
+        .replace('í', 'i')
+        .replace('ó', 'o')
+        .replace('ú', 'u')
+        .replace('ü', 'u')
+        .replace(Regex("[^a-z0-9]+"), " ")
+        .trim()
+
+private val GENERIC_PRODUCT_WORDS = setOf(
+    "ahorro",
+    "ahorros",
+    "banco",
+    "bancaria",
+    "bancario",
+    "cuenta",
+    "de",
+    "del",
+    "desde",
+    "el",
+    "la",
+    "las",
+    "los",
+    "mi",
+    "mis",
+    "producto",
+)

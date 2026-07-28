@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pocketmind.data.assistant.AssistantRepository
+import com.pocketmind.data.assistant.AssistantRequestException
 import com.pocketmind.shared.assistant.AssistantDraftPreview
 import com.pocketmind.shared.assistant.AssistantTurnRequest
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -111,10 +112,12 @@ class AssistantViewModel @Inject constructor(
         }
     }
 
-    private fun Exception.safeMessage(): String =
-        message
+    private fun Exception.safeMessage(): String = when (this) {
+        is AssistantRequestException -> publicMessage
+        else -> message
             ?.takeIf { it.startsWith("El asistente") || it.startsWith("Tu sesión") }
-            ?: "No pude procesar el mensaje. Revisa tu conexión e inténtalo de nuevo."
+            ?: "El asistente no pudo responder ahora. Tu mensaje sigue aquí para reintentarlo."
+    }
 
     private companion object {
         const val CONVERSATION_ID = "assistantConversationId"
