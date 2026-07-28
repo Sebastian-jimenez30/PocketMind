@@ -4,6 +4,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.only
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.Analytics
@@ -55,6 +61,7 @@ fun PocketMindApp() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     val showBottomBar = currentRoute != null &&
         currentRoute != AUTH_ROUTE &&
         currentRoute != FINANCIAL_ONBOARDING_ROUTE
@@ -79,8 +86,11 @@ fun PocketMindApp() {
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets.systemBars.only(
+            WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom,
+        ),
         bottomBar = {
-            if (showBottomBar) {
+            if (showBottomBar && !imeVisible) {
                 PocketBottomNavigation(
                     items = listOf(
                         PocketNavigationItem(

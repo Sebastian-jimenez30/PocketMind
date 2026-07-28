@@ -129,6 +129,12 @@ data class AssistantDraftTransitionRequest(
 )
 
 @Serializable
+data class AssistantDraftRevisionRequest(
+    val expectedVersion: Long,
+    val commandPayload: JsonObject,
+)
+
+@Serializable
 data class AssistantDraftCompletionRequest(
     val expectedVersion: Long,
     val executionResult: JsonObject,

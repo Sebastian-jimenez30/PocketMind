@@ -56,4 +56,30 @@ class AssistantDraftContractsTest {
             encoded,
         )
     }
+
+    @Test
+    fun `revision request preserves exact version and structured command`() {
+        val request = AssistantDraftRevisionRequest(
+            expectedVersion = 4,
+            commandPayload = buildJsonObject {
+                put("type", "record_expense")
+                put("command_id", "33333333-3333-4333-8333-333333333333")
+            },
+        )
+
+        val encoded = json.encodeToString(
+            AssistantDraftRevisionRequest.serializer(),
+            request,
+        )
+        val decoded = json.decodeFromString(
+            AssistantDraftRevisionRequest.serializer(),
+            encoded,
+        )
+
+        assertEquals(4, decoded.expectedVersion)
+        assertEquals(
+            "\"record_expense\"",
+            decoded.commandPayload["type"].toString(),
+        )
+    }
 }

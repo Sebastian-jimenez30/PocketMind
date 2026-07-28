@@ -8,18 +8,17 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.TrendingDown
 import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material.icons.rounded.Add
@@ -69,6 +68,8 @@ import com.pocketmind.shared.domain.model.TransactionCategoryId
 import com.pocketmind.shared.domain.model.TransactionSource
 import com.pocketmind.shared.domain.model.TransactionType
 import com.pocketmind.ui.components.PocketPrimaryButton
+import com.pocketmind.ui.components.PocketContextTopBar
+import com.pocketmind.ui.components.pocketBringIntoViewOnFocus
 import com.pocketmind.ui.theme.PocketMindTheme
 import com.pocketmind.ui.theme.PocketSpacing
 import java.text.NumberFormat
@@ -123,6 +124,7 @@ fun TransactionsScreen(
     }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         floatingActionButton = {
             FloatingActionButton(onClick = onCreate, containerColor = MaterialTheme.colorScheme.primary) {
                 Icon(Icons.Rounded.Add, stringResource(R.string.transactions_add), tint = MaterialTheme.colorScheme.onPrimary)
@@ -156,9 +158,15 @@ fun TransactionsScreen(
                 },
                 singleLine = true,
                 shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        start = PocketSpacing.xl,
+                        top = PocketSpacing.sm,
+                        end = PocketSpacing.xl,
+                    )
                     .height(52.dp)
-                    .padding(horizontal = PocketSpacing.xl),
+                    .pocketBringIntoViewOnFocus(),
             )
             if (showFilters) {
                 ModalBottomSheet(onDismissRequest = { showFilters = false }) {
@@ -269,17 +277,11 @@ fun TransactionsScreen(
 
 @Composable
 private fun TransactionsHeader(onBack: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primary).statusBarsPadding()
-            .padding(horizontal = PocketSpacing.sm, vertical = PocketSpacing.xxs),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(onClick = onBack) {
-            Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.transactions_back), tint = MaterialTheme.colorScheme.onPrimary)
-        }
-        Spacer(Modifier.width(PocketSpacing.xs))
-        Text(stringResource(R.string.transactions_title), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
-    }
+    PocketContextTopBar(
+        title = stringResource(R.string.transactions_title),
+        onBack = onBack,
+        backContentDescription = stringResource(R.string.transactions_back),
+    )
 }
 
 @Composable

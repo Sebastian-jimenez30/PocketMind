@@ -10,12 +10,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Analytics
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -38,6 +36,7 @@ import com.pocketmind.R
 import com.pocketmind.shared.domain.model.Money
 import com.pocketmind.shared.domain.model.TransactionCategoryId
 import com.pocketmind.ui.theme.PocketSpacing
+import com.pocketmind.ui.components.PocketContextTopBar
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -50,16 +49,11 @@ fun AnalysisRoute(onBack: () -> Unit, viewModel: AnalysisViewModel = hiltViewMod
 @Composable
 private fun AnalysisScreen(state: AnalysisUiState, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        Row(
-            Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primary).statusBarsPadding()
-                .padding(horizontal = PocketSpacing.sm, vertical = PocketSpacing.xxs),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.accounts_back), tint = MaterialTheme.colorScheme.onPrimary)
-            }
-            Text(stringResource(R.string.analysis_title), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
-        }
+        PocketContextTopBar(
+            title = stringResource(R.string.analysis_title),
+            onBack = onBack,
+            backContentDescription = stringResource(R.string.accounts_back),
+        )
         if (state.isLoading) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         } else {

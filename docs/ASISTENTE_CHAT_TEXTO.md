@@ -88,6 +88,43 @@ Ejemplo:
 Una respuesta puede ser `conversation`, `clarification`, `proposal` o
 `unsupported`.
 
+La corrección manual de una propuesta no vuelve a pasar por el modelo:
+
+```text
+POST /v1/assistant/drafts/{draftId}/revise
+Authorization: Bearer <supabase_access_token>
+Content-Type: application/json
+```
+
+El cuerpo contiene la versión esperada y el `commandPayload` corregido. El
+servicio exige el mismo `commandId`, la misma familia de comando y estado
+`proposed`; luego actualiza la versión y vuelve a validar el estado financiero.
+Android confirma únicamente la versión revisada.
+
+## Comportamiento del chat
+
+1. El cliente agrega el mensaje local y limpia el compositor antes de esperar
+   la red.
+2. Durante la respuesta muestra un indicador compacto “Analizando…”.
+3. Si falla el envío, conserva el mensaje con advertencia y reintenta usando el
+   mismo `clientMessageId` para mantener idempotencia.
+4. La tarjeta introductoria solo existe antes del primer mensaje.
+5. `Cancelar` retira la propuesta inmediatamente y cancela el borrador en
+   segundo plano.
+6. `Editar` obtiene el comando estructurado, presenta campos dentro de la misma
+   tarjeta y usa `/revise`; no crea un nuevo turno ni delega la corrección al
+   LLM.
+7. El compositor se apoya directamente sobre el IME y la navegación inferior
+   se oculta mientras el teclado está visible.
+8. Un envío conserva el mismo `clientMessageId` y realiza como máximo tres
+   intentos ante red, timeout, `429` o `5xx`, separados por tres segundos.
+   Durante todo el ciclo se muestra únicamente “Analizando…”. Los errores
+   definitivos aparecen como texto breve junto al mensaje; no se añade un
+   segundo indicador bajo la burbuja.
+9. La edición permite escoger otro producto compatible desde los productos
+   activos locales. El identificador y la moneda seleccionados se incorporan al
+   comando revisado antes de confirmarlo.
+
 ## Configuración Android
 
 En `apps/mobile/local.properties`:

@@ -7,18 +7,17 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.TrendingDown
 import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material.icons.rounded.CreditCard
@@ -41,7 +40,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -52,6 +50,7 @@ import com.pocketmind.shared.domain.model.SavingsMovement
 import com.pocketmind.shared.domain.model.SavingsMovementType
 import com.pocketmind.shared.domain.model.SavingsProductType
 import com.pocketmind.ui.components.PocketPrimaryButton
+import com.pocketmind.ui.components.PocketContextTopBar
 import com.pocketmind.ui.theme.PocketSpacing
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
@@ -77,7 +76,10 @@ private fun ProductDetailScreen(
     onAction: (String, ManualActionType) -> Unit,
 ) {
     val account = state.account
-    Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+    ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             ProductHeader(account?.name.orEmpty(), onBack) {
                 account?.let { onEdit(it.id) }
@@ -102,24 +104,11 @@ private fun ProductDetailScreen(
 
 @Composable
 private fun ProductHeader(title: String, onBack: () -> Unit, onEdit: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth()
-            .background(MaterialTheme.colorScheme.primary)
-            .statusBarsPadding()
-            .padding(horizontal = PocketSpacing.sm, vertical = PocketSpacing.xxs),
-        verticalAlignment = Alignment.CenterVertically,
+    PocketContextTopBar(
+        title = title.ifBlank { stringResource(R.string.accounts_title) },
+        onBack = onBack,
+        backContentDescription = stringResource(R.string.accounts_back),
     ) {
-        IconButton(onClick = onBack) {
-            Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.accounts_back), tint = MaterialTheme.colorScheme.onPrimary)
-        }
-        Text(
-            title,
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
         IconButton(onClick = onEdit) {
             Icon(Icons.Rounded.Edit, stringResource(R.string.product_detail_edit), tint = MaterialTheme.colorScheme.onPrimary)
         }

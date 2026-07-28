@@ -5,11 +5,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -17,13 +19,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -35,16 +42,23 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pocketmind.R
 import com.pocketmind.shared.assistant.AssistantDraftPreview
+import com.pocketmind.shared.domain.command.FinancialCommand
+import com.pocketmind.ui.components.PocketContextTopBar
 import com.pocketmind.ui.components.pocketBringIntoViewOnFocus
 import com.pocketmind.ui.theme.PocketSpacing
 import java.text.NumberFormat
@@ -62,11 +76,13 @@ fun AssistantRoute(
         onInputChanged = viewModel::onInputChanged,
         onSend = viewModel::send,
         onRetry = viewModel::retry,
-        onDismissError = viewModel::dismissError,
         onConfirmDraft = viewModel::confirmDraft,
         onEditDraft = viewModel::editDraft,
         onCancelDraft = viewModel::cancelDraft,
         onRetryDraft = viewModel::retryDraftCompletion,
+        onUpdateDraftEditor = viewModel::updateDraftEditor,
+        onSaveDraftEditor = viewModel::saveDraftEditor,
+        onCloseDraftEditor = viewModel::closeDraftEditor,
     )
 }
 
@@ -76,19 +92,23 @@ private fun AssistantScreen(
     onBack: () -> Unit,
     onInputChanged: (String) -> Unit,
     onSend: () -> Unit,
-    onRetry: () -> Unit,
-    onDismissError: () -> Unit,
+    onRetry: (AssistantUiMessage) -> Unit,
     onConfirmDraft: (AssistantUiDraft) -> Unit,
     onEditDraft: (AssistantUiDraft) -> Unit,
     onCancelDraft: (AssistantUiDraft) -> Unit,
     onRetryDraft: (AssistantUiDraft) -> Unit,
+    onUpdateDraftEditor: (
+        (AssistantDraftEditorState) -> AssistantDraftEditorState,
+    ) -> Unit,
+    onSaveDraftEditor: () -> Unit,
+    onCloseDraftEditor: () -> Unit,
 ) {
     val listState = rememberLazyListState()
-    LaunchedEffect(state.messages, state.isSending, state.errorMessage) {
+    val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
+    LaunchedEffect(state.messages, state.isSending, imeBottom) {
         val itemCount = state.messages.size +
             if (state.messages.isEmpty()) 1 else 0 +
-            if (state.isSending) 1 else 0 +
-            if (state.errorMessage != null) 1 else 0
+            if (state.isSending) 1 else 0
         if (itemCount > 0) listState.animateScrollToItem(itemCount - 1)
     }
 
@@ -118,29 +138,32 @@ private fun AssistantScreen(
                     onEditDraft = onEditDraft,
                     onCancelDraft = onCancelDraft,
                     onRetryDraft = onRetryDraft,
+                    onRetryMessage = { onRetry(message) },
+                    editor = state.draftEditor?.takeIf {
+                        it.draft.preview.id == message.draft?.preview?.id
+                    },
+                    onUpdateDraftEditor = onUpdateDraftEditor,
+                    onSaveDraftEditor = onSaveDraftEditor,
+                    onCloseDraftEditor = onCloseDraftEditor,
                 )
             }
             if (state.isSending) {
                 item {
                     Row(
+                        modifier = Modifier.padding(start = PocketSpacing.xs),
                         horizontalArrangement = Arrangement.spacedBy(PocketSpacing.sm),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        CircularProgressIndicator(modifier = Modifier.padding(PocketSpacing.xs))
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                        )
                         Text(
                             text = stringResource(R.string.assistant_thinking),
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                }
-            }
-            state.errorMessage?.let { message ->
-                item {
-                    ErrorCard(
-                        message = message,
-                        onRetry = onRetry,
-                        onDismiss = onDismissError,
-                    )
                 }
             }
         }
@@ -155,27 +178,11 @@ private fun AssistantScreen(
 
 @Composable
 private fun AssistantHeader(onBack: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.primary)
-            .statusBarsPadding()
-            .padding(horizontal = PocketSpacing.sm, vertical = PocketSpacing.xxs),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(onClick = onBack) {
-            Icon(
-                Icons.AutoMirrored.Rounded.ArrowBack,
-                contentDescription = stringResource(R.string.assistant_back),
-                tint = MaterialTheme.colorScheme.onPrimary,
-            )
-        }
-        Text(
-            text = stringResource(R.string.assistant_title),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onPrimary,
-        )
-    }
+    PocketContextTopBar(
+        title = stringResource(R.string.assistant_title),
+        onBack = onBack,
+        backContentDescription = stringResource(R.string.assistant_back),
+    )
 }
 
 @Composable
@@ -216,6 +223,13 @@ private fun MessageBubble(
     onEditDraft: (AssistantUiDraft) -> Unit,
     onCancelDraft: (AssistantUiDraft) -> Unit,
     onRetryDraft: (AssistantUiDraft) -> Unit,
+    onRetryMessage: () -> Unit,
+    editor: AssistantDraftEditorState?,
+    onUpdateDraftEditor: (
+        (AssistantDraftEditorState) -> AssistantDraftEditorState,
+    ) -> Unit,
+    onSaveDraftEditor: () -> Unit,
+    onCloseDraftEditor: () -> Unit,
 ) {
     val isUser = message.role == "user"
     Column(
@@ -247,17 +261,257 @@ private fun MessageBubble(
                 },
             )
         }
+        when (message.deliveryState) {
+            AssistantMessageDeliveryState.SENDING -> Unit
+            AssistantMessageDeliveryState.FAILED -> {
+                Row(
+                    modifier = Modifier.fillMaxWidth(0.9f),
+                    horizontalArrangement = Arrangement.spacedBy(PocketSpacing.xs),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Rounded.WarningAmber,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                    Text(
+                        text = message.deliveryError
+                            ?: stringResource(R.string.assistant_message_failed),
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    IconButton(onClick = onRetryMessage) {
+                        Icon(
+                            Icons.Rounded.Refresh,
+                            contentDescription = stringResource(R.string.assistant_retry),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+            }
+            AssistantMessageDeliveryState.SENT -> Unit
+        }
         message.draft?.let { draft ->
-            DraftReviewCard(
-                draft = draft,
-                actionsEnabled = draftActionsEnabled,
-                onConfirm = { onConfirmDraft(draft) },
-                onEdit = { onEditDraft(draft) },
-                onCancel = { onCancelDraft(draft) },
-                onRetry = { onRetryDraft(draft) },
-            )
+            if (editor != null) {
+                DraftInlineEditor(
+                    editor = editor,
+                    enabled = draftActionsEnabled,
+                    onUpdate = onUpdateDraftEditor,
+                    onSave = onSaveDraftEditor,
+                    onClose = onCloseDraftEditor,
+                )
+            } else {
+                DraftReviewCard(
+                    draft = draft,
+                    actionsEnabled = draftActionsEnabled,
+                    onConfirm = { onConfirmDraft(draft) },
+                    onEdit = { onEditDraft(draft) },
+                    onCancel = { onCancelDraft(draft) },
+                    onRetry = { onRetryDraft(draft) },
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun DraftInlineEditor(
+    editor: AssistantDraftEditorState,
+    enabled: Boolean,
+    onUpdate: ((AssistantDraftEditorState) -> AssistantDraftEditorState) -> Unit,
+    onSave: () -> Unit,
+    onClose: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        border = androidx.compose.foundation.BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.secondary,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(PocketSpacing.md),
+            verticalArrangement = Arrangement.spacedBy(PocketSpacing.sm),
+        ) {
+            Text(
+                text = stringResource(R.string.assistant_edit_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            when {
+                editor.command.supportsProductSelection() -> {
+                    EditorProductSelector(
+                        products = editor.products,
+                        selectedId = editor.productId,
+                        fallbackName = editor.draft.preview.primaryProductName,
+                        onSelect = { productId ->
+                            onUpdate { it.copy(productId = productId) }
+                        },
+                    )
+                }
+                editor.command.supportsProductNameEditing() -> {
+                    EditorField(
+                        value = editor.productName,
+                        label = stringResource(R.string.account_editor_name),
+                        onValueChange = { value ->
+                            onUpdate { it.copy(productName = value) }
+                        },
+                    )
+                }
+                else -> {
+                    Text(
+                        text = editor.draft.preview.primaryProductName,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+            }
+            if (editor.command.supportsAmountEditing()) {
+                EditorField(
+                    value = editor.amount,
+                    label = stringResource(R.string.manual_action_amount),
+                    keyboardType = KeyboardType.Number,
+                    onValueChange = { value ->
+                        onUpdate { it.copy(amount = value.filter(Char::isDigit)) }
+                    },
+                )
+            }
+            if (editor.command.supportsMerchantEditing()) {
+                EditorField(
+                    value = editor.merchant,
+                    label = stringResource(R.string.manual_action_merchant),
+                    onValueChange = { value ->
+                        onUpdate { it.copy(merchant = value) }
+                    },
+                )
+            }
+            if (editor.command is FinancialCommand.RecordCardPurchase) {
+                EditorField(
+                    value = editor.installmentCount,
+                    label = stringResource(R.string.manual_action_installments),
+                    keyboardType = KeyboardType.Number,
+                    onValueChange = { value ->
+                        onUpdate {
+                            it.copy(installmentCount = value.filter(Char::isDigit))
+                        }
+                    },
+                )
+            }
+            if (editor.command.supportsRateEditing()) {
+                EditorField(
+                    value = editor.annualRatePercent,
+                    label = stringResource(R.string.manual_action_rate_label),
+                    keyboardType = KeyboardType.Decimal,
+                    onValueChange = { value ->
+                        onUpdate {
+                            it.copy(
+                                annualRatePercent = value.filter { character ->
+                                    character.isDigit() ||
+                                        character == ',' ||
+                                        character == '.'
+                                },
+                            )
+                        }
+                    },
+                )
+            }
+            editor.error?.let { error ->
+                Text(
+                    text = error,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            Button(
+                onClick = onSave,
+                enabled = enabled,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.assistant_save_changes))
+            }
+            TextButton(
+                onClick = onClose,
+                enabled = enabled,
+                modifier = Modifier.align(Alignment.End),
+            ) {
+                Text(stringResource(R.string.assistant_close_editor))
+            }
+        }
+    }
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun EditorProductSelector(
+    products: List<com.pocketmind.shared.domain.model.FinancialAccount>,
+    selectedId: String,
+    fallbackName: String,
+    onSelect: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedName = products.firstOrNull { it.id == selectedId }?.name
+        ?: fallbackName
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+    ) {
+        OutlinedTextField(
+            value = selectedName,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(stringResource(R.string.transaction_editor_account)) },
+            trailingIcon = {
+                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor(
+                    androidx.compose.material3.ExposedDropdownMenuAnchorType
+                        .PrimaryNotEditable,
+                    enabled = products.isNotEmpty(),
+                ),
+            shape = RoundedCornerShape(16.dp),
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            shape = RoundedCornerShape(16.dp),
+        ) {
+            products.forEach { product ->
+                DropdownMenuItem(
+                    text = { Text(product.name) },
+                    onClick = {
+                        onSelect(product.id)
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EditorField(
+    value: String,
+    label: String,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    onValueChange: (String) -> Unit,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = Modifier
+            .fillMaxWidth()
+            .pocketBringIntoViewOnFocus(),
+        label = { Text(label) },
+        singleLine = true,
+        shape = RoundedCornerShape(16.dp),
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+    )
 }
 
 @Composable
@@ -444,31 +698,6 @@ private fun DraftReviewCard(
 }
 
 @Composable
-private fun ErrorCard(
-    message: String,
-    onRetry: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer,
-        ),
-    ) {
-        Column(Modifier.padding(PocketSpacing.md)) {
-            Text(message, color = MaterialTheme.colorScheme.onErrorContainer)
-            Row(modifier = Modifier.align(Alignment.End)) {
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.assistant_dismiss))
-                }
-                TextButton(onClick = onRetry) {
-                    Text(stringResource(R.string.assistant_retry))
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun AssistantComposer(
     value: String,
     enabled: Boolean,
@@ -579,3 +808,58 @@ private fun String.movementTypeLabelResource(): Int = when (this) {
     "RATE_CHANGE" -> R.string.assistant_savings_rate_change
     else -> R.string.assistant_unknown_detail
 }
+
+private fun FinancialCommand.supportsProductNameEditing(): Boolean =
+    this is FinancialCommand.CreateProduct ||
+        this is FinancialCommand.UpdateProduct
+
+private fun FinancialCommand.supportsProductSelection(): Boolean = when (this) {
+    is FinancialCommand.RecordIncome,
+    is FinancialCommand.RecordExpense,
+    is FinancialCommand.Transfer,
+    is FinancialCommand.RecordCardPurchase,
+    is FinancialCommand.RecordCardPayment,
+    is FinancialCommand.RecordSavingsMovement,
+    is FinancialCommand.RecordLoanPayment,
+    is FinancialCommand.UpdateTransaction,
+    -> true
+    is FinancialCommand.CreateProduct,
+    is FinancialCommand.UpdateProduct,
+    is FinancialCommand.ArchiveProduct,
+    is FinancialCommand.DeleteTransaction,
+    -> false
+}
+
+private fun FinancialCommand.supportsAmountEditing(): Boolean = when (this) {
+    is FinancialCommand.ArchiveProduct,
+    is FinancialCommand.DeleteTransaction,
+    -> false
+    is FinancialCommand.RecordSavingsMovement ->
+        movementType != com.pocketmind.shared.domain.model.SavingsMovementType.RATE_CHANGE
+    else -> true
+}
+
+private fun FinancialCommand.supportsMerchantEditing(): Boolean =
+    this is FinancialCommand.RecordIncome ||
+        this is FinancialCommand.RecordExpense ||
+        this is FinancialCommand.Transfer ||
+        this is FinancialCommand.RecordCardPurchase ||
+        this is FinancialCommand.UpdateTransaction
+
+private fun FinancialCommand.supportsRateEditing(): Boolean = when (this) {
+    is FinancialCommand.CreateProduct ->
+        configuration.supportsRateEditing()
+    is FinancialCommand.UpdateProduct ->
+        configuration.supportsRateEditing()
+    is FinancialCommand.RecordSavingsMovement ->
+        movementType == com.pocketmind.shared.domain.model.SavingsMovementType.RATE_CHANGE
+    else -> false
+}
+
+private fun com.pocketmind.shared.domain.model.FinancialProductConfiguration
+    .supportsRateEditing(): Boolean = when (this) {
+        com.pocketmind.shared.domain.model.FinancialProductConfiguration.Standard -> false
+        is com.pocketmind.shared.domain.model.FinancialProductConfiguration.Savings ->
+            profile.type != com.pocketmind.shared.domain.model.SavingsProductType.SIMPLE
+        else -> true
+    }

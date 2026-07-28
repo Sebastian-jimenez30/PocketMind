@@ -246,8 +246,10 @@ La cabecera puede reducirse al desplazarse. Debe respetar safe areas, barras del
 sistema y teclado.
 
 Las cabeceras contextuales usan una sola línea, títulos preferentemente de una
-palabra y el alto mínimo necesario para el botón Atrás. No se reserva una zona
-superior amplia para descripciones que ya aparecen dentro del contenido.
+palabra y una fila visual de 48 dp en Android o 44 pt en iOS, además del área
+segura. La propia cabecera pinta detrás de la barra de estado: el contenedor raíz
+no vuelve a consumir ese inset ni deja una franja independiente. No se reserva
+una zona superior amplia para descripciones que ya aparecen dentro del contenido.
 
 Autenticación y onboarding no muestran navegación inferior. Inicio,
 Movimientos, Análisis, Perfil y sus flujos secundarios autenticados conservan la
@@ -420,6 +422,25 @@ iOS no presenta este flujo.
 Cambios de contraseña, eliminación, desvinculación y operaciones irreversibles
 usan confirmación explícita. La biometría invoca la experiencia nativa.
 
+### 10.8 Asistente
+
+- La cabecera contextual usa `PocketContextTopBar`: una fila accesible de
+  48 dp en Android o 44 pt en iOS, además del área segura, con título de una
+  línea y sin doble inset superior.
+- El mensaje del usuario aparece y el compositor se limpia inmediatamente al
+  enviar; la respuesta remota no bloquea ese feedback.
+- El progreso se expresa con una línea pequeña como “Analizando…”, nunca con
+  una tarjeta de estado que desplace la conversación.
+- La introducción desaparece después del primer mensaje.
+- Un envío fallido conserva el mensaje y muestra junto a él un icono de
+  advertencia, una explicación breve y la acción de reintentar.
+- El compositor queda unido visualmente al teclado. Mientras el teclado está
+  visible se oculta la navegación inferior para no crear una franja vacía.
+- Editar una propuesta ocurre dentro de su propia tarjeta mediante campos
+  deterministas; no convierte la corrección en otro prompt para el modelo.
+- Cancelar retira de inmediato la propuesta visible y nunca presenta un estado
+  de guardado.
+
 ## 11. Voz y contenido
 
 El idioma inicial es español claro y cercano.
@@ -457,6 +478,23 @@ Requisitos:
 - el campo que recibe foco se desplaza a una zona visible después de abrirse el
   teclado;
 - orientación y tamaños soportados.
+
+### 12.1 Teclado en Android
+
+- `MainActivity` conserva `android:windowSoftInputMode="adjustResize"`.
+- El `Scaffold` raíz consume únicamente las barras del sistema; nunca usa
+  `safeDrawing` para el borde inferior porque ese inset también incluye el IME
+  y duplicaría el espacio aplicado por la pantalla.
+- El chat aplica `imePadding()` a su contenedor, oculta temporalmente la
+  navegación inferior y vuelve a desplazar la lista cuando cambia el inset del
+  IME para mantener visible el último mensaje.
+- Todo formulario usa un contenedor desplazable con `verticalScroll()` o
+  `LazyColumn`, más `imePadding()`.
+- Cada campo editable aplica `pocketBringIntoViewOnFocus()`. Este componente
+  vuelve a solicitar visibilidad cuando cambia la altura real del teclado, no
+  solamente cuando recibe el foco.
+- Los campos de menú de solo lectura no abren el teclado y no necesitan este
+  comportamiento.
 
 Las cantidades se formatean por locale, inicialmente `es-CO`, y nunca se
 construyen concatenando símbolos manualmente.
