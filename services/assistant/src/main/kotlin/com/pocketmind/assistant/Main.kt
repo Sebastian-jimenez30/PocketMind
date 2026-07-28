@@ -5,6 +5,7 @@ import com.pocketmind.assistant.application.assistantModule
 import com.pocketmind.assistant.config.AssistantConfig
 import com.pocketmind.assistant.infrastructure.openai.KoogRuntimeFactory
 import com.pocketmind.assistant.infrastructure.supabase.RemoteSupabaseTokenVerifier
+import com.pocketmind.assistant.infrastructure.supabase.SupabaseAssistantMemoryRepository
 import com.pocketmind.assistant.infrastructure.supabase.createSupabaseHttpClient
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
@@ -16,6 +17,7 @@ fun main() {
         config = config,
         tokenVerifier = RemoteSupabaseTokenVerifier(supabaseClient, config),
         koogRuntimeFactory = KoogRuntimeFactory(config),
+        memoryRepository = SupabaseAssistantMemoryRepository(supabaseClient, config),
     )
 
     try {

@@ -1,6 +1,7 @@
 package com.pocketmind.assistant.infrastructure.supabase
 
 import com.pocketmind.assistant.auth.AuthenticatedUser
+import com.pocketmind.assistant.auth.SupabaseAccessToken
 import com.pocketmind.assistant.auth.SupabaseTokenVerifier
 import com.pocketmind.assistant.config.AssistantConfig
 import io.ktor.client.HttpClient
@@ -49,6 +50,7 @@ class RemoteSupabaseTokenVerifier(
                 AuthenticatedUser(
                     userId = id,
                     role = user.role?.trim().orEmpty().ifBlank { DEFAULT_ROLE },
+                    accessToken = SupabaseAccessToken(token),
                 )
             }
     }

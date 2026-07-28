@@ -17,10 +17,12 @@ API, Koog para la orquestación y Supabase Auth como autoridad de identidad.
 
 ```text
 services/assistant/
+├── agent/memory/           Adaptador de checkpoints de Koog
 ├── api/                    Contratos HTTP y errores públicos
 ├── application/            Composición, plugins y rutas
 ├── auth/                   Principal y puerto de validación
 ├── config/                 Variables de entorno y secretos
+├── domain/memory/           Modelos y puertos de persistencia
 └── infrastructure/
     ├── openai/             Frontera de construcción de Koog
     └── supabase/           Validación remota del JWT
@@ -56,6 +58,8 @@ alcance de esta fase.
 | `OPENAI_API_KEY` | Secreto del servidor, nunca del APK. |
 | `POCKETMIND_AGENT_MODEL` | Modelo principal configurable; inicialmente `gpt-4o-mini`. |
 | `POCKETMIND_FALLBACK_MODEL` | Respaldo configurable; inicialmente `gpt-4o`. |
+| `POCKETMIND_PROMPT_VERSION` | Versión auditable del prompt; inicialmente `assistant-v1`. |
+| `POCKETMIND_TOOL_SCHEMA_VERSION` | Versión positiva del catálogo de herramientas. |
 
 `.env.example` documenta el contrato, pero el servicio deliberadamente no carga
 archivos `.env`: las claves deben entrar por variables de proceso o por el
@@ -112,9 +116,28 @@ Invoke-RestMethod http://localhost:8080/v1/session -Headers $headers
 El endpoint autenticado debe devolver únicamente `userId` y `role`. No devuelve
 correo ni metadatos del perfil.
 
+## API de memoria
+
+Todas estas rutas requieren el JWT de Supabase:
+
+```text
+POST   /v1/assistant/conversations
+GET    /v1/assistant/conversations
+GET    /v1/assistant/conversations/{conversationId}
+DELETE /v1/assistant/conversations/{conversationId}
+POST   /v1/assistant/drafts/{draftId}/confirm
+POST   /v1/assistant/drafts/{draftId}/cancel
+POST   /v1/assistant/drafts/{draftId}/complete
+```
+
+El servicio reenvía el JWT a la Data REST API de Supabase. No usa
+`service_role`, y PostgreSQL vuelve a verificar `auth.uid()` mediante RLS.
+`SupabaseKoogPersistenceStorageProvider` vincula cada instancia a un usuario y
+una conversación concretos.
+
 ## Alcance de esta fase
 
-Esta base todavía no recibe mensajes ni ejecuta modelos. La siguiente fase crea
-la memoria multiusuario en Supabase con RLS, retención y borrado. Después se
-añaden las herramientas de lectura y, finalmente, el grafo que produce
-borradores confirmables.
+Esta base todavía no recibe turnos ni ejecuta modelos. La memoria multiusuario,
+RLS, retención y borrado ya están preparados. La siguiente fase añade
+herramientas de lectura; después se implementa el grafo que produce borradores
+confirmables.

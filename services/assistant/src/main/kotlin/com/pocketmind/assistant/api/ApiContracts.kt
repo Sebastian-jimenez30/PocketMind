@@ -1,6 +1,7 @@
 package com.pocketmind.assistant.api
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 
 @Serializable
 data class HealthResponse(
@@ -15,6 +16,75 @@ data class HealthResponse(
 data class SessionResponse(
     val userId: String,
     val role: String,
+)
+
+@Serializable
+data class CreateConversationRequest(
+    val id: String,
+    val title: String? = null,
+    val locale: String = "es-CO",
+)
+
+@Serializable
+data class ConversationResponse(
+    val id: String,
+    val title: String?,
+    val status: String,
+    val locale: String,
+    val promptVersion: String,
+    val toolSchemaVersion: Int,
+    val lastMessageAt: String?,
+    val createdAt: String,
+    val updatedAt: String,
+)
+
+@Serializable
+data class ConversationDetailResponse(
+    val conversation: ConversationResponse,
+    val messages: List<MessageResponse>,
+)
+
+@Serializable
+data class MessageResponse(
+    val id: String,
+    val turnId: String,
+    val role: String,
+    val content: String,
+    val inputModality: String,
+    val promptVersion: String?,
+    val modelId: String?,
+    val createdAt: String,
+)
+
+@Serializable
+data class DraftTransitionRequest(
+    val expectedVersion: Long,
+    val expectedState: String? = null,
+)
+
+@Serializable
+data class CompleteDraftRequest(
+    val expectedVersion: Long,
+    val executionResult: JsonObject,
+)
+
+@Serializable
+data class DraftResponse(
+    val id: String,
+    val conversationId: String,
+    val commandType: String,
+    val commandPayload: JsonObject,
+    val commandSchemaVersion: Int,
+    val state: String,
+    val idempotencyKey: String,
+    val payloadHash: String,
+    val financialStateVersion: Long,
+    val executionResult: JsonObject?,
+    val errorCode: String?,
+    val version: Long,
+    val expiresAt: String,
+    val createdAt: String,
+    val updatedAt: String,
 )
 
 @Serializable

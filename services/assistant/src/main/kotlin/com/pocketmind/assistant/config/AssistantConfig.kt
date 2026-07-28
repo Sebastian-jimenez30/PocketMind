@@ -45,6 +45,8 @@ data class AssistantConfig(
     val openAiApiKey: SecretValue,
     val primaryModel: String,
     val fallbackModel: String,
+    val promptVersion: String,
+    val toolSchemaVersion: Int,
 ) {
     companion object {
         fun load(source: EnvironmentSource = SystemEnvironmentSource): AssistantConfig {
@@ -97,6 +99,17 @@ data class AssistantConfig(
                 DEFAULT_FALLBACK_MODEL,
             ).takeIf(String::isNotBlank)
                 ?: invalidKeys.addAndNull("POCKETMIND_FALLBACK_MODEL")
+            val promptVersion = source.valueOrDefault(
+                "POCKETMIND_PROMPT_VERSION",
+                DEFAULT_PROMPT_VERSION,
+            ).takeIf { it.length in 1..80 }
+                ?: invalidKeys.addAndNull("POCKETMIND_PROMPT_VERSION")
+            val toolSchemaVersion = source.valueOrDefault(
+                "POCKETMIND_TOOL_SCHEMA_VERSION",
+                DEFAULT_TOOL_SCHEMA_VERSION.toString(),
+            ).toIntOrNull()
+                ?.takeIf { it > 0 }
+                ?: invalidKeys.addAndNull("POCKETMIND_TOOL_SCHEMA_VERSION")
 
             if (invalidKeys.isNotEmpty()) {
                 throw ConfigurationException(invalidKeys)
@@ -112,6 +125,8 @@ data class AssistantConfig(
                 openAiApiKey = requireNotNull(openAiKey),
                 primaryModel = requireNotNull(primaryModel),
                 fallbackModel = requireNotNull(fallbackModel),
+                promptVersion = requireNotNull(promptVersion),
+                toolSchemaVersion = requireNotNull(toolSchemaVersion),
             )
         }
 
@@ -119,6 +134,8 @@ data class AssistantConfig(
         private const val DEFAULT_AUTH_TIMEOUT_MS = 5_000L
         private const val DEFAULT_PRIMARY_MODEL = "gpt-4o-mini"
         private const val DEFAULT_FALLBACK_MODEL = "gpt-4o"
+        private const val DEFAULT_PROMPT_VERSION = "assistant-v1"
+        private const val DEFAULT_TOOL_SCHEMA_VERSION = 1
     }
 }
 
