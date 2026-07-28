@@ -90,12 +90,11 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    fun signOut(onComplete: () -> Unit) {
+    fun signOut() {
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, message = null) }
             try {
                 profileRepository.signOut()
-                onComplete()
             } catch (exception: Exception) {
                 showError(exception.toSafeMessage())
             } finally {

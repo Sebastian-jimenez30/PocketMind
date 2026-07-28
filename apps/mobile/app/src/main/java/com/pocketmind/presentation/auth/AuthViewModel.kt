@@ -4,13 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pocketmind.data.auth.AuthOperationResult
 import com.pocketmind.data.auth.AuthRepository
-import com.pocketmind.data.sync.SessionBootstrapper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -24,36 +22,14 @@ data class AuthUiState(
     val isLoading: Boolean = false,
     val message: String? = null,
     val isError: Boolean = false,
-    val isAuthenticated: Boolean = false,
 )
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    private val sessionBootstrapper: SessionBootstrapper,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AuthUiState())
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
-
-    init {
-        viewModelScope.launch {
-            authRepository
-                .observeAuthentication()
-                .distinctUntilChanged()
-                .collect { isAuthenticated ->
-                    if (isAuthenticated) {
-                        _uiState.update { it.copy(isLoading = true, isAuthenticated = false) }
-                        sessionBootstrapper.bootstrapCurrentSession()
-                    }
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            isAuthenticated = isAuthenticated,
-                        )
-                    }
-                }
-        }
-    }
 
     fun updateEmail(value: String) = _uiState.update { it.copy(email = value, message = null) }
     fun updatePassword(value: String) = _uiState.update { it.copy(password = value, message = null) }
@@ -89,9 +65,8 @@ class AuthViewModel @Inject constructor(
 
     private suspend fun handle(result: AuthOperationResult, mode: AuthMode) {
         if (result == AuthOperationResult.Success && mode == AuthMode.SIGN_IN) {
-            sessionBootstrapper.bootstrapCurrentSession()
             _uiState.update {
-                it.copy(isLoading = false, isAuthenticated = true, message = null, isError = false)
+                it.copy(isLoading = false, message = null, isError = false)
             }
             return
         }

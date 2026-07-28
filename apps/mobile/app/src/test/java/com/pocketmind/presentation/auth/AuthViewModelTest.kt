@@ -2,18 +2,16 @@ package com.pocketmind.presentation.auth
 
 import com.pocketmind.data.auth.AuthOperationResult
 import com.pocketmind.data.auth.AuthRepository
-import com.pocketmind.data.sync.SessionBootstrapper
+import com.pocketmind.data.auth.AuthSessionState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import org.junit.After
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -33,29 +31,22 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `authenticates when Google callback creates a session`() {
+    fun `finishes successful sign in without exposing navigation state`() {
         val repository = FakeAuthRepository()
-        var bootstrapCalls = 0
         val viewModel = AuthViewModel(
             authRepository = repository,
-            sessionBootstrapper = SessionBootstrapper {
-                bootstrapCalls += 1
-                Result.success(Unit)
-            },
         )
 
-        assertFalse(viewModel.uiState.value.isAuthenticated)
+        viewModel.updateEmail("ana@example.com")
+        viewModel.updatePassword("segura123")
+        viewModel.submit()
 
-        repository.authentication.value = true
-
-        assertTrue(viewModel.uiState.value.isAuthenticated)
-        assertEquals(1, bootstrapCalls)
+        assertFalse(viewModel.uiState.value.isLoading)
     }
 
     private class FakeAuthRepository : AuthRepository {
-        val authentication = MutableStateFlow(false)
-
-        override fun observeAuthentication(): Flow<Boolean> = authentication
+        override fun observeSessionState(): Flow<AuthSessionState> =
+            flowOf(AuthSessionState.UNAUTHENTICATED)
 
         override suspend fun signIn(email: String, password: String): AuthOperationResult =
             AuthOperationResult.Success

@@ -354,6 +354,13 @@ Valor monetario que puede ocultarse sin alterar el layout.
 
 ### 10.1 Autenticación
 
+- antes de resolver la sesión se muestra un estado de arranque con únicamente
+  el logotipo de PocketMind sobre el fondo de la aplicación;
+- este estado no tiene duración artificial: permanece hasta conocer la sesión,
+  completar la sincronización inicial y resolver si corresponde Inicio,
+  Onboarding o Login;
+- Login y Onboarding nunca se usan como pantallas de carga ni deben aparecer
+  fugazmente durante la restauración de una sesión existente;
 - cabecera índigo con navegación contextual;
 - superficie blanca redondeada;
 - bienvenida breve e ilustración propia;

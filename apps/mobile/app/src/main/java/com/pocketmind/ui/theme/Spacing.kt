@@ -13,4 +13,5 @@ object PocketSpacing {
     val xxxl = 40.dp
     val touchTarget = 48.dp
     val primaryButtonHeight = 52.dp
+    val startupBrandMark = 120.dp
 }

@@ -32,7 +32,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -63,13 +62,9 @@ import androidx.compose.ui.res.stringResource
 
 @Composable
 fun AuthRoute(
-    onAuthenticated: () -> Unit,
     viewModel: AuthViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    LaunchedEffect(state.isAuthenticated) {
-        if (state.isAuthenticated) onAuthenticated()
-    }
     AuthScreen(
         state = state,
         onEmailChanged = viewModel::updateEmail,

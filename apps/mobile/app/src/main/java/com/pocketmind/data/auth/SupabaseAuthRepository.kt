@@ -13,8 +13,14 @@ import kotlinx.coroutines.flow.map
 class SupabaseAuthRepository @Inject constructor(
     private val supabase: SupabaseClient,
 ) : AuthRepository {
-    override fun observeAuthentication(): Flow<Boolean> =
-        supabase.auth.sessionStatus.map { it is SessionStatus.Authenticated }
+    override fun observeSessionState(): Flow<AuthSessionState> =
+        supabase.auth.sessionStatus.map { status ->
+            when (status) {
+                SessionStatus.Initializing -> AuthSessionState.RESOLVING
+                is SessionStatus.Authenticated -> AuthSessionState.AUTHENTICATED
+                else -> AuthSessionState.UNAUTHENTICATED
+            }
+        }
 
     override suspend fun signIn(email: String, password: String): AuthOperationResult = execute {
         supabase.auth.signInWith(Email) {

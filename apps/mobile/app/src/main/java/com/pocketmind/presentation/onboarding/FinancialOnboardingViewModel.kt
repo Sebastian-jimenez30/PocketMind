@@ -13,7 +13,6 @@ import com.pocketmind.shared.domain.model.Recurrence
 import com.pocketmind.shared.domain.model.RecurringObligation
 import com.pocketmind.shared.domain.model.SavingsPlan
 import com.pocketmind.shared.domain.model.SavingsPlanType
-import com.pocketmind.shared.domain.usecase.ObserveFinancialSetupCompletedUseCase
 import com.pocketmind.shared.domain.usecase.SaveInitialFinancialSetupUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.util.UUID
@@ -47,25 +46,15 @@ data class FinancialOnboardingUiState(
     val obligationAmount: String = "",
     val obligationDueDay: String = "",
     val isSaving: Boolean = false,
-    val isAlreadyCompleted: Boolean = false,
     val error: String? = null,
 )
 
 @HiltViewModel
 class FinancialOnboardingViewModel @Inject constructor(
-    observeFinancialSetupCompleted: ObserveFinancialSetupCompletedUseCase,
     private val saveInitialFinancialSetup: SaveInitialFinancialSetupUseCase,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(FinancialOnboardingUiState())
     val uiState: StateFlow<FinancialOnboardingUiState> = _uiState.asStateFlow()
-
-    init {
-        viewModelScope.launch {
-            observeFinancialSetupCompleted().collect { completed ->
-                _uiState.update { it.copy(isAlreadyCompleted = completed) }
-            }
-        }
-    }
 
     fun previous() = _uiState.update { it.copy(step = (it.step - 1).coerceAtLeast(0), error = null) }
     fun next() = _uiState.update { it.copy(step = (it.step + 1).coerceAtMost(LAST_STEP), error = null) }
