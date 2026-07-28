@@ -1,6 +1,7 @@
 # Guía de implementación del asistente de IA
 
-> Estado: decisión de arquitectura aprobada y plan pendiente de implementación.
+> Estado: fases 0 a 2 integradas; fase 3 implementada en código y pendiente de
+> validación local antes del merge.
 > Alcance: texto y voz a texto para ejecutar, con confirmación, todas las
 > operaciones financieras disponibles manualmente en PocketMind.
 
@@ -445,7 +446,7 @@ Salida: ninguna pantalla escribe por un camino alternativo.
 
 Rama: `feat/financial-command-domain-gaps`.
 
-Estado: implementada y validada localmente; pendiente de merge.
+Estado: implementada, validada e integrada en `main`.
 
 - Tasas promocionales por período.
 - Pago de cuota, total y abono.
@@ -459,10 +460,30 @@ Salida: todos los ejemplos se representan sin cálculos del LLM.
 
 Rama: `feat/assistant-service-foundation`.
 
+Estado: implementada en código; pendiente de ejecutar la validación local.
+
 - Crear `services/assistant`.
 - Fijar JDK, Kotlin y Koog compatibles.
 - Configurar entornos y validar secretos al iniciar.
 - Crear `/health`, JWT, errores y trazas redactadas.
+
+Decisiones aplicadas:
+
+- El servicio se incluye como módulo JVM del build existente, pero nunca forma
+  parte del APK.
+- `shared` publica un target JVM para reutilizar los contratos financieros de
+  Android e iOS sin duplicarlos.
+- Ktor valida el Bearer token consultando `/auth/v1/user` con la clave pública
+  de Supabase. No se almacena el secreto de firma JWT.
+- Koog se construye detrás de una fábrica inyectable y no realiza llamadas de
+  red al iniciar.
+- `OPENAI_API_KEY` solo se lee desde variables del entorno del servidor. El
+  nombre histórico `OPENIA_API_KEY` no se acepta.
+- Los identificadores de modelos siguen siendo configurables. Antes de la fase
+  de interpretación se debe reconfirmar su disponibilidad en la cuenta de
+  OpenAI, sin cambiar silenciosamente la decisión de producto.
+- Los logs contienen método, ruta sin parámetros, estado y `X-Request-Id`; no
+  contienen cuerpos, JWT, claves, conversaciones ni datos financieros.
 
 Salida: servicio autenticado y sin secretos en el repositorio.
 

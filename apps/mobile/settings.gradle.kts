@@ -25,3 +25,5 @@ dependencyResolutionManagement {
 rootProject.name = "PocketMind"
 include(":app")
 include(":shared")
+include(":assistant-service")
+project(":assistant-service").projectDir = file("../../services/assistant")
