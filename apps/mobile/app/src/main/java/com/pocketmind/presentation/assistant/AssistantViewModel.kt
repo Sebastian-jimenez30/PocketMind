@@ -502,11 +502,21 @@ class AssistantViewModel @Inject constructor(
         val action = when (commandType) {
             "record_income" -> "ingreso"
             "record_expense" -> "gasto"
-            else -> "transferencia"
+            "transfer" -> "transferencia"
+            "create_product" -> "nuevo producto"
+            "update_product" -> "cambio de producto"
+            "archive_product" -> "archivo de producto"
+            "record_card_purchase" -> "compra con tarjeta"
+            "record_card_payment" -> "pago de tarjeta"
+            "record_savings_movement" -> "movimiento de ahorro"
+            "record_loan_payment" -> "pago de préstamo"
+            "update_transaction" -> "corrección de movimiento"
+            "delete_transaction" -> "eliminación de movimiento"
+            else -> "acción"
         }
         val destination = destinationProductName?.let { " hacia $it" }.orEmpty()
-        return "Corrige este $action de $amountMinorUnits $currency " +
-            "desde $primaryProductName$destination: "
+        val amount = amountMinorUnits?.let { " de $it ${currency.orEmpty()}" }.orEmpty()
+        return "Corrige este $action$amount en $primaryProductName$destination: "
     }
 
     private companion object {

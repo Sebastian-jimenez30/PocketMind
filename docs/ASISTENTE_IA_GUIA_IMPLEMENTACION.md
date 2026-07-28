@@ -610,11 +610,38 @@ Salida: una confirmación produce exactamente un resultado.
 
 Rama: `feat/assistant-full-command-parity`.
 
-- Productos, tarjetas, promociones, ahorros, CDT y préstamos.
-- Edición, eliminación y preferencias seguras.
-- Solicitudes compuestas separadas.
+Estado: implementada en código; pendiente de validación local y en dispositivo.
 
-Salida: toda acción manual puede proponerse por texto.
+- [x] Crear, editar y archivar efectivo, cuentas, tarjetas, ahorros y préstamos.
+- [x] Registrar compras con tarjeta, número de cuotas y periodos promocionales.
+- [x] Pagar cuota, saldo total, abono a capital o un valor personalizado.
+- [x] Aportar, retirar y cambiar la tasa de ahorros y CDT.
+- [x] Registrar pagos de préstamos con monto explícito o calculado.
+- [x] Editar y eliminar movimientos manuales independientes.
+- [x] Separar solicitudes que contienen varias acciones financieras.
+- [x] Mostrar una revisión especializada según el tipo de comando.
+
+Reglas aplicadas:
+
+1. El modelo extrae datos, pero un resolutor determinista vuelve a consultar el
+   producto completo y construye el `FinancialCommand`.
+2. Los valores calculados, como la próxima cuota o el saldo total de una deuda,
+   provienen de las reglas compartidas; el modelo no los calcula.
+3. Una compra promocional conserva los rangos de cuotas y bloquea periodos
+   superpuestos o fuera del plazo.
+4. Una edición fusiona únicamente los campos pedidos con el estado almacenado.
+   Tipos, monedas, fechas o categorías inválidas producen aclaración.
+5. Movimientos generados por compras, pagos, ahorros o préstamos no se pueden
+   editar o eliminar aisladamente, porque romperían la consistencia del producto.
+6. Preferencias de autenticación, privacidad, permisos y seguridad no se
+   modifican por chat. El asistente explica dónde cambiarlas para mantener una
+   confirmación explícita en la pantalla correspondiente.
+7. Si el usuario pide dos escrituras independientes en un mensaje, el
+   asistente solicita escoger la primera; no combina comandos ni hace escrituras
+   parciales.
+
+Salida: toda acción financiera manual puede proponerse por texto y conserva la
+misma confirmación, persistencia local y sincronización del flujo manual.
 
 ### Fase 9. Voz
 

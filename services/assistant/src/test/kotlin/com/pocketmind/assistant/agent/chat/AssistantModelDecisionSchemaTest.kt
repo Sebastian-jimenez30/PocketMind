@@ -30,6 +30,10 @@ class AssistantModelDecisionSchemaTest {
         assertEquals(properties, required)
         assertTrue("reply" in required)
         assertTrue("intent" in required)
+        assertTrue("promotionalRatePeriods" in required)
+        assertTrue("paymentType" in required)
+        assertTrue("savingsMovementType" in required)
+        assertTrue("transactionId" in required)
         assertTrue("missingFields" in required)
     }
 
@@ -44,5 +48,26 @@ class AssistantModelDecisionSchemaTest {
 
         assertContains(encoded, "\"action\":\"respond\"")
         assertContains(encoded, "\"reply\":\"¡Hola!")
+    }
+
+    @Test
+    fun `advanced financial action is represented inside the structured contract`() {
+        val encoded = Json.encodeToString(
+            AssistantModelDecision(
+                action = AssistantDecisionAction.PROPOSE,
+                intent = AssistantFinancialIntent.RECORD_CARD_PURCHASE,
+                amountMinorUnits = 1_200_000,
+                primaryProductReference = "card-id",
+                merchant = "Celular",
+                installmentCount = 6,
+                promotionalRatePeriods = listOf(
+                    AssistantPromotionalRatePeriod(1, 3, 0),
+                ),
+            ),
+        )
+
+        assertContains(encoded, "\"intent\":\"record_card_purchase\"")
+        assertContains(encoded, "\"installmentCount\":6")
+        assertContains(encoded, "\"annualInterestBasisPoints\":0")
     }
 }

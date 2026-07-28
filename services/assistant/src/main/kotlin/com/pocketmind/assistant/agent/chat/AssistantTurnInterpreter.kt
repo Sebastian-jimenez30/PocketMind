@@ -43,6 +43,14 @@ data class AssistantInterpreterProduct(
     val type: String,
     val currency: String,
     val aliases: List<String>,
+    val currentBalanceMinorUnits: Long? = null,
+    val currentDebtMinorUnits: Long? = null,
+    val availableCreditMinorUnits: Long? = null,
+    val nextPaymentMinorUnits: Long? = null,
+    val annualRateBasisPoints: Int? = null,
+    val statementClosingDay: Int? = null,
+    val paymentDueDay: Int? = null,
+    val maturityAtEpochMillis: Long? = null,
 )
 
 @Serializable
@@ -67,7 +75,7 @@ enum class AssistantDecisionAction {
 }
 
 @Serializable
-enum class AssistantBasicIntent {
+enum class AssistantFinancialIntent {
     @SerialName("record_income")
     RECORD_INCOME,
 
@@ -76,7 +84,41 @@ enum class AssistantBasicIntent {
 
     @SerialName("transfer")
     TRANSFER,
+
+    @SerialName("create_product")
+    CREATE_PRODUCT,
+
+    @SerialName("update_product")
+    UPDATE_PRODUCT,
+
+    @SerialName("archive_product")
+    ARCHIVE_PRODUCT,
+
+    @SerialName("record_card_purchase")
+    RECORD_CARD_PURCHASE,
+
+    @SerialName("record_card_payment")
+    RECORD_CARD_PAYMENT,
+
+    @SerialName("record_savings_movement")
+    RECORD_SAVINGS_MOVEMENT,
+
+    @SerialName("record_loan_payment")
+    RECORD_LOAN_PAYMENT,
+
+    @SerialName("update_transaction")
+    UPDATE_TRANSACTION,
+
+    @SerialName("delete_transaction")
+    DELETE_TRANSACTION,
 }
+
+@Serializable
+data class AssistantPromotionalRatePeriod(
+    val firstInstallment: Int,
+    val lastInstallment: Int,
+    val annualInterestBasisPoints: Int,
+)
 
 /**
  * Provider-neutral model output. Every value is validated again by
@@ -86,15 +128,39 @@ enum class AssistantBasicIntent {
 data class AssistantModelDecision(
     val action: AssistantDecisionAction,
     val reply: String? = null,
-    val intent: AssistantBasicIntent? = null,
+    val intent: AssistantFinancialIntent? = null,
     val amountMinorUnits: Long? = null,
     val currency: String? = null,
     val primaryProductReference: String? = null,
     val destinationProductReference: String? = null,
+    val sourceProductReference: String? = null,
     val occurredAtEpochMillis: Long? = null,
     val categoryId: String? = null,
     val merchant: String? = null,
     val note: String? = null,
+    val productName: String? = null,
+    val productType: String? = null,
+    val aliases: List<String> = emptyList(),
+    val creditLimitMinorUnits: Long? = null,
+    val annualRateBasisPoints: Int? = null,
+    val statementClosingDay: Int? = null,
+    val paymentDueDay: Int? = null,
+    val openingDebtInstallmentCount: Int? = null,
+    val firstPaymentAtEpochMillis: Long? = null,
+    val savingsProductType: String? = null,
+    val openedAtEpochMillis: Long? = null,
+    val maturityAtEpochMillis: Long? = null,
+    val monthlyPaymentMinorUnits: Long? = null,
+    val installmentCount: Int? = null,
+    val promotionalRatePeriods: List<AssistantPromotionalRatePeriod> = emptyList(),
+    val paymentType: String? = null,
+    val savingsMovementType: String? = null,
+    val transactionId: String? = null,
+    val transactionType: String? = null,
+    val clearMerchant: Boolean = false,
+    val clearCategory: Boolean = false,
+    val clearNote: Boolean = false,
+    val clearRelatedProduct: Boolean = false,
     val missingFields: List<String> = emptyList(),
 )
 
@@ -191,12 +257,24 @@ class KoogAssistantTurnInterpreter(
             - respond: saludos, conversación general, preguntas sobre qué puedes
               hacer y consultas financieras de lectura. Escribe la respuesta en
               reply. Para datos personales usa las herramientas; nunca inventes.
-            - propose: hay información suficiente para preparar record_income,
-              record_expense o transfer. No ejecutas ni guardas la operación.
+            - propose: hay información suficiente para preparar exactamente una
+              acción financiera. No ejecutas ni guardas la operación.
             - clarify: falta un dato realmente indispensable. Pregunta solo por
               ese dato en reply y enuméralo en missingFields.
-            - unsupported: el usuario pide una escritura todavía no soportada.
-              Explica brevemente la limitación en reply y ofrece una alternativa.
+            - unsupported: el usuario pide una capacidad que no corresponde a
+              las acciones enumeradas abajo. Explica la limitación sin mostrar
+              errores técnicos.
+
+            Intents de escritura soportados:
+            - record_income, record_expense y transfer.
+            - create_product, update_product y archive_product.
+            - record_card_purchase y record_card_payment.
+            - record_savings_movement y record_loan_payment.
+            - update_transaction y delete_transaction.
+
+            Si un mensaje contiene dos acciones independientes, no las mezcles
+            en un comando. Usa clarify y pide confirmar cuál preparar primero.
+            Crear un producto con su saldo o deuda inicial sí es una sola acción.
 
             Interpretación financiera:
             - "desde", "de mi cuenta" o "con mi cuenta" identifica el producto
@@ -221,6 +299,12 @@ class KoogAssistantTurnInterpreter(
             - Para ingreso o gasto usa primaryProductReference.
             - Para transferencia usa primaryProductReference como origen y
               destinationProductReference como destino.
+            - Para compras, pagos, ahorros, préstamos, editar o archivar usa
+              primaryProductReference para el producto principal.
+            - sourceProductReference es el producto desde el que sale dinero al
+              pagar una deuda o aportar a un ahorro.
+            - destinationProductReference es el destino de una transferencia o
+              del retiro de un ahorro.
             - categoryId solo puede ser SALARY, FREELANCE, TRANSFER, FOOD,
               TRANSPORT, HOME, HEALTH, EDUCATION, ENTERTAINMENT, SHOPPING,
               SERVICES, DEBT_PAYMENT, SAVINGS u OTHER.
@@ -228,6 +312,49 @@ class KoogAssistantTurnInterpreter(
             - Nunca presentes una operación como guardada: solo propones un
               borrador para revisión.
             - Solo devuelve el objeto estructurado solicitado.
+
+            Productos:
+            - productType usa CASH, BANK_ACCOUNT, SAVINGS, CREDIT_CARD o LOAN.
+            - productName es obligatorio al crear; amountMinorUnits representa
+              saldo inicial, deuda inicial o cero si no se indicó.
+            - aliases contiene solo alias que el usuario haya indicado.
+            - Para CREDIT_CARD devuelve creditLimitMinorUnits,
+              annualRateBasisPoints, statementClosingDay y paymentDueDay.
+            - Para SAVINGS devuelve savingsProductType SIMPLE, POCKET o
+              TERM_DEPOSIT. SIMPLE usa tasa 0. POCKET y TERM_DEPOSIT requieren
+              annualRateBasisPoints; TERM_DEPOSIT requiere maturityAtEpochMillis.
+            - Para LOAN devuelve annualRateBasisPoints,
+              monthlyPaymentMinorUnits y paymentDueDay.
+            - Tasas: 11 % efectivo anual se representa como 1100 puntos básicos;
+              0 % se representa como 0.
+            - Al editar un producto devuelve solamente los campos que cambian.
+              Nunca inventes valores faltantes: el servicio preserva los actuales.
+
+            Tarjetas y deudas:
+            - Una compra con tarjeta usa record_card_purchase, la tarjeta en
+              primaryProductReference, monto, merchant e installmentCount.
+            - "Las primeras 3 cuotas sin interés" produce un periodo promocional
+              firstInstallment=1, lastInstallment=3,
+              annualInterestBasisPoints=0.
+            - paymentType usa SCHEDULED_INSTALLMENT para "pagué la cuota",
+              FULL_BALANCE para "saldé", EXTRA_PRINCIPAL para "aboné a capital"
+              y CUSTOM para un pago por monto.
+            - En SCHEDULED_INSTALLMENT y FULL_BALANCE el monto puede quedar null
+              porque PocketMind lo calcula con los datos actuales.
+
+            Ahorros:
+            - savingsMovementType usa DEPOSIT, WITHDRAWAL o RATE_CHANGE.
+            - DEPOSIT puede indicar sourceProductReference.
+            - WITHDRAWAL puede indicar destinationProductReference.
+            - RATE_CHANGE usa annualRateBasisPoints y no necesita monto.
+
+            Edición y eliminación:
+            - Usa las herramientas para identificar el transactionId exacto.
+            - update_transaction solo devuelve los campos que cambian; el
+              servicio conserva los demás.
+            - Para quitar un campo usa clearMerchant, clearCategory, clearNote
+              o clearRelatedProduct.
+            - Nunca adivines un transactionId ni un producto ambiguo.
 
             Ejemplos de criterio:
             - "Mandé 20mil a mi novia desde Bancolombia" es un gasto de 20000
@@ -237,6 +364,16 @@ class KoogAssistantTurnInterpreter(
             - "Pasé 50000 de Bancolombia a Nu" es transferencia únicamente si
               Bancolombia y Nu son dos productos propios.
             - "Hola" usa respond con un saludo breve.
+            - "Compré un celular de 1200000 con Visa a 6 cuotas y las primeras
+              3 sin interés" usa record_card_purchase y un periodo 1..3 a tasa 0.
+            - "Pagué la cuota de Visa desde Bancolombia" usa
+              record_card_payment con SCHEDULED_INSTALLMENT y monto null.
+            - "Metí 80000 a mi cajita Nu desde Bancolombia" usa
+              record_savings_movement con DEPOSIT.
+            - "La cajita Nu ahora rinde 11 %" usa RATE_CHANGE y tasa 1100.
+            - "Abrí un CDT Bancolombia al 11 % por seis meses con 2000000"
+              usa create_product, SAVINGS, TERM_DEPOSIT, tasa 1100, saldo
+              inicial 2000000 y una fecha de vencimiento calculada desde hoy.
         """.trimIndent()
     }
 }

@@ -1,7 +1,5 @@
 package com.pocketmind.assistant.domain.turn
 
-import ai.koog.agents.core.tools.ToolRegistry
-import com.pocketmind.assistant.agent.chat.AssistantBasicIntent
 import com.pocketmind.assistant.agent.chat.AssistantDecisionAction
 import com.pocketmind.assistant.agent.chat.AssistantInterpreterInput
 import com.pocketmind.assistant.agent.chat.AssistantInterpreterMessage
@@ -12,7 +10,6 @@ import com.pocketmind.assistant.agent.tools.AssistantReadToolRegistryFactory
 import com.pocketmind.assistant.auth.AuthenticatedUser
 import com.pocketmind.assistant.domain.finance.FinancialReadService
 import com.pocketmind.assistant.domain.finance.FinancialReadServiceFactory
-import com.pocketmind.assistant.domain.finance.ProductSummary
 import com.pocketmind.assistant.domain.memory.AssistantCommandDraft
 import com.pocketmind.assistant.domain.memory.AssistantMemoryRepository
 import com.pocketmind.assistant.domain.memory.AssistantMessage
@@ -29,18 +26,15 @@ import com.pocketmind.shared.assistant.AssistantTurnStatus
 import com.pocketmind.shared.domain.command.CURRENT_FINANCIAL_COMMAND_SCHEMA_VERSION
 import com.pocketmind.shared.domain.command.FinancialCommand
 import com.pocketmind.shared.domain.command.FinancialCommandCodec
-import com.pocketmind.shared.domain.model.CurrencyCode
-import com.pocketmind.shared.domain.model.FinancialAccountType
+import com.pocketmind.shared.domain.model.FinancialProductConfiguration
 import com.pocketmind.shared.domain.model.Money
 import com.pocketmind.shared.domain.model.TransactionCategoryId
-import com.pocketmind.shared.domain.model.TransactionSource
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import java.nio.charset.StandardCharsets
 import java.time.Clock
 import java.time.Duration
-import java.time.Instant
 import java.util.UUID
 
 fun interface AssistantTurnHandler {
@@ -66,6 +60,8 @@ class AssistantTurnService(
     private val modelId: String,
     private val clock: Clock = Clock.systemUTC(),
 ) : AssistantTurnHandler {
+    private val proposalResolver = AssistantProposalResolver(clock)
+
     override suspend fun handle(
         session: AuthenticatedUser,
         request: AssistantTurnRequest,
@@ -115,6 +111,14 @@ class AssistantTurnService(
                         type = it.type,
                         currency = it.currency,
                         aliases = it.aliases,
+                        currentBalanceMinorUnits = it.currentBalance?.minorUnits,
+                        currentDebtMinorUnits = it.currentDebt?.minorUnits,
+                        availableCreditMinorUnits = it.availableCredit?.minorUnits,
+                        nextPaymentMinorUnits = it.nextPayment?.minorUnits,
+                        annualRateBasisPoints = it.annualRateBasisPoints,
+                        statementClosingDay = it.statementClosingDay,
+                        paymentDueDay = it.paymentDueDay,
+                        maturityAtEpochMillis = it.maturityAtEpochMillis,
                     )
                 },
                 conversation = history.map {
@@ -202,7 +206,8 @@ class AssistantTurnService(
             is Resolution.Conversation -> resolution.message
             is Resolution.Unsupported -> resolution.message
                 ?: "No entendí qué quieres hacer. Puedo conversar contigo, consultar " +
-                "tus finanzas y registrar ingresos, gastos o transferencias."
+                "tus finanzas y ayudarte con movimientos, productos, tarjetas, " +
+                "ahorros o préstamos."
             is Resolution.Proposal -> proposalReply(resolution)
         }
         val assistantMessage = memoryRepository.appendMessage(
@@ -243,135 +248,30 @@ class AssistantTurnService(
         decision: AssistantModelDecision,
         readService: FinancialReadService,
         turnId: String,
-    ): Resolution {
-        val intent = decision.intent
-            ?: return Resolution.Clarification("¿Qué movimiento quieres registrar?")
-        val amount = decision.amountMinorUnits
-            ?.takeIf { it > 0 }
-            ?: return Resolution.Clarification("¿Cuál es el valor del movimiento?")
-        val primaryReference = decision.primaryProductReference
-            ?.trim()
-            ?.takeIf(String::isNotEmpty)
-            ?: return Resolution.Clarification(
-                if (intent == AssistantBasicIntent.TRANSFER) {
-                    "¿Desde cuál producto quieres transferir?"
-                } else {
-                    "¿En cuál producto ocurrió el movimiento?"
-                },
-            )
-        val primary = resolveLiquidProduct(primaryReference, readService)
-            ?: return Resolution.Clarification(
-                "No pude identificar con certeza el producto \"$primaryReference\". " +
-                    "¿Puedes usar su nombre completo?",
-            )
-        val currency = resolveCurrency(decision.currency, primary)
-            ?: return Resolution.Clarification(
-                "La moneda indicada no coincide con ${primary.name}.",
-            )
-        val occurredAt = decision.occurredAtEpochMillis ?: clock.millis()
-        if (occurredAt <= 0 || occurredAt > clock.millis() + MAX_FUTURE_SKEW.toMillis()) {
-            return Resolution.Clarification("¿En qué fecha ocurrió el movimiento?")
-        }
-        val categoryId = decision.categoryId?.let { value ->
-            TransactionCategoryId.entries.firstOrNull { it.name == value }
-                ?: return Resolution.Clarification(
-                    "No reconocí la categoría. ¿Cuál quieres usar?",
-                )
-        }?.name
-        val destination = if (intent == AssistantBasicIntent.TRANSFER) {
-            val reference = decision.destinationProductReference
-                ?.trim()
-                ?.takeIf(String::isNotEmpty)
-                ?: return Resolution.Clarification(
-                    "¿A cuál producto quieres enviar el dinero?",
-                )
-            resolveLiquidProduct(reference, readService)
-                ?: return Resolution.Clarification(
-                    "No pude identificar con certeza el destino \"$reference\". " +
-                        "¿Puedes usar su nombre completo?",
-                )
-        } else {
-            null
-        }
-        if (destination != null && destination.id == primary.id) {
-            return Resolution.Clarification(
-                "El origen y el destino deben ser productos diferentes.",
-            )
-        }
-        if (destination != null && destination.currency != primary.currency) {
-            return Resolution.Clarification(
-                "Por ahora la transferencia debe usar productos de la misma moneda.",
-            )
-        }
-        val money = Money(amount, currency)
-        val command = when (intent) {
-            AssistantBasicIntent.RECORD_INCOME -> FinancialCommand.RecordIncome(
-                commandId = turnId,
-                productId = primary.id,
-                amount = money,
-                occurredAtEpochMillis = occurredAt,
-                source = TransactionSource.ASSISTANT_TEXT,
-                categoryId = categoryId,
-                merchant = decision.merchant.normalizedOptional(),
-                note = decision.note.normalizedOptional(),
-            )
-            AssistantBasicIntent.RECORD_EXPENSE -> FinancialCommand.RecordExpense(
-                commandId = turnId,
-                productId = primary.id,
-                amount = money,
-                occurredAtEpochMillis = occurredAt,
-                source = TransactionSource.ASSISTANT_TEXT,
-                categoryId = categoryId,
-                merchant = decision.merchant.normalizedOptional(),
-                note = decision.note.normalizedOptional(),
-            )
-            AssistantBasicIntent.TRANSFER -> FinancialCommand.Transfer(
-                commandId = turnId,
-                sourceProductId = primary.id,
-                destinationProductId = requireNotNull(destination).id,
-                amount = money,
-                occurredAtEpochMillis = occurredAt,
-                source = TransactionSource.ASSISTANT_TEXT,
-                categoryId = categoryId ?: TransactionCategoryId.TRANSFER.name,
-                merchant = decision.merchant.normalizedOptional(),
-                note = decision.note.normalizedOptional(),
-            )
-        }
-        val payload = Json.parseToJsonElement(FinancialCommandCodec.encode(command)).jsonObject
-        val metadata = readService.getOverview().metadata
-        return Resolution.Proposal(
-            commandType = intent.wireValue,
-            commandPayload = payload,
-            financialStateVersion = metadata.stateVersion,
-            amountMinorUnits = amount,
-            currency = currency.name,
-            primary = primary,
-            destination = destination,
-            merchant = decision.merchant.normalizedOptional(),
-            categoryId = categoryId,
-            occurredAtEpochMillis = occurredAt,
+    ): Resolution = when (
+        val result = proposalResolver.resolve(decision, readService, turnId)
+    ) {
+        is AssistantProposalResolution.Clarification ->
+            Resolution.Clarification(result.message)
+        is AssistantProposalResolution.Proposal -> Resolution.Proposal(
+            commandType = result.command.commandType,
+            commandPayload = Json.parseToJsonElement(
+                FinancialCommandCodec.encode(result.command),
+            ).jsonObject,
+            financialStateVersion = result.financialStateVersion,
+            amountMinorUnits = result.amount?.minorUnits,
+            currency = result.amount?.currency?.name ?: result.primary.currency,
+            primary = result.primary,
+            destination = result.destination,
+            merchant = result.merchant,
+            categoryId = result.categoryId,
+            occurredAtEpochMillis = result.occurredAtEpochMillis,
+            productType = result.productType,
+            installmentCount = result.installmentCount,
+            annualRateBasisPoints = result.annualRateBasisPoints,
+            paymentType = result.paymentType,
+            movementType = result.movementType,
         )
-    }
-
-    private suspend fun resolveLiquidProduct(
-        reference: String,
-        service: FinancialReadService,
-    ): ProductSummary? {
-        val product = service.getProduct(reference, LIQUID_PRODUCT_TYPES).product ?: return null
-        if (product.isArchived) return null
-        return product
-    }
-
-    private fun resolveCurrency(
-        requested: String?,
-        product: ProductSummary,
-    ): CurrencyCode? {
-        val productCurrency = CurrencyCode.entries.single { it.name == product.currency }
-        if (requested.isNullOrBlank()) return productCurrency
-        val requestedCurrency = CurrencyCode.entries
-            .firstOrNull { it.name == requested.trim().uppercase() }
-            ?: return null
-        return requestedCurrency.takeIf { it == productCurrency }
     }
 
     private suspend fun replayCompletedTurn(
@@ -412,35 +312,60 @@ class AssistantTurnService(
         val command = FinancialCommandCodec.decode(draft.commandPayload.toString()).getOrNull()
             ?: return null
         val service = readServiceFactory.create(session)
-        val values = command.previewValues() ?: return null
-        val primary = service.getProduct(values.primaryProductId).product ?: return null
+        val values = command.previewValues(service) ?: return null
+        val primary = service.getProduct(values.primaryProductId).product
         val destination = values.destinationProductId
             ?.let { service.getProduct(it).product }
+        val primaryName = values.primaryProductName ?: primary?.name ?: return null
         return AssistantDraftPreview(
             id = draft.id,
             version = draft.version,
             commandType = draft.commandType,
-            amountMinorUnits = values.amount.minorUnits,
-            currency = values.amount.currency.name,
-            primaryProductId = primary.id,
-            primaryProductName = primary.name,
+            amountMinorUnits = values.amount?.minorUnits,
+            currency = values.amount?.currency?.name ?: primary?.currency,
+            primaryProductId = values.primaryProductId,
+            primaryProductName = primaryName,
             destinationProductId = destination?.id,
             destinationProductName = destination?.name,
             merchant = values.merchant,
             categoryId = values.categoryId,
             occurredAtEpochMillis = values.occurredAtEpochMillis,
+            productType = values.productType,
+            installmentCount = values.installmentCount,
+            annualRateBasisPoints = values.annualRateBasisPoints,
+            paymentType = values.paymentType,
+            movementType = values.movementType,
             expiresAt = draft.expiresAt.toString(),
         )
     }
 
     private fun proposalReply(value: Resolution.Proposal): String = when (value.commandType) {
-        AssistantBasicIntent.RECORD_INCOME.wireValue ->
+        "record_income" ->
             "Preparé un ingreso en ${value.primary.name}. Revísalo antes de guardarlo."
-        AssistantBasicIntent.RECORD_EXPENSE.wireValue ->
+        "record_expense" ->
             "Preparé un gasto en ${value.primary.name}. Revísalo antes de guardarlo."
-        else ->
+        "transfer" ->
             "Preparé una transferencia de ${value.primary.name} a " +
                 "${value.destination?.name}. Revísala antes de guardarla."
+        "create_product" ->
+            "Preparé el nuevo producto ${value.primary.name}. Revisa su configuración."
+        "update_product" ->
+            "Preparé los cambios de ${value.primary.name}. Revísalos antes de guardar."
+        "archive_product" ->
+            "Preparé el archivo de ${value.primary.name}. Revísalo antes de continuar."
+        "record_card_purchase" ->
+            "Preparé la compra con ${value.primary.name}. Revisa el valor y las cuotas."
+        "record_card_payment" ->
+            "Preparé el pago de ${value.primary.name}. Revísalo antes de guardar."
+        "record_savings_movement" ->
+            "Preparé el movimiento de ${value.primary.name}. Revísalo antes de guardar."
+        "record_loan_payment" ->
+            "Preparé el pago de ${value.primary.name}. Revísalo antes de guardar."
+        "update_transaction" ->
+            "Preparé la corrección del movimiento. Revísala antes de guardar."
+        "delete_transaction" ->
+            "Preparé la eliminación del movimiento. Revísala antes de continuar."
+        else -> "Preparé una propuesta. Revísala antes de guardarla."
     }
 
     private fun clarificationFor(fields: List<String>): String {
@@ -471,6 +396,11 @@ class AssistantTurnService(
         merchant = merchant,
         categoryId = categoryId,
         occurredAtEpochMillis = occurredAtEpochMillis,
+        productType = productType,
+        installmentCount = installmentCount,
+        annualRateBasisPoints = annualRateBasisPoints,
+        paymentType = paymentType,
+        movementType = movementType,
         expiresAt = draft.expiresAt.toString(),
     )
 
@@ -482,41 +412,169 @@ class AssistantTurnService(
             val commandType: String,
             val commandPayload: JsonObject,
             val financialStateVersion: Long,
-            val amountMinorUnits: Long,
+            val amountMinorUnits: Long?,
             val currency: String,
-            val primary: ProductSummary,
-            val destination: ProductSummary?,
+            val primary: ProposalProduct,
+            val destination: ProposalProduct?,
             val merchant: String?,
             val categoryId: String?,
             val occurredAtEpochMillis: Long,
+            val productType: String? = null,
+            val installmentCount: Int? = null,
+            val annualRateBasisPoints: Int? = null,
+            val paymentType: String? = null,
+            val movementType: String? = null,
         ) : Resolution
     }
 
     private data class CommandPreviewValues(
         val primaryProductId: String,
+        val primaryProductName: String? = null,
         val destinationProductId: String?,
-        val amount: Money,
+        val amount: Money?,
         val merchant: String?,
         val categoryId: String?,
         val occurredAtEpochMillis: Long,
+        val productType: String? = null,
+        val installmentCount: Int? = null,
+        val annualRateBasisPoints: Int? = null,
+        val paymentType: String? = null,
+        val movementType: String? = null,
     )
 
-    private fun FinancialCommand.previewValues(): CommandPreviewValues? = when (this) {
+    private suspend fun FinancialCommand.previewValues(
+        service: FinancialReadService,
+    ): CommandPreviewValues? = when (this) {
         is FinancialCommand.RecordIncome -> CommandPreviewValues(
-            productId, null, amount, merchant, categoryId, occurredAtEpochMillis,
+            productId, null, null, amount, merchant, categoryId, occurredAtEpochMillis,
         )
         is FinancialCommand.RecordExpense -> CommandPreviewValues(
-            productId, null, amount, merchant, categoryId, occurredAtEpochMillis,
+            productId, null, null, amount, merchant, categoryId, occurredAtEpochMillis,
         )
         is FinancialCommand.Transfer -> CommandPreviewValues(
             sourceProductId,
+            null,
             destinationProductId,
             amount,
             merchant,
             categoryId,
             occurredAtEpochMillis,
         )
-        else -> null
+        is FinancialCommand.CreateProduct -> CommandPreviewValues(
+            primaryProductId = account.id,
+            primaryProductName = account.name,
+            destinationProductId = null,
+            amount = account.openingBalance,
+            merchant = null,
+            categoryId = null,
+            occurredAtEpochMillis = configuration.openedAtOrNow(clock.millis()),
+            productType = account.type.name,
+            annualRateBasisPoints = configuration.annualRateBasisPoints(),
+        )
+        is FinancialCommand.UpdateProduct -> CommandPreviewValues(
+            primaryProductId = account.id,
+            primaryProductName = account.name,
+            destinationProductId = null,
+            amount = account.openingBalance,
+            merchant = null,
+            categoryId = null,
+            occurredAtEpochMillis = clock.millis(),
+            productType = account.type.name,
+            annualRateBasisPoints = configuration.annualRateBasisPoints(),
+        )
+        is FinancialCommand.ArchiveProduct -> CommandPreviewValues(
+            primaryProductId = productId,
+            destinationProductId = null,
+            amount = null,
+            merchant = null,
+            categoryId = null,
+            occurredAtEpochMillis = clock.millis(),
+        )
+        is FinancialCommand.RecordCardPurchase -> CommandPreviewValues(
+            primaryProductId = cardId,
+            destinationProductId = null,
+            amount = principal,
+            merchant = merchant,
+            categoryId = categoryId,
+            occurredAtEpochMillis = purchasedAtEpochMillis,
+            installmentCount = installmentCount,
+        )
+        is FinancialCommand.RecordCardPayment -> {
+            val card = service.getProduct(cardId).product ?: return null
+            val resolvedAmount = amount ?: Money(
+                when (paymentType) {
+                    com.pocketmind.shared.domain.model.DebtPaymentType.SCHEDULED_INSTALLMENT ->
+                        card.nextPayment?.minorUnits ?: 0
+                    com.pocketmind.shared.domain.model.DebtPaymentType.FULL_BALANCE ->
+                        card.currentDebt?.minorUnits ?: 0
+                    else -> 0
+                },
+                com.pocketmind.shared.domain.model.CurrencyCode.valueOf(card.currency),
+            )
+            CommandPreviewValues(
+                primaryProductId = cardId,
+                destinationProductId = sourceProductId,
+                amount = resolvedAmount,
+                merchant = null,
+                categoryId = TransactionCategoryId.DEBT_PAYMENT.name,
+                occurredAtEpochMillis = paidAtEpochMillis,
+                paymentType = paymentType.name,
+            )
+        }
+        is FinancialCommand.RecordSavingsMovement -> CommandPreviewValues(
+            primaryProductId = savingsId,
+            destinationProductId = destinationProductId ?: sourceProductId,
+            amount = amount.takeUnless {
+                movementType ==
+                    com.pocketmind.shared.domain.model.SavingsMovementType.RATE_CHANGE
+            },
+            merchant = null,
+            categoryId = TransactionCategoryId.SAVINGS.name,
+            occurredAtEpochMillis = occurredAtEpochMillis,
+            annualRateBasisPoints = annualYieldBasisPoints,
+            movementType = movementType.name,
+        )
+        is FinancialCommand.RecordLoanPayment -> {
+            val loan = service.getProduct(loanId).product ?: return null
+            val resolvedAmount = amount ?: Money(
+                when (paymentType) {
+                    com.pocketmind.shared.domain.model.DebtPaymentType.SCHEDULED_INSTALLMENT ->
+                        loan.nextPayment?.minorUnits ?: 0
+                    com.pocketmind.shared.domain.model.DebtPaymentType.FULL_BALANCE ->
+                        loan.currentDebt?.minorUnits ?: 0
+                    else -> 0
+                },
+                com.pocketmind.shared.domain.model.CurrencyCode.valueOf(loan.currency),
+            )
+            CommandPreviewValues(
+                primaryProductId = loanId,
+                destinationProductId = sourceProductId,
+                amount = resolvedAmount,
+                merchant = null,
+                categoryId = TransactionCategoryId.DEBT_PAYMENT.name,
+                occurredAtEpochMillis = paidAtEpochMillis,
+                paymentType = paymentType.name,
+            )
+        }
+        is FinancialCommand.UpdateTransaction -> CommandPreviewValues(
+            primaryProductId = productId,
+            destinationProductId = relatedProductId,
+            amount = amount,
+            merchant = merchant,
+            categoryId = categoryId,
+            occurredAtEpochMillis = occurredAtEpochMillis,
+        )
+        is FinancialCommand.DeleteTransaction -> {
+            val transaction = service.getTransactionById(transactionId) ?: return null
+            CommandPreviewValues(
+                primaryProductId = transaction.accountId,
+                destinationProductId = transaction.relatedAccountId,
+                amount = transaction.amount,
+                merchant = transaction.merchant,
+                categoryId = transaction.categoryId,
+                occurredAtEpochMillis = transaction.occurredAtEpochMillis,
+            )
+        }
     }
 
     private fun AssistantMessage.toTransport(): AssistantChatMessage =
@@ -536,21 +594,42 @@ class AssistantTurnService(
     private companion object {
         const val HISTORY_LIMIT = 80
         const val TITLE_LIMIT = 80
-        val LIQUID_PRODUCT_TYPES = setOf(
-            FinancialAccountType.CASH,
-            FinancialAccountType.BANK_ACCOUNT,
-        )
         val DRAFT_TTL: Duration = Duration.ofMinutes(15)
-        val MAX_FUTURE_SKEW: Duration = Duration.ofMinutes(5)
     }
 }
 
-private val AssistantBasicIntent.wireValue: String
+private val FinancialCommand.commandType: String
     get() = when (this) {
-        AssistantBasicIntent.RECORD_INCOME -> "record_income"
-        AssistantBasicIntent.RECORD_EXPENSE -> "record_expense"
-        AssistantBasicIntent.TRANSFER -> "transfer"
+        is FinancialCommand.RecordIncome -> "record_income"
+        is FinancialCommand.RecordExpense -> "record_expense"
+        is FinancialCommand.Transfer -> "transfer"
+        is FinancialCommand.CreateProduct -> "create_product"
+        is FinancialCommand.UpdateProduct -> "update_product"
+        is FinancialCommand.ArchiveProduct -> "archive_product"
+        is FinancialCommand.RecordCardPurchase -> "record_card_purchase"
+        is FinancialCommand.RecordCardPayment -> "record_card_payment"
+        is FinancialCommand.RecordSavingsMovement -> "record_savings_movement"
+        is FinancialCommand.RecordLoanPayment -> "record_loan_payment"
+        is FinancialCommand.UpdateTransaction -> "update_transaction"
+        is FinancialCommand.DeleteTransaction -> "delete_transaction"
     }
+
+private fun FinancialProductConfiguration.annualRateBasisPoints(): Int? = when (this) {
+    FinancialProductConfiguration.Standard -> null
+    is FinancialProductConfiguration.CreditCard -> profile.annualInterestBasisPoints
+    is FinancialProductConfiguration.Savings -> profile.annualYieldBasisPoints.takeUnless {
+        profile.type == com.pocketmind.shared.domain.model.SavingsProductType.SIMPLE
+    }
+    is FinancialProductConfiguration.Loan -> profile.annualInterestBasisPoints
+}
+
+private fun FinancialProductConfiguration.openedAtOrNow(now: Long): Long = when (this) {
+    FinancialProductConfiguration.Standard -> now
+    is FinancialProductConfiguration.CreditCard ->
+        profile.openingDebtFirstPaymentAtEpochMillis ?: now
+    is FinancialProductConfiguration.Savings -> profile.openedAtEpochMillis
+    is FinancialProductConfiguration.Loan -> profile.openedAtEpochMillis
+}
 
 private fun String?.normalizedOptional(): String? =
     this?.trim()?.takeIf(String::isNotEmpty)
