@@ -27,6 +27,9 @@ esa variable y conserva todos sus targets.
 
 - `Dockerfile.vercel`: build multietapa y ejecución como usuario sin privilegios.
 - `.dockerignore`: excluye secretos, propiedades locales, cachés y artefactos.
+- `vercel.json`: configura la decisión versionada de ignorar builds.
+- `scripts/vercel-ignore-build.sh`: compara el commit y permite construir solo
+  cuando cambia el servicio o alguna de sus dependencias.
 - `services/assistant/.env.example`: inventario sin valores reales.
 
 No debe existir una clave real en ninguno de esos archivos.
@@ -96,11 +99,19 @@ docker build -f Dockerfile.vercel -t pocketmind-assistant:local .
 
 ## Despliegue
 
-Después de fusionar el PR, Vercel desplegará automáticamente `main`. También se
-puede iniciar un despliegue desde el Dashboard. No se deben subir archivos
-locales con secretos mediante la CLI.
+Después de fusionar el PR, Vercel evaluará automáticamente `main`. El contenedor
+solo se construirá si el commit cambia `assistant-service`, el módulo `shared`,
+la infraestructura Gradle usada por el servidor o los archivos de despliegue.
+Los demás commits aparecerán como `Canceled` sin ejecutar el build completo.
+
+También se puede iniciar un despliegue desde el Dashboard. En un redespliegue
+manual por cambio de variables se debe desactivar **Use project's Ignore Build
+Step**. No se deben subir archivos locales con secretos mediante la CLI.
 
 Cada cambio en variables de entorno requiere un nuevo despliegue.
+
+La política completa y la lista de rutas relevantes están documentadas en
+[`CI_CD.md`](CI_CD.md).
 
 ## Verificación remota
 

@@ -29,6 +29,8 @@ aquí debe actualizarse en el mismo cambio que la implemente.
   determinista, configuración Android y límites de la propuesta no ejecutada.
 - [Despliegue del asistente](DESPLIEGUE_ASISTENTE_VERCEL.md): contenedor JVM,
   variables de entorno, despliegue Vercel y validación desde Android.
+- [CI/CD](CI_CD.md): pruebas automáticas en cada push, flujo de PR,
+  protección de `main` y despliegues selectivos de Vercel.
 - [Sincronización de datos](SINCRONIZACION_DATOS.md): operación offline-first,
   estados, validación multidispositivo y diagnóstico.
 - [ADR-001](architecture/ADR-001-SINCRONIZACION-OFFLINE-FIRST.md): decisión,
