@@ -23,6 +23,8 @@ aquí debe actualizarse en el mismo cambio que la implemente.
   GPT-4, seguridad, memoria, fases y estrategia de pruebas.
 - [Memoria del asistente](ASISTENTE_MEMORIA.md): esquema Supabase, RLS,
   ciclo de borradores, checkpoints de Koog, retención y contratos HTTP.
+- [Herramientas de lectura](ASISTENTE_HERRAMIENTAS_LECTURA.md): snapshot
+  financiero remoto, versiones, alias y catálogo Koog sin escrituras.
 - [Sincronización de datos](SINCRONIZACION_DATOS.md): operación offline-first,
   estados, validación multidispositivo y diagnóstico.
 - [ADR-001](architecture/ADR-001-SINCRONIZACION-OFFLINE-FIRST.md): decisión,

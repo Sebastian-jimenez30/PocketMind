@@ -21,6 +21,9 @@ import com.pocketmind.assistant.domain.memory.AssistantMessage
 import com.pocketmind.assistant.domain.memory.DraftState
 import com.pocketmind.assistant.domain.memory.DraftTransition
 import com.pocketmind.assistant.domain.memory.NewConversation
+import com.pocketmind.assistant.domain.finance.FinancialContextException
+import com.pocketmind.assistant.domain.finance.FinancialContextProblem
+import com.pocketmind.assistant.domain.finance.FinancialContextRemoteException
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
@@ -121,6 +124,49 @@ fun Application.assistantModule(dependencies: AppDependencies) {
                 ),
             )
         }
+        exception<FinancialContextException> { call, cause ->
+            val unsupported =
+                cause.problem == FinancialContextProblem.UNSUPPORTED_SCHEMA
+            call.respond(
+                HttpStatusCode.UnprocessableEntity,
+                call.errorResponse(
+                    code = if (unsupported) {
+                        "FINANCIAL_SCHEMA_UNSUPPORTED"
+                    } else {
+                        "FINANCIAL_DATA_INVALID"
+                    },
+                    message = if (unsupported) {
+                        "Los datos financieros requieren una versión más reciente."
+                    } else {
+                        "Los datos financieros sincronizados no son consistentes."
+                    },
+                ),
+            )
+        }
+        exception<FinancialContextRemoteException> { call, cause ->
+            val unauthorized =
+                cause.statusCode == HttpStatusCode.Unauthorized.value ||
+                    cause.statusCode == HttpStatusCode.Forbidden.value
+            call.respond(
+                if (unauthorized) {
+                    HttpStatusCode.Unauthorized
+                } else {
+                    HttpStatusCode.ServiceUnavailable
+                },
+                call.errorResponse(
+                    code = if (unauthorized) {
+                        "UNAUTHORIZED"
+                    } else {
+                        "FINANCIAL_CONTEXT_UNAVAILABLE"
+                    },
+                    message = if (unauthorized) {
+                        "La sesión no es válida o expiró."
+                    } else {
+                        "El contexto financiero no está disponible temporalmente."
+                    },
+                ),
+            )
+        }
         exception<IllegalArgumentException> { call, _ ->
             call.respond(
                 HttpStatusCode.BadRequest,
@@ -194,6 +240,7 @@ fun Application.assistantModule(dependencies: AppDependencies) {
                         "koog" to "configured",
                         "supabaseAuth" to "configured",
                         "supabaseMemory" to "configured",
+                        "financialReadTools" to "configured",
                     ),
                 ),
             )

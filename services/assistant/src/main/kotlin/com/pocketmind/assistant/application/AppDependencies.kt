@@ -1,5 +1,6 @@
 package com.pocketmind.assistant.application
 
+import com.pocketmind.assistant.agent.tools.AssistantReadToolRegistryFactory
 import com.pocketmind.assistant.auth.SupabaseTokenVerifier
 import com.pocketmind.assistant.config.AssistantConfig
 import com.pocketmind.assistant.domain.memory.AssistantMemoryRepository
@@ -10,4 +11,5 @@ data class AppDependencies(
     val tokenVerifier: SupabaseTokenVerifier,
     val koogRuntimeFactory: KoogRuntimeFactory,
     val memoryRepository: AssistantMemoryRepository,
+    val readToolRegistryFactory: AssistantReadToolRegistryFactory,
 )

@@ -1,10 +1,12 @@
 package com.pocketmind.assistant.application
 
+import com.pocketmind.assistant.agent.tools.AssistantReadToolRegistryFactory
 import com.pocketmind.assistant.auth.AuthenticatedUser
 import com.pocketmind.assistant.auth.SupabaseAccessToken
 import com.pocketmind.assistant.config.AssistantConfig
 import com.pocketmind.assistant.config.source
 import com.pocketmind.assistant.config.validValues
+import com.pocketmind.assistant.domain.finance.FinancialContextRepository
 import com.pocketmind.assistant.infrastructure.openai.KoogRuntimeFactory
 import com.pocketmind.assistant.infrastructure.supabase.SupabaseAssistantMemoryRepository
 import io.ktor.client.HttpClient
@@ -40,6 +42,7 @@ class ApplicationModuleTest {
         assertEquals(HttpStatusCode.OK, response.status)
         assertContains(body, "\"status\":\"ok\"")
         assertContains(body, "\"koog\":\"configured\"")
+        assertContains(body, "\"financialReadTools\":\"configured\"")
         assertFalse(body.contains("openai-test"))
         assertFalse(body.contains("publishable-test"))
         assertNotNull(response.headers[HttpHeaders.XRequestId])
@@ -149,6 +152,7 @@ private fun testDependencies(
             )
         }
     }
+    val memoryRepository = SupabaseAssistantMemoryRepository(memoryClient, config)
     return AppDependencies(
         config = config,
         tokenVerifier = { token ->
@@ -163,7 +167,13 @@ private fun testDependencies(
             }
         },
         koogRuntimeFactory = KoogRuntimeFactory(config),
-        memoryRepository = SupabaseAssistantMemoryRepository(memoryClient, config),
+        memoryRepository = memoryRepository,
+        readToolRegistryFactory = AssistantReadToolRegistryFactory(
+            contextRepository = FinancialContextRepository {
+                error("Financial context was not expected in this test.")
+            },
+            memoryRepository = memoryRepository,
+        ),
     )
 }
 
