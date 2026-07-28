@@ -6,6 +6,8 @@ import com.pocketmind.assistant.auth.SupabaseAccessToken
 import com.pocketmind.assistant.config.AssistantConfig
 import com.pocketmind.assistant.config.source
 import com.pocketmind.assistant.config.validValues
+import com.pocketmind.assistant.domain.finance.FinancialContextRepository
+import com.pocketmind.assistant.domain.finance.FinancialContextSnapshot
 import com.pocketmind.assistant.domain.turn.AssistantTurnHandler
 import com.pocketmind.assistant.infrastructure.openai.KoogRuntimeFactory
 import com.pocketmind.assistant.infrastructure.supabase.SupabaseAssistantMemoryRepository
@@ -190,6 +192,42 @@ class ApplicationModuleTest {
         )
         assertContains(response.bodyAsText(), "\"title\":\"Julio\"")
     }
+
+    @Test
+    fun `confirmation rejects a draft built from stale financial state`() = testApplication {
+        val memoryEngine = MockEngine {
+            respond(
+                content = draftRecord(financialStateVersion = 41),
+                status = HttpStatusCode.OK,
+                headers = headersOf(
+                    HttpHeaders.ContentType,
+                    ContentType.Application.Json.toString(),
+                ),
+            )
+        }
+        application {
+            assistantModule(
+                testDependencies(
+                    validToken = TEST_JWT,
+                    memoryEngine = memoryEngine,
+                    financialContextRepository = {
+                        emptyFinancialContext(stateVersion = 42)
+                    },
+                ),
+            )
+        }
+
+        val response = client.post(
+            "/v1/assistant/drafts/55555555-5555-4555-8555-555555555555/confirm",
+        ) {
+            bearerAuth(TEST_JWT)
+            contentType(ContentType.Application.Json)
+            setBody("""{"expectedVersion":1}""")
+        }
+
+        assertEquals(HttpStatusCode.Conflict, response.status)
+        assertContains(response.bodyAsText(), "\"code\":\"DRAFT_STALE\"")
+    }
 }
 
 private fun testDependencies(
@@ -197,6 +235,10 @@ private fun testDependencies(
     memoryEngine: MockEngine = MockEngine {
         error("Assistant memory was not expected in this test.")
     },
+    financialContextRepository: FinancialContextRepository =
+        FinancialContextRepository {
+            error("Financial context was not expected in this test.")
+        },
     turnHandler: AssistantTurnHandler = AssistantTurnHandler { _, _ ->
         error("Assistant turn was not expected in this test.")
     },
@@ -228,10 +270,54 @@ private fun testDependencies(
         },
         koogRuntimeFactory = KoogRuntimeFactory(config),
         memoryRepository = memoryRepository,
+        financialContextRepository = financialContextRepository,
         readToolRegistryFactory = AssistantReadToolRegistryFactory(),
         turnHandler = turnHandler,
     )
 }
+
+private fun draftRecord(financialStateVersion: Long): String =
+    """
+        [{
+          "id":"55555555-5555-4555-8555-555555555555",
+          "conversation_id":"11111111-1111-4111-8111-111111111111",
+          "user_id":"$TEST_USER_ID",
+          "command_type":"record_expense",
+          "command_payload":{"schema_version":1},
+          "command_schema_version":1,
+          "state":"proposed",
+          "idempotency_key":"assistant-turn:test-confirmation",
+          "payload_hash":"hash",
+          "financial_state_version":$financialStateVersion,
+          "execution_result":null,
+          "error_code":null,
+          "version":1,
+          "expires_at":"2099-07-28T18:00:00Z",
+          "created_at":"2026-07-28T17:00:00Z",
+          "updated_at":"2026-07-28T17:00:00Z"
+        }]
+    """.trimIndent()
+
+private fun emptyFinancialContext(stateVersion: Long) = FinancialContextSnapshot(
+    stateVersion = stateVersion,
+    latestRemoteUpdateEpochMillis = null,
+    supportedSchemaVersion = 1,
+    remoteRecordCount = 0,
+    unknownEntityTypes = emptySet(),
+    accounts = emptyList(),
+    transactions = emptyList(),
+    incomeSources = emptyList(),
+    debts = emptyList(),
+    savingsPlans = emptyList(),
+    recurringObligations = emptyList(),
+    creditCardProfiles = emptyList(),
+    installmentPurchases = emptyList(),
+    creditCardPayments = emptyList(),
+    savingsProfiles = emptyList(),
+    savingsMovements = emptyList(),
+    loanProfiles = emptyList(),
+    loanPayments = emptyList(),
+)
 
 private const val TEST_JWT = "header.payload.signature"
 private const val TEST_USER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"

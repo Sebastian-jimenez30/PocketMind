@@ -37,6 +37,7 @@ fun main() {
         tokenVerifier = RemoteSupabaseTokenVerifier(supabaseClient, config),
         koogRuntimeFactory = koogRuntimeFactory,
         memoryRepository = memoryRepository,
+        financialContextRepository = financialContextRepository,
         readToolRegistryFactory = readToolRegistryFactory,
         turnHandler = AssistantTurnService(
             memoryRepository = memoryRepository,

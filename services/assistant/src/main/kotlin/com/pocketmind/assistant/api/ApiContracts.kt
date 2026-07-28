@@ -1,7 +1,6 @@
 package com.pocketmind.assistant.api
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonObject
 
 @Serializable
 data class HealthResponse(
@@ -54,37 +53,6 @@ data class MessageResponse(
     val promptVersion: String?,
     val modelId: String?,
     val createdAt: String,
-)
-
-@Serializable
-data class DraftTransitionRequest(
-    val expectedVersion: Long,
-    val expectedState: String? = null,
-)
-
-@Serializable
-data class CompleteDraftRequest(
-    val expectedVersion: Long,
-    val executionResult: JsonObject,
-)
-
-@Serializable
-data class DraftResponse(
-    val id: String,
-    val conversationId: String,
-    val commandType: String,
-    val commandPayload: JsonObject,
-    val commandSchemaVersion: Int,
-    val state: String,
-    val idempotencyKey: String,
-    val payloadHash: String,
-    val financialStateVersion: Long,
-    val executionResult: JsonObject?,
-    val errorCode: String?,
-    val version: Long,
-    val expiresAt: String,
-    val createdAt: String,
-    val updatedAt: String,
 )
 
 @Serializable

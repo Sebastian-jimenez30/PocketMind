@@ -352,6 +352,15 @@
     <string name="assistant_thinking">Revisando tus datos…</string>
     <string name="assistant_review">Revisión</string>
     <string name="assistant_not_saved">Aún no está guardado.</string>
+    <string name="assistant_confirm">Guardar movimiento</string>
+    <string name="assistant_edit">Editar</string>
+    <string name="assistant_cancel">Cancelar</string>
+    <string name="assistant_saving">Guardando de forma segura…</string>
+    <string name="assistant_verify">Verificar guardado</string>
+    <string name="assistant_draft_completed">Movimiento guardado. La sincronización continuará en segundo plano.</string>
+    <string name="assistant_draft_cancelled">Propuesta cancelada. No se guardó ningún movimiento.</string>
+    <string name="assistant_draft_failed">No se pudo guardar esta propuesta.</string>
+    <string name="assistant_draft_completion_pending">El movimiento puede estar guardado. Verifica para cerrar el proceso.</string>
     <string name="assistant_income">Ingreso</string>
     <string name="assistant_expense">Gasto</string>
     <string name="assistant_transfer">Transferencia</string>

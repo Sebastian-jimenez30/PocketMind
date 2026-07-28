@@ -346,16 +346,20 @@ Antes de proponer:
 POST   /v1/assistant/turn
 POST   /v1/assistant/audio/transcribe
 GET    /v1/assistant/conversations/{conversationId}
+GET    /v1/assistant/drafts/{draftId}
 POST   /v1/assistant/drafts/{draftId}/confirm
 POST   /v1/assistant/drafts/{draftId}/cancel
 POST   /v1/assistant/drafts/{draftId}/complete
+POST   /v1/assistant/drafts/{draftId}/fail
 DELETE /v1/assistant/conversations/{conversationId}
 GET    /health
 ```
 
 Los endpoints privados usan `Authorization: Bearer <supabase-jwt>`. `confirm`
 fija la intención, pero no permite al servidor escribir fuera del dominio.
-`complete` registra el resultado idempotente generado por la aplicación.
+`complete` registra el resultado idempotente generado por la aplicación. `fail`
+cierra un comando que fue confirmado, pero rechazado por las reglas deterministas
+del dominio. `GET drafts` permite recuperar una confirmación interrumpida.
 
 ## 13. Voz a texto
 
@@ -576,10 +580,29 @@ Salida: texto crea propuestas, nunca escrituras silenciosas.
 
 Rama: `feat/assistant-command-confirmation`.
 
-- Confirmar, editar y cancelar.
-- Convertir borrador a comando.
-- Revalidar estado.
-- Ejecutar Room/outbox y recuperar interrupciones.
+- [x] Confirmar, editar y cancelar desde la tarjeta de revisión.
+- [x] Convertir el payload versionado con `FinancialCommandCodec`.
+- [x] Revalidar vencimiento, versión del borrador y versión financiera remota.
+- [x] Ejecutar el mismo `ExecuteFinancialCommandUseCase` del registro manual.
+- [x] Escribir en Room y activar el outbox sin un camino especial para IA.
+- [x] Reintentar de forma idempotente cuando la app o la red interrumpen el cierre.
+- [x] Registrar resultados exitosos y rechazos deterministas en el borrador.
+
+Reglas de operación:
+
+1. La tarjeta no guarda nada hasta pulsar **Guardar movimiento**.
+   Las respuestas breves e inequívocas como “sí”, “guárdalo” o “confirmar”
+   activan la misma acción únicamente si hay una propuesta visible.
+2. **Editar** cancela la propuesta original y abre su resumen en el campo de
+   conversación; el texto corregido genera un borrador nuevo.
+3. El backend confirma únicamente si el borrador no venció y el estado
+   financiero remoto coincide con el usado para construir la propuesta.
+4. Android conserva el identificador confirmado antes de ejecutar. Si se
+   interrumpe el proceso, consulta el borrador y reintenta el mismo `commandId`.
+5. Un éxito local que todavía no pudo cerrarse en el backend se muestra como
+   pendiente de verificación; nunca se ejecuta con un identificador nuevo.
+6. La persistencia local continúa siendo la fuente de verdad de la interfaz y
+   WorkManager sincroniza el outbox en segundo plano.
 
 Salida: una confirmación produce exactamente un resultado.
 
