@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -62,6 +63,10 @@ fun AssistantRoute(
         onSend = viewModel::send,
         onRetry = viewModel::retry,
         onDismissError = viewModel::dismissError,
+        onConfirmDraft = viewModel::confirmDraft,
+        onEditDraft = viewModel::editDraft,
+        onCancelDraft = viewModel::cancelDraft,
+        onRetryDraft = viewModel::retryDraftCompletion,
     )
 }
 
@@ -73,9 +78,13 @@ private fun AssistantScreen(
     onSend: () -> Unit,
     onRetry: () -> Unit,
     onDismissError: () -> Unit,
+    onConfirmDraft: (AssistantUiDraft) -> Unit,
+    onEditDraft: (AssistantUiDraft) -> Unit,
+    onCancelDraft: (AssistantUiDraft) -> Unit,
+    onRetryDraft: (AssistantUiDraft) -> Unit,
 ) {
     val listState = rememberLazyListState()
-    LaunchedEffect(state.messages.size, state.isSending, state.errorMessage) {
+    LaunchedEffect(state.messages, state.isSending, state.errorMessage) {
         val itemCount = state.messages.size +
             if (state.messages.isEmpty()) 1 else 0 +
             if (state.isSending) 1 else 0 +
@@ -102,7 +111,14 @@ private fun AssistantScreen(
                 item { AssistantWelcome() }
             }
             items(state.messages, key = AssistantUiMessage::id) { message ->
-                MessageBubble(message)
+                MessageBubble(
+                    message = message,
+                    draftActionsEnabled = state.activeDraftId == null && !state.isSending,
+                    onConfirmDraft = onConfirmDraft,
+                    onEditDraft = onEditDraft,
+                    onCancelDraft = onCancelDraft,
+                    onRetryDraft = onRetryDraft,
+                )
             }
             if (state.isSending) {
                 item {
@@ -130,7 +146,7 @@ private fun AssistantScreen(
         }
         AssistantComposer(
             value = state.input,
-            enabled = !state.isSending,
+            enabled = !state.isSending && state.activeDraftId == null,
             onValueChange = onInputChanged,
             onSend = onSend,
         )
@@ -193,7 +209,14 @@ private fun AssistantWelcome() {
 }
 
 @Composable
-private fun MessageBubble(message: AssistantUiMessage) {
+private fun MessageBubble(
+    message: AssistantUiMessage,
+    draftActionsEnabled: Boolean,
+    onConfirmDraft: (AssistantUiDraft) -> Unit,
+    onEditDraft: (AssistantUiDraft) -> Unit,
+    onCancelDraft: (AssistantUiDraft) -> Unit,
+    onRetryDraft: (AssistantUiDraft) -> Unit,
+) {
     val isUser = message.role == "user"
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -224,12 +247,29 @@ private fun MessageBubble(message: AssistantUiMessage) {
                 },
             )
         }
-        message.draft?.let { DraftReviewCard(it) }
+        message.draft?.let { draft ->
+            DraftReviewCard(
+                draft = draft,
+                actionsEnabled = draftActionsEnabled,
+                onConfirm = { onConfirmDraft(draft) },
+                onEdit = { onEditDraft(draft) },
+                onCancel = { onCancelDraft(draft) },
+                onRetry = { onRetryDraft(draft) },
+            )
+        }
     }
 }
 
 @Composable
-private fun DraftReviewCard(draft: AssistantDraftPreview) {
+private fun DraftReviewCard(
+    draft: AssistantUiDraft,
+    actionsEnabled: Boolean,
+    onConfirm: () -> Unit,
+    onEdit: () -> Unit,
+    onCancel: () -> Unit,
+    onRetry: () -> Unit,
+) {
+    val preview = draft.preview
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -251,30 +291,92 @@ private fun DraftReviewCard(draft: AssistantDraftPreview) {
                 color = MaterialTheme.colorScheme.primary,
             )
             Text(
-                text = draft.commandLabel(),
+                text = preview.commandLabel(),
                 style = MaterialTheme.typography.labelLarge,
             )
             Text(
-                text = formatAmount(draft.amountMinorUnits, draft.currency),
+                text = formatAmount(preview.amountMinorUnits, preview.currency),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                text = if (draft.destinationProductName == null) {
-                    draft.primaryProductName
+                text = if (preview.destinationProductName == null) {
+                    preview.primaryProductName
                 } else {
-                    "${draft.primaryProductName} → ${draft.destinationProductName}"
+                    "${preview.primaryProductName} → ${preview.destinationProductName}"
                 },
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            draft.merchant?.let {
+            preview.merchant?.let {
                 Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text(
-                text = stringResource(R.string.assistant_not_saved),
+                text = draft.message ?: stringResource(
+                    when (draft.state) {
+                        AssistantDraftUiState.PROPOSED,
+                        AssistantDraftUiState.PROCESSING,
+                        -> R.string.assistant_not_saved
+                        AssistantDraftUiState.COMPLETED ->
+                            R.string.assistant_draft_completed
+                        AssistantDraftUiState.CANCELLED ->
+                            R.string.assistant_draft_cancelled
+                        AssistantDraftUiState.FAILED ->
+                            R.string.assistant_draft_failed
+                        AssistantDraftUiState.COMPLETION_PENDING ->
+                            R.string.assistant_draft_completion_pending
+                    },
+                ),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.tertiary,
+                color = when (draft.state) {
+                    AssistantDraftUiState.COMPLETED -> MaterialTheme.colorScheme.secondary
+                    AssistantDraftUiState.FAILED -> MaterialTheme.colorScheme.error
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
             )
+            when (draft.state) {
+                AssistantDraftUiState.PROPOSED -> {
+                    Button(
+                        onClick = onConfirm,
+                        enabled = actionsEnabled,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.assistant_confirm))
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        TextButton(onClick = onCancel, enabled = actionsEnabled) {
+                            Text(stringResource(R.string.assistant_cancel))
+                        }
+                        TextButton(onClick = onEdit, enabled = actionsEnabled) {
+                            Text(stringResource(R.string.assistant_edit))
+                        }
+                    }
+                }
+                AssistantDraftUiState.PROCESSING -> {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(PocketSpacing.sm),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CircularProgressIndicator()
+                        Text(stringResource(R.string.assistant_saving))
+                    }
+                }
+                AssistantDraftUiState.COMPLETION_PENDING -> {
+                    Button(
+                        onClick = onRetry,
+                        enabled = actionsEnabled,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.assistant_verify))
+                    }
+                }
+                AssistantDraftUiState.COMPLETED,
+                AssistantDraftUiState.CANCELLED,
+                AssistantDraftUiState.FAILED,
+                -> Unit
+            }
         }
     }
 }

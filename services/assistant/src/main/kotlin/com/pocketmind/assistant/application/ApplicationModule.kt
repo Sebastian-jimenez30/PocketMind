@@ -3,18 +3,14 @@ package com.pocketmind.assistant.application
 import com.pocketmind.assistant.api.ApiError
 import com.pocketmind.assistant.api.ApiErrorResponse
 import com.pocketmind.assistant.api.ApiException
-import com.pocketmind.assistant.api.CompleteDraftRequest
 import com.pocketmind.assistant.api.ConversationDetailResponse
 import com.pocketmind.assistant.api.ConversationResponse
 import com.pocketmind.assistant.api.CreateConversationRequest
-import com.pocketmind.assistant.api.DraftResponse
-import com.pocketmind.assistant.api.DraftTransitionRequest
 import com.pocketmind.assistant.api.HealthResponse
 import com.pocketmind.assistant.api.MessageResponse
 import com.pocketmind.assistant.api.SessionResponse
 import com.pocketmind.assistant.agent.chat.AssistantModelUnavailableException
 import com.pocketmind.assistant.auth.AuthenticatedUser
-import com.pocketmind.assistant.domain.memory.AssistantCommandDraft
 import com.pocketmind.assistant.domain.memory.AssistantConversation
 import com.pocketmind.assistant.domain.memory.AssistantMemoryConflictException
 import com.pocketmind.assistant.domain.memory.AssistantMemoryRemoteException
@@ -26,6 +22,11 @@ import com.pocketmind.assistant.domain.finance.FinancialContextException
 import com.pocketmind.assistant.domain.finance.FinancialContextProblem
 import com.pocketmind.assistant.domain.finance.FinancialContextRemoteException
 import com.pocketmind.shared.assistant.AssistantTurnRequest
+import com.pocketmind.shared.assistant.AssistantCommandDraft as AssistantCommandDraftResponse
+import com.pocketmind.shared.assistant.AssistantDraftCompletionRequest
+import com.pocketmind.shared.assistant.AssistantDraftFailureRequest
+import com.pocketmind.shared.assistant.AssistantDraftState
+import com.pocketmind.shared.assistant.AssistantDraftTransitionRequest
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
@@ -323,11 +324,60 @@ fun Application.assistantModule(dependencies: AppDependencies) {
                 call.respond(HttpStatusCode.NoContent)
             }
 
+            get("/v1/assistant/drafts/{draftId}") {
+                val user = call.authenticatedUser()
+                val draftId = call.parameters.requireUuid("draftId")
+                val draft = dependencies.memoryRepository.getDraft(user, draftId)
+                    ?: throw notFound()
+                call.respond(draft.toResponse())
+            }
+
             post("/v1/assistant/drafts/{draftId}/confirm") {
                 val user = call.authenticatedUser()
                 val draftId = call.parameters.requireUuid("draftId")
-                val request = call.receive<DraftTransitionRequest>()
+                val request = call.receive<AssistantDraftTransitionRequest>()
                 request.requirePositiveVersion()
+                val proposedDraft = dependencies.memoryRepository.getDraft(user, draftId)
+                    ?: throw notFound()
+                if (
+                    proposedDraft.state == DraftState.PROPOSED &&
+                    !proposedDraft.expiresAt.isAfter(java.time.Instant.now())
+                ) {
+                    dependencies.memoryRepository.transitionDraft(
+                        session = user,
+                        draftId = draftId,
+                        transition = DraftTransition(
+                            expectedState = DraftState.PROPOSED,
+                            nextState = DraftState.EXPIRED,
+                            expectedVersion = request.expectedVersion,
+                        ),
+                    )
+                    throw ApiException(
+                        status = HttpStatusCode.Gone,
+                        code = "DRAFT_EXPIRED",
+                        publicMessage = "La propuesta venció. Cuéntame de nuevo el movimiento.",
+                    )
+                }
+                val currentFinancialState = dependencies.financialContextRepository
+                    .fetchSnapshot(user)
+                if (currentFinancialState.stateVersion != proposedDraft.financialStateVersion) {
+                    dependencies.memoryRepository.transitionDraft(
+                        session = user,
+                        draftId = draftId,
+                        transition = DraftTransition(
+                            expectedState = DraftState.PROPOSED,
+                            nextState = DraftState.CANCELLED,
+                            expectedVersion = request.expectedVersion,
+                            errorCode = "draft_stale",
+                        ),
+                    )
+                    throw ApiException(
+                        status = HttpStatusCode.Conflict,
+                        code = "DRAFT_STALE",
+                        publicMessage =
+                            "Tus productos cambiaron. Genera una propuesta nueva antes de guardar.",
+                    )
+                }
                 val draft = dependencies.memoryRepository.transitionDraft(
                     session = user,
                     draftId = draftId,
@@ -343,10 +393,10 @@ fun Application.assistantModule(dependencies: AppDependencies) {
             post("/v1/assistant/drafts/{draftId}/cancel") {
                 val user = call.authenticatedUser()
                 val draftId = call.parameters.requireUuid("draftId")
-                val request = call.receive<DraftTransitionRequest>()
+                val request = call.receive<AssistantDraftTransitionRequest>()
                 request.requirePositiveVersion()
                 val expectedState = request.expectedState
-                    ?.let(::draftStateFromWire)
+                    ?.toDomain()
                     ?.takeIf { it == DraftState.PROPOSED || it == DraftState.CONFIRMED }
                     ?: throw invalidRequest()
                 val draft = dependencies.memoryRepository.transitionDraft(
@@ -364,7 +414,7 @@ fun Application.assistantModule(dependencies: AppDependencies) {
             post("/v1/assistant/drafts/{draftId}/complete") {
                 val user = call.authenticatedUser()
                 val draftId = call.parameters.requireUuid("draftId")
-                val request = call.receive<CompleteDraftRequest>()
+                val request = call.receive<AssistantDraftCompletionRequest>()
                 require(request.expectedVersion > 0)
                 val draft = dependencies.memoryRepository.transitionDraft(
                     session = user,
@@ -374,6 +424,26 @@ fun Application.assistantModule(dependencies: AppDependencies) {
                         nextState = DraftState.COMPLETED,
                         expectedVersion = request.expectedVersion,
                         executionResult = request.executionResult,
+                    ),
+                )
+                call.respond(draft.toResponse())
+            }
+
+            post("/v1/assistant/drafts/{draftId}/fail") {
+                val user = call.authenticatedUser()
+                val draftId = call.parameters.requireUuid("draftId")
+                val request = call.receive<AssistantDraftFailureRequest>()
+                require(request.expectedVersion > 0)
+                require(request.errorCode.isNotBlank())
+                val draft = dependencies.memoryRepository.transitionDraft(
+                    session = user,
+                    draftId = draftId,
+                    transition = DraftTransition(
+                        expectedState = DraftState.CONFIRMED,
+                        nextState = DraftState.FAILED,
+                        expectedVersion = request.expectedVersion,
+                        executionResult = request.executionResult,
+                        errorCode = request.errorCode.take(80),
                     ),
                 )
                 call.respond(draft.toResponse())
@@ -407,7 +477,7 @@ private fun AssistantTurnRequest.requireValid() {
     require(runCatching { ZoneId.of(timeZoneId.trim()) }.isSuccess)
 }
 
-private fun DraftTransitionRequest.requirePositiveVersion() {
+private fun AssistantDraftTransitionRequest.requirePositiveVersion() {
     require(expectedVersion > 0)
 }
 
@@ -416,10 +486,6 @@ private fun io.ktor.http.Parameters.requireUuid(name: String): String {
     require(runCatching { java.util.UUID.fromString(value) }.isSuccess)
     return value
 }
-
-private fun draftStateFromWire(value: String): DraftState =
-    DraftState.entries.firstOrNull { it.wireValue == value }
-        ?: throw invalidRequest()
 
 private fun AssistantConversation.toResponse(): ConversationResponse =
     ConversationResponse(
@@ -445,13 +511,14 @@ private fun AssistantMessage.toResponse(): MessageResponse = MessageResponse(
     createdAt = createdAt.toString(),
 )
 
-private fun AssistantCommandDraft.toResponse(): DraftResponse = DraftResponse(
+private fun com.pocketmind.assistant.domain.memory.AssistantCommandDraft.toResponse():
+    AssistantCommandDraftResponse = AssistantCommandDraftResponse(
     id = id,
     conversationId = conversationId,
     commandType = commandType,
     commandPayload = commandPayload,
     commandSchemaVersion = commandSchemaVersion,
-    state = state.wireValue,
+    state = state.toTransport(),
     idempotencyKey = idempotencyKey,
     payloadHash = payloadHash,
     financialStateVersion = financialStateVersion,
@@ -462,6 +529,11 @@ private fun AssistantCommandDraft.toResponse(): DraftResponse = DraftResponse(
     createdAt = createdAt.toString(),
     updatedAt = updatedAt.toString(),
 )
+
+private fun AssistantDraftState.toDomain(): DraftState = DraftState.valueOf(name)
+
+private fun DraftState.toTransport(): AssistantDraftState =
+    AssistantDraftState.valueOf(name)
 
 private fun notFound(): ApiException = ApiException(
     status = HttpStatusCode.NotFound,

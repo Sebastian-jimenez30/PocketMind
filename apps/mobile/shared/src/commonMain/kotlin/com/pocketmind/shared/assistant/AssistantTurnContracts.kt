@@ -2,6 +2,7 @@ package com.pocketmind.shared.assistant
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 
 /**
  * Stable transport contracts shared by Android, iOS and the assistant service.
@@ -67,4 +68,70 @@ data class AssistantTurnResponse(
     val userMessage: AssistantChatMessage,
     val assistantMessage: AssistantChatMessage,
     val draft: AssistantDraftPreview? = null,
+)
+
+@Serializable
+enum class AssistantDraftState {
+    @SerialName("proposed")
+    PROPOSED,
+
+    @SerialName("confirmed")
+    CONFIRMED,
+
+    @SerialName("cancelled")
+    CANCELLED,
+
+    @SerialName("completed")
+    COMPLETED,
+
+    @SerialName("failed")
+    FAILED,
+
+    @SerialName("expired")
+    EXPIRED,
+}
+
+/**
+ * Full draft returned only by authenticated lifecycle endpoints.
+ *
+ * The preview shown in chat intentionally omits [commandPayload]. Platforms
+ * must execute this payload only after explicitly confirming the exact draft
+ * version that was presented to the user.
+ */
+@Serializable
+data class AssistantCommandDraft(
+    val id: String,
+    val conversationId: String,
+    val commandType: String,
+    val commandPayload: JsonObject,
+    val commandSchemaVersion: Int,
+    val state: AssistantDraftState,
+    val idempotencyKey: String,
+    val payloadHash: String,
+    val financialStateVersion: Long,
+    val executionResult: JsonObject? = null,
+    val errorCode: String? = null,
+    val version: Long,
+    val expiresAt: String,
+    val createdAt: String,
+    val updatedAt: String,
+)
+
+@Serializable
+data class AssistantDraftTransitionRequest(
+    val expectedVersion: Long,
+    val expectedState: AssistantDraftState? = null,
+)
+
+@Serializable
+data class AssistantDraftCompletionRequest(
+    val expectedVersion: Long,
+    val executionResult: JsonObject,
+)
+
+@Serializable
+data class AssistantDraftFailureRequest(
+    val expectedVersion: Long,
+    val executionResult: JsonObject,
+    val errorCode: String,
 )
