@@ -21,6 +21,8 @@ aquí debe actualizarse en el mismo cambio que la implemente.
 - [Asistente de IA](ASISTENTE_IA_GUIA_IMPLEMENTACION.md): decisiones de
   arquitectura, comandos compartidos con la operación manual, Koog, modelos
   GPT-4, seguridad, memoria, fases y estrategia de pruebas.
+- [Memoria del asistente](ASISTENTE_MEMORIA.md): esquema Supabase, RLS,
+  ciclo de borradores, checkpoints de Koog, retención y contratos HTTP.
 - [Sincronización de datos](SINCRONIZACION_DATOS.md): operación offline-first,
   estados, validación multidispositivo y diagnóstico.
 - [ADR-001](architecture/ADR-001-SINCRONIZACION-OFFLINE-FIRST.md): decisión,

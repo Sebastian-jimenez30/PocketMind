@@ -15,6 +15,8 @@ class AssistantConfigTest {
         assertEquals(8080, config.port)
         assertEquals("https://pocketmind.supabase.co", config.supabaseUrl)
         assertEquals("gpt-4o-mini", config.primaryModel)
+        assertEquals("assistant-v1", config.promptVersion)
+        assertEquals(1, config.toolSchemaVersion)
         assertEquals(SecretValue.REDACTED, config.openAiApiKey.toString())
     }
 
@@ -76,6 +78,8 @@ internal fun validValues(): Map<String, String> = mapOf(
     "OPENAI_API_KEY" to "openai-test",
     "POCKETMIND_AGENT_MODEL" to "gpt-4o-mini",
     "POCKETMIND_FALLBACK_MODEL" to "gpt-4o",
+    "POCKETMIND_PROMPT_VERSION" to "assistant-v1",
+    "POCKETMIND_TOOL_SCHEMA_VERSION" to "1",
 )
 
 internal fun source(values: Map<String, String>): EnvironmentSource =

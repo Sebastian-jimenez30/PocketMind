@@ -1,7 +1,7 @@
 # Guía de implementación del asistente de IA
 
-> Estado: fases 0 a 2 integradas; fase 3 implementada en código y pendiente de
-> validación local antes del merge.
+> Estado: fases 0 a 4 implementadas y validadas; la migración de memoria está
+> aplicada en Supabase.
 > Alcance: texto y voz a texto para ejecutar, con confirmación, todas las
 > operaciones financieras disponibles manualmente en PocketMind.
 
@@ -460,7 +460,7 @@ Salida: todos los ejemplos se representan sin cálculos del LLM.
 
 Rama: `feat/assistant-service-foundation`.
 
-Estado: implementada en código; pendiente de ejecutar la validación local.
+Estado: implementada y validada localmente.
 
 - Crear `services/assistant`.
 - Fijar JDK, Kotlin y Koog compatibles.
@@ -491,9 +491,27 @@ Salida: servicio autenticado y sin secretos en el repositorio.
 
 Rama: `feat/assistant-memory`.
 
+Estado: migración aplicada al proyecto PocketMind y backend validado
+localmente.
+
 - Crear migraciones, RLS e índices.
 - Implementar conversación, borrador, auditoría y checkpoints.
 - Añadir retención y borrado.
+
+Decisiones aplicadas:
+
+- Todas las tablas repiten `user_id` y las relaciones hijas usan claves
+  foráneas compuestas para impedir referencias entre usuarios.
+- RLS deriva la identidad exclusivamente de `auth.uid()`.
+- Mensajes y eventos son append-only para el rol `authenticated`.
+- Los borradores comienzan en `proposed`; PostgreSQL protege las transiciones,
+  el control optimista de versión y la auditoría.
+- Los checkpoints implementan el contrato estable
+  `PersistenceStorageProvider` de Koog y se ligan a un usuario y conversación.
+- Un trabajo de Supabase Cron expira borradores, elimina checkpoints vencidos y
+  purga borradores terminales después de 90 días.
+- Eliminar una conversación borra en cascada mensajes, borradores, eventos y
+  checkpoints. Los alias confirmados se administran por separado.
 
 Salida: conversación recuperable sin mezclar usuarios.
 
