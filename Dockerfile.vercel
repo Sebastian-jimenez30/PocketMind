@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1
+
+FROM eclipse-temurin:21-jdk-jammy AS build
+
+WORKDIR /workspace
+COPY . .
+
+# The server reuses :shared, but a container build does not need Android or iOS
+# targets. This keeps the builder independent from an Android SDK installation.
+ENV POCKETMIND_SERVER_ONLY=true
+
+RUN chmod +x apps/mobile/gradlew \
+    && apps/mobile/gradlew \
+        -p apps/mobile \
+        :assistant-service:installDist \
+        --no-daemon
+
+FROM eclipse-temurin:21-jre-jammy AS runtime
+
+RUN groupadd --system pocketmind \
+    && useradd --system --gid pocketmind --home-dir /app pocketmind
+
+WORKDIR /app
+COPY --from=build --chown=pocketmind:pocketmind \
+    /workspace/services/assistant/build/install/assistant-service/ \
+    /app/
+
+USER pocketmind
+
+# Vercel provides PORT at runtime. Ktor reads it through AssistantConfig.
+EXPOSE 8080
+CMD ["bin/assistant-service"]

@@ -28,6 +28,11 @@ interface AssistantMemoryRepository {
         value: NewMessage,
     ): AssistantMessage
 
+    suspend fun findMessageByClientMessageId(
+        session: AuthenticatedUser,
+        clientMessageId: String,
+    ): AssistantMessage?
+
     suspend fun listMessages(
         session: AuthenticatedUser,
         conversationId: String,
@@ -42,6 +47,11 @@ interface AssistantMemoryRepository {
     suspend fun getDraft(
         session: AuthenticatedUser,
         draftId: String,
+    ): AssistantCommandDraft?
+
+    suspend fun getDraftByIdempotencyKey(
+        session: AuthenticatedUser,
+        idempotencyKey: String,
     ): AssistantCommandDraft?
 
     suspend fun reviseProposedDraft(

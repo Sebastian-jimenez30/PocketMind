@@ -1,12 +1,10 @@
 package com.pocketmind.assistant.auth
 
-import io.ktor.server.auth.Principal
-
 class AuthenticatedUser(
     val userId: String,
     val role: String,
     internal val accessToken: SupabaseAccessToken,
-) : Principal
+)
 
 /**
  * Keeps the caller JWT available for RLS-protected Supabase requests without

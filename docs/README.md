@@ -25,6 +25,10 @@ aquí debe actualizarse en el mismo cambio que la implemente.
   ciclo de borradores, checkpoints de Koog, retención y contratos HTTP.
 - [Herramientas de lectura](ASISTENTE_HERRAMIENTAS_LECTURA.md): snapshot
   financiero remoto, versiones, alias y catálogo Koog sin escrituras.
+- [Chat de texto](ASISTENTE_CHAT_TEXTO.md): contrato de turnos, validación
+  determinista, configuración Android y límites de la propuesta no ejecutada.
+- [Despliegue del asistente](DESPLIEGUE_ASISTENTE_VERCEL.md): contenedor JVM,
+  variables de entorno, despliegue Vercel y validación desde Android.
 - [Sincronización de datos](SINCRONIZACION_DATOS.md): operación offline-first,
   estados, validación multidispositivo y diagnóstico.
 - [ADR-001](architecture/ADR-001-SINCRONIZACION-OFFLINE-FIRST.md): decisión,

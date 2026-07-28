@@ -42,6 +42,11 @@ android {
             "SUPABASE_PUBLISHABLE_KEY",
             (localProperties.getProperty("SUPABASE_PUBLISHABLE_KEY") ?: "").asBuildConfigString(),
         )
+        buildConfigField(
+            "String",
+            "ASSISTANT_BASE_URL",
+            (localProperties.getProperty("ASSISTANT_BASE_URL") ?: "").asBuildConfigString(),
+        )
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["firebaseCrashlyticsCollectionEnabled"] = false
@@ -91,6 +96,8 @@ dependencies {
     implementation(libs.supabase.auth.kt)
     implementation(libs.supabase.postgrest.kt)
     implementation(libs.ktor.client.okhttp)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.serialization.kotlinx.json)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.crashlytics)
     ksp(libs.hilt.compiler)

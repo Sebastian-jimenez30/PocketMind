@@ -342,4 +342,19 @@
     <string name="category_savings">Ahorro</string>
     <string name="category_other">Otro</string>
     <string name="home_account_label">Saldo del producto</string>
+    <string name="home_action_assistant">Asistente</string>
+    <string name="assistant_title">Asistente</string>
+    <string name="assistant_back">Volver</string>
+    <string name="assistant_welcome_title">Registra con tus palabras</string>
+    <string name="assistant_welcome_body">Cuéntame un ingreso, gasto o transferencia. Consultaré tus productos y te mostraré una propuesta antes de guardar.</string>
+    <string name="assistant_input_hint">Ej. Gasté 35.000 en almuerzo con Bancolombia</string>
+    <string name="assistant_send">Enviar</string>
+    <string name="assistant_thinking">Revisando tus datos…</string>
+    <string name="assistant_review">Revisión</string>
+    <string name="assistant_not_saved">Aún no está guardado.</string>
+    <string name="assistant_income">Ingreso</string>
+    <string name="assistant_expense">Gasto</string>
+    <string name="assistant_transfer">Transferencia</string>
+    <string name="assistant_retry">Reintentar</string>
+    <string name="assistant_dismiss">Cerrar</string>
 </resources>

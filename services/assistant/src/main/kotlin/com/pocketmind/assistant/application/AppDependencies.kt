@@ -4,6 +4,7 @@ import com.pocketmind.assistant.agent.tools.AssistantReadToolRegistryFactory
 import com.pocketmind.assistant.auth.SupabaseTokenVerifier
 import com.pocketmind.assistant.config.AssistantConfig
 import com.pocketmind.assistant.domain.memory.AssistantMemoryRepository
+import com.pocketmind.assistant.domain.turn.AssistantTurnHandler
 import com.pocketmind.assistant.infrastructure.openai.KoogRuntimeFactory
 
 data class AppDependencies(
@@ -12,4 +13,5 @@ data class AppDependencies(
     val koogRuntimeFactory: KoogRuntimeFactory,
     val memoryRepository: AssistantMemoryRepository,
     val readToolRegistryFactory: AssistantReadToolRegistryFactory,
+    val turnHandler: AssistantTurnHandler,
 )

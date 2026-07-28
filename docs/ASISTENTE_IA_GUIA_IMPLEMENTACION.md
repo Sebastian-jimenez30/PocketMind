@@ -519,7 +519,7 @@ Salida: conversación recuperable sin mezclar usuarios.
 
 Rama: `feat/assistant-read-tools`.
 
-Estado: implementada en código; pendiente de validación local.
+Estado: implementada, validada y fusionada.
 
 - Implementar catálogo de lectura y contratos mínimos.
 - Resolver productos y alias.
@@ -546,6 +546,24 @@ Salida: contexto real sin entidades inventadas.
 ### Fase 6. Chat básico
 
 Rama: `feat/assistant-text-core`.
+
+Estado: implementada en código; pendiente de validación local y en dispositivo.
+
+Decisiones aplicadas:
+
+- `POST /v1/assistant/turn` recibe un turno autenticado con JWT de Supabase.
+- El identificador de mensaje del cliente hace seguro reintentar una solicitud.
+- Koog exige una salida estructurada y solo dispone de herramientas de lectura.
+- El modelo interpreta; un servicio determinista vuelve a comprobar monto,
+  moneda, categoría, fecha y productos reales.
+- En esta fase solo se aceptan productos líquidos para ingresos, gastos y
+  transferencias. Tarjetas, ahorros y préstamos entran en la fase de paridad.
+- Cada propuesta se codifica con `FinancialCommandCodec`, conserva la versión
+  del estado financiero y vence después de 15 minutos.
+- Android muestra una tarjeta marcada como no guardada. La confirmación y
+  ejecución se habilitan únicamente en la fase 7.
+- `OPENAI_API_KEY` permanece en el servicio. El APK solo conoce la URL pública
+  configurada mediante `ASSISTANT_BASE_URL`.
 
 - Implementar grafo y `gpt-4o-mini`.
 - Soportar ingresos, gastos y transferencias.

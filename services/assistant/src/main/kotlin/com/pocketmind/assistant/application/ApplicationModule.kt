@@ -12,6 +12,7 @@ import com.pocketmind.assistant.api.DraftTransitionRequest
 import com.pocketmind.assistant.api.HealthResponse
 import com.pocketmind.assistant.api.MessageResponse
 import com.pocketmind.assistant.api.SessionResponse
+import com.pocketmind.assistant.agent.chat.AssistantModelUnavailableException
 import com.pocketmind.assistant.auth.AuthenticatedUser
 import com.pocketmind.assistant.domain.memory.AssistantCommandDraft
 import com.pocketmind.assistant.domain.memory.AssistantConversation
@@ -24,6 +25,7 @@ import com.pocketmind.assistant.domain.memory.NewConversation
 import com.pocketmind.assistant.domain.finance.FinancialContextException
 import com.pocketmind.assistant.domain.finance.FinancialContextProblem
 import com.pocketmind.assistant.domain.finance.FinancialContextRemoteException
+import com.pocketmind.shared.assistant.AssistantTurnRequest
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
@@ -53,6 +55,7 @@ import io.ktor.server.routing.routing
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import org.slf4j.event.Level
+import java.time.ZoneId
 
 fun Application.assistantModule(dependencies: AppDependencies) {
     val applicationLog = log
@@ -167,6 +170,15 @@ fun Application.assistantModule(dependencies: AppDependencies) {
                 ),
             )
         }
+        exception<AssistantModelUnavailableException> { call, _ ->
+            call.respond(
+                HttpStatusCode.ServiceUnavailable,
+                call.errorResponse(
+                    code = "ASSISTANT_UNAVAILABLE",
+                    message = "El asistente no está disponible temporalmente.",
+                ),
+            )
+        }
         exception<IllegalArgumentException> { call, _ ->
             call.respond(
                 HttpStatusCode.BadRequest,
@@ -241,6 +253,7 @@ fun Application.assistantModule(dependencies: AppDependencies) {
                         "supabaseAuth" to "configured",
                         "supabaseMemory" to "configured",
                         "financialReadTools" to "configured",
+                        "assistantTextCore" to "configured",
                     ),
                 ),
             )
@@ -250,6 +263,13 @@ fun Application.assistantModule(dependencies: AppDependencies) {
             get("/v1/session") {
                 val user = call.authenticatedUser()
                 call.respond(SessionResponse(userId = user.userId, role = user.role))
+            }
+
+            post("/v1/assistant/turn") {
+                val user = call.authenticatedUser()
+                val request = call.receive<AssistantTurnRequest>()
+                request.requireValid()
+                call.respond(dependencies.turnHandler.handle(user, request))
             }
 
             post("/v1/assistant/conversations") {
@@ -374,6 +394,17 @@ private fun CreateConversationRequest.requireValid() {
     require(runCatching { java.util.UUID.fromString(id) }.isSuccess)
     require(title == null || title.trim().length in 1..120)
     require(locale.trim().length in 2..20)
+}
+
+private fun AssistantTurnRequest.requireValid() {
+    require(runCatching { java.util.UUID.fromString(clientMessageId) }.isSuccess)
+    require(
+        conversationId == null ||
+            runCatching { java.util.UUID.fromString(conversationId) }.isSuccess,
+    )
+    require(content.trim().length in 1..4_000)
+    require(locale.trim().length in 2..20)
+    require(runCatching { ZoneId.of(timeZoneId.trim()) }.isSuccess)
 }
 
 private fun DraftTransitionRequest.requirePositiveVersion() {

@@ -4,17 +4,25 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-kotlin {
-    android {
-        namespace = "com.pocketmind.shared"
-        compileSdk = 37
-        minSdk = 26
-        withHostTestBuilder {}.configure {}
-    }
+val pocketMindServerOnly = providers
+    .environmentVariable("POCKETMIND_SERVER_ONLY")
+    .orNull
+    ?.equals("true", ignoreCase = true)
+    ?: false
 
-    iosArm64()
-    iosSimulatorArm64()
-    iosX64()
+kotlin {
+    if (!pocketMindServerOnly) {
+        android {
+            namespace = "com.pocketmind.shared"
+            compileSdk = 37
+            minSdk = 26
+            withHostTestBuilder {}.configure {}
+        }
+
+        iosArm64()
+        iosSimulatorArm64()
+        iosX64()
+    }
     jvm("server")
 
     sourceSets {
