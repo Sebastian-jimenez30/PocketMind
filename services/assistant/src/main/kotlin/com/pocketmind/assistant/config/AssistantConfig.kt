@@ -134,7 +134,7 @@ data class AssistantConfig(
         private const val DEFAULT_AUTH_TIMEOUT_MS = 5_000L
         private const val DEFAULT_PRIMARY_MODEL = "gpt-4o-mini"
         private const val DEFAULT_FALLBACK_MODEL = "gpt-4o"
-        private const val DEFAULT_PROMPT_VERSION = "assistant-v1"
+        private const val DEFAULT_PROMPT_VERSION = "assistant-v2"
         private const val DEFAULT_TOOL_SCHEMA_VERSION = 1
     }
 }

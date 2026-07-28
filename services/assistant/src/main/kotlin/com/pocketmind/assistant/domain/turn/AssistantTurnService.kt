@@ -5,6 +5,7 @@ import com.pocketmind.assistant.agent.chat.AssistantBasicIntent
 import com.pocketmind.assistant.agent.chat.AssistantDecisionAction
 import com.pocketmind.assistant.agent.chat.AssistantInterpreterInput
 import com.pocketmind.assistant.agent.chat.AssistantInterpreterMessage
+import com.pocketmind.assistant.agent.chat.AssistantInterpreterProduct
 import com.pocketmind.assistant.agent.chat.AssistantModelDecision
 import com.pocketmind.assistant.agent.chat.AssistantTurnInterpreter
 import com.pocketmind.assistant.agent.tools.AssistantReadToolRegistryFactory
@@ -100,12 +101,22 @@ class AssistantTurnService(
         }
         val history = memoryRepository.listMessages(session, conversationId, HISTORY_LIMIT)
         val readService = readServiceFactory.create(session)
+        val products = readService.listProducts(includeArchived = false).products
         val tools = toolRegistryFactory.create(readService)
         val decision = interpreter.interpret(
             AssistantInterpreterInput(
                 locale = request.locale,
                 timeZoneId = request.timeZoneId,
                 currentEpochMillis = clock.millis(),
+                products = products.map {
+                    AssistantInterpreterProduct(
+                        id = it.id,
+                        name = it.name,
+                        type = it.type,
+                        currency = it.currency,
+                        aliases = it.aliases,
+                    )
+                },
                 conversation = history.map {
                     AssistantInterpreterMessage(it.role.wireValue, it.content)
                 },
@@ -153,9 +164,16 @@ class AssistantTurnService(
         readService: FinancialReadService,
     ): AssistantTurnResponse {
         val resolution = when (decision.action) {
-            AssistantDecisionAction.UNSUPPORTED -> Resolution.Unsupported
+            AssistantDecisionAction.RESPOND -> Resolution.Conversation(
+                decision.reply.normalizedOptional()
+                    ?: "Hola, ¿cómo puedo ayudarte con tus finanzas?",
+            )
+            AssistantDecisionAction.UNSUPPORTED -> Resolution.Unsupported(
+                decision.reply.normalizedOptional(),
+            )
             AssistantDecisionAction.CLARIFY -> Resolution.Clarification(
-                clarificationFor(decision.missingFields),
+                decision.reply.normalizedOptional()
+                    ?: clarificationFor(decision.missingFields),
             )
             AssistantDecisionAction.PROPOSE -> resolveProposal(decision, readService, turnId)
         }
@@ -181,8 +199,10 @@ class AssistantTurnService(
         }
         val reply = when (resolution) {
             is Resolution.Clarification -> resolution.message
-            Resolution.Unsupported ->
-                "Por ahora puedo ayudarte a registrar ingresos, gastos y transferencias."
+            is Resolution.Conversation -> resolution.message
+            is Resolution.Unsupported -> resolution.message
+                ?: "No entendí qué quieres hacer. Puedo conversar contigo, consultar " +
+                "tus finanzas y registrar ingresos, gastos o transferencias."
             is Resolution.Proposal -> proposalReply(resolution)
         }
         val assistantMessage = memoryRepository.appendMessage(
@@ -204,8 +224,9 @@ class AssistantTurnService(
             turnId = turnId,
             status = when (resolution) {
                 is Resolution.Clarification -> AssistantTurnStatus.CLARIFICATION
+                is Resolution.Conversation -> AssistantTurnStatus.CONVERSATION
                 is Resolution.Proposal -> AssistantTurnStatus.PROPOSAL
-                Resolution.Unsupported -> AssistantTurnStatus.UNSUPPORTED
+                is Resolution.Unsupported -> AssistantTurnStatus.UNSUPPORTED
             },
             reply = reply,
             userMessage = userMessage.toTransport(),
@@ -336,12 +357,9 @@ class AssistantTurnService(
         reference: String,
         service: FinancialReadService,
     ): ProductSummary? {
-        val product = service.getProduct(reference).product ?: return null
+        val product = service.getProduct(reference, LIQUID_PRODUCT_TYPES).product ?: return null
         if (product.isArchived) return null
-        return product.takeIf {
-            it.type == FinancialAccountType.CASH.name ||
-                it.type == FinancialAccountType.BANK_ACCOUNT.name
-        }
+        return product
     }
 
     private fun resolveCurrency(
@@ -458,7 +476,8 @@ class AssistantTurnService(
 
     private sealed interface Resolution {
         data class Clarification(val message: String) : Resolution
-        data object Unsupported : Resolution
+        data class Conversation(val message: String) : Resolution
+        data class Unsupported(val message: String?) : Resolution
         data class Proposal(
             val commandType: String,
             val commandPayload: JsonObject,
@@ -517,6 +536,10 @@ class AssistantTurnService(
     private companion object {
         const val HISTORY_LIMIT = 80
         const val TITLE_LIMIT = 80
+        val LIQUID_PRODUCT_TYPES = setOf(
+            FinancialAccountType.CASH,
+            FinancialAccountType.BANK_ACCOUNT,
+        )
         val DRAFT_TTL: Duration = Duration.ofMinutes(15)
         val MAX_FUTURE_SKEW: Duration = Duration.ofMinutes(5)
     }

@@ -37,9 +37,12 @@ class FinancialReadService(
         )
     }
 
-    suspend fun getProduct(reference: String): ProductLookupResult {
+    suspend fun getProduct(
+        reference: String,
+        allowedTypes: Set<FinancialAccountType> = emptySet(),
+    ): ProductLookupResult {
         val context = loadContext()
-        return when (val resolution = context.resolve(reference)) {
+        return when (val resolution = context.resolve(reference, allowedTypes)) {
             is ProductReferenceResolution.Resolved -> ProductLookupResult(
                 status = STATUS_RESOLVED,
                 metadata = context.metadata,
@@ -257,15 +260,21 @@ class FinancialReadService(
         val snapshot: FinancialContextSnapshot,
         val metadata: FinancialReadMetadata,
     ) {
-        fun resolve(reference: String): ProductReferenceResolution {
+        fun resolve(
+            reference: String,
+            allowedTypes: Set<FinancialAccountType> = emptySet(),
+        ): ProductReferenceResolution {
             val normalized = reference.trim()
-            snapshot.accounts.singleOrNull { it.id == normalized }?.let {
+            val candidates = snapshot.accounts.filter {
+                allowedTypes.isEmpty() || it.type in allowedTypes
+            }
+            candidates.singleOrNull { it.id == normalized }?.let {
                 return ProductReferenceResolution.Resolved(
                     product = it,
                     matchedByAlias = false,
                 )
             }
-            return resolveProductReference(reference, snapshot.accounts)
+            return resolveProductReference(reference, candidates)
         }
 
         fun summarize(account: FinancialAccount): ProductSummary {

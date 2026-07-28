@@ -19,6 +19,9 @@ data class AssistantTurnRequest(
 
 @Serializable
 enum class AssistantTurnStatus {
+    @SerialName("conversation")
+    CONVERSATION,
+
     @SerialName("clarification")
     CLARIFICATION,
 
