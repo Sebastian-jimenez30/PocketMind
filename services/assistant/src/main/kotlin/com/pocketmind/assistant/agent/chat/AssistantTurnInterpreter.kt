@@ -3,6 +3,7 @@ package com.pocketmind.assistant.agent.chat
 import ai.koog.agents.core.agent.AIAgent
 import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.agents.ext.agent.structuredOutputWithToolsStrategy
+import ai.koog.prompt.executor.clients.openai.base.structure.OpenAIStandardJsonSchemaGenerator
 import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.structure.StructuredRequest
 import ai.koog.prompt.structure.StructuredRequestConfig
@@ -83,6 +84,15 @@ data class AssistantModelDecision(
     val missingFields: List<String> = emptyList(),
 )
 
+internal fun createAssistantDecisionOutputStructure(
+    json: Json,
+): JsonStructure<AssistantModelDecision> = JsonStructure.create(
+    id = "PocketMindTurnDecision",
+    serializer = AssistantModelDecision.serializer(),
+    json = json,
+    schemaGenerator = OpenAIStandardJsonSchemaGenerator,
+)
+
 class KoogAssistantTurnInterpreter(
     private val runtimeFactory: KoogRuntimeFactory,
     private val json: Json = Json {
@@ -91,11 +101,7 @@ class KoogAssistantTurnInterpreter(
         ignoreUnknownKeys = false
     },
 ) : AssistantTurnInterpreter {
-    private val outputStructure = JsonStructure.create(
-        id = "PocketMindTurnDecision",
-        serializer = AssistantModelDecision.serializer(),
-        json = json,
-    )
+    private val outputStructure = createAssistantDecisionOutputStructure(json)
     private val strategy = structuredOutputWithToolsStrategy(
         config = StructuredRequestConfig(
             byProvider = mapOf(
