@@ -10,6 +10,11 @@ interface AssistantRepository {
     suspend fun sendTurn(request: AssistantTurnRequest): AssistantTurnResponse
     suspend fun getDraft(draftId: String): AssistantCommandDraft
     suspend fun confirmDraft(draftId: String, expectedVersion: Long): AssistantCommandDraft
+    suspend fun reviseDraft(
+        draftId: String,
+        expectedVersion: Long,
+        commandPayload: kotlinx.serialization.json.JsonObject,
+    ): AssistantCommandDraft
     suspend fun cancelDraft(
         draftId: String,
         expectedVersion: Long,

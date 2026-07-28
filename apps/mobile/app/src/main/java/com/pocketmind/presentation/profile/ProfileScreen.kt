@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -20,7 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.AutoAwesome
@@ -69,6 +69,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pocketmind.R
 import com.pocketmind.ui.components.PocketContentSheet
+import com.pocketmind.ui.components.PocketContextTopBar
 import com.pocketmind.ui.components.PocketMessage
 import com.pocketmind.ui.components.PocketPrimaryButton
 import com.pocketmind.ui.components.pocketBringIntoViewOnFocus
@@ -135,6 +136,7 @@ fun ProfileScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.primary,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { paddingValues ->
         Column(
@@ -142,7 +144,7 @@ fun ProfileScreen(
                 .fillMaxSize()
                 .padding(paddingValues),
         ) {
-            ProfileHeader(state = state, onBack = onBack)
+            ProfileHeader(onBack = onBack)
             PocketContentSheet(modifier = Modifier.weight(1f)) {
                 if (state.isLoading) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -196,52 +198,13 @@ fun ProfileScreen(
 
 @Composable
 private fun ProfileHeader(
-    state: ProfileUiState,
     onBack: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = PocketSpacing.lg, vertical = PocketSpacing.xs),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = stringResource(R.string.profile_back),
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                )
-            }
-            Text(
-                text = stringResource(R.string.profile_title),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.weight(1f),
-                textAlign = TextAlign.Center,
-            )
-            Spacer(Modifier.size(PocketSpacing.touchTarget))
-        }
-        if (!state.isLoading) {
-            Spacer(Modifier.height(PocketSpacing.xxs))
-            ProfileAvatar(state.displayName)
-            Spacer(Modifier.height(PocketSpacing.xs))
-            Text(
-                text = state.displayName.ifBlank { stringResource(R.string.profile_default_name) },
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onPrimary,
-            )
-            Text(
-                text = state.email,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.82f),
-            )
-        }
-        Spacer(Modifier.height(PocketSpacing.xxs))
-    }
+    PocketContextTopBar(
+        title = stringResource(R.string.profile_title),
+        onBack = onBack,
+        backContentDescription = stringResource(R.string.profile_back),
+    )
 }
 
 @Composable
@@ -285,6 +248,28 @@ private fun ProfileContent(
         ),
         verticalArrangement = Arrangement.spacedBy(PocketSpacing.lg),
     ) {
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(PocketSpacing.md),
+            ) {
+                ProfileAvatar(state.displayName)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = state.displayName.ifBlank {
+                            stringResource(R.string.profile_default_name)
+                        },
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                    Text(
+                        text = state.email,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
         if (state.message != null) {
             item { PocketMessage(message = state.message, isError = state.isError) }
         }

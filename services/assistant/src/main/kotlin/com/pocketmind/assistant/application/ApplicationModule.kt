@@ -18,6 +18,7 @@ import com.pocketmind.assistant.domain.memory.AssistantMessage
 import com.pocketmind.assistant.domain.memory.DraftState
 import com.pocketmind.assistant.domain.memory.DraftTransition
 import com.pocketmind.assistant.domain.memory.NewConversation
+import com.pocketmind.assistant.domain.memory.ProposedDraftRevision
 import com.pocketmind.assistant.domain.finance.FinancialContextException
 import com.pocketmind.assistant.domain.finance.FinancialContextProblem
 import com.pocketmind.assistant.domain.finance.FinancialContextRemoteException
@@ -25,8 +26,12 @@ import com.pocketmind.shared.assistant.AssistantTurnRequest
 import com.pocketmind.shared.assistant.AssistantCommandDraft as AssistantCommandDraftResponse
 import com.pocketmind.shared.assistant.AssistantDraftCompletionRequest
 import com.pocketmind.shared.assistant.AssistantDraftFailureRequest
+import com.pocketmind.shared.assistant.AssistantDraftRevisionRequest
 import com.pocketmind.shared.assistant.AssistantDraftState
 import com.pocketmind.shared.assistant.AssistantDraftTransitionRequest
+import com.pocketmind.shared.domain.command.CURRENT_FINANCIAL_COMMAND_SCHEMA_VERSION
+import com.pocketmind.shared.domain.command.FinancialCommand
+import com.pocketmind.shared.domain.command.FinancialCommandCodec
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
@@ -332,6 +337,45 @@ fun Application.assistantModule(dependencies: AppDependencies) {
                 call.respond(draft.toResponse())
             }
 
+            post("/v1/assistant/drafts/{draftId}/revise") {
+                val user = call.authenticatedUser()
+                val draftId = call.parameters.requireUuid("draftId")
+                val request = call.receive<AssistantDraftRevisionRequest>()
+                require(request.expectedVersion > 0)
+                val current = dependencies.memoryRepository.getDraft(user, draftId)
+                    ?: throw notFound()
+                val previousCommand = FinancialCommandCodec
+                    .decode(current.commandPayload.toString())
+                    .getOrElse { throw invalidRequest() }
+                val revisedCommand = FinancialCommandCodec
+                    .decode(request.commandPayload.toString())
+                    .getOrElse { throw invalidRequest() }
+                require(current.state == DraftState.PROPOSED)
+                if (!current.expiresAt.isAfter(java.time.Instant.now())) {
+                    throw ApiException(
+                        status = HttpStatusCode.Gone,
+                        code = "DRAFT_EXPIRED",
+                        publicMessage =
+                            "La propuesta venció. Cuéntame de nuevo el movimiento.",
+                    )
+                }
+                require(previousCommand.commandId == revisedCommand.commandId)
+                require(previousCommand.wireType == revisedCommand.wireType)
+                val financialState = dependencies.financialContextRepository.fetchSnapshot(user)
+                val draft = dependencies.memoryRepository.reviseProposedDraft(
+                    session = user,
+                    draftId = draftId,
+                    expectedVersion = request.expectedVersion,
+                    revision = ProposedDraftRevision(
+                        commandType = revisedCommand.wireType,
+                        commandPayload = request.commandPayload,
+                        commandSchemaVersion = CURRENT_FINANCIAL_COMMAND_SCHEMA_VERSION,
+                        financialStateVersion = financialState.stateVersion,
+                    ),
+                )
+                call.respond(draft.toResponse())
+            }
+
             post("/v1/assistant/drafts/{draftId}/confirm") {
                 val user = call.authenticatedUser()
                 val draftId = call.parameters.requireUuid("draftId")
@@ -476,6 +520,22 @@ private fun AssistantTurnRequest.requireValid() {
     require(locale.trim().length in 2..20)
     require(runCatching { ZoneId.of(timeZoneId.trim()) }.isSuccess)
 }
+
+private val FinancialCommand.wireType: String
+    get() = when (this) {
+        is FinancialCommand.RecordIncome -> "record_income"
+        is FinancialCommand.RecordExpense -> "record_expense"
+        is FinancialCommand.Transfer -> "transfer"
+        is FinancialCommand.CreateProduct -> "create_product"
+        is FinancialCommand.UpdateProduct -> "update_product"
+        is FinancialCommand.ArchiveProduct -> "archive_product"
+        is FinancialCommand.RecordCardPurchase -> "record_card_purchase"
+        is FinancialCommand.RecordCardPayment -> "record_card_payment"
+        is FinancialCommand.RecordSavingsMovement -> "record_savings_movement"
+        is FinancialCommand.RecordLoanPayment -> "record_loan_payment"
+        is FinancialCommand.UpdateTransaction -> "update_transaction"
+        is FinancialCommand.DeleteTransaction -> "delete_transaction"
+    }
 
 private fun AssistantDraftTransitionRequest.requirePositiveVersion() {
     require(expectedVersion > 0)

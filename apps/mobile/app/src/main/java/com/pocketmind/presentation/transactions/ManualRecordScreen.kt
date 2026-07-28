@@ -9,13 +9,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -57,6 +55,7 @@ import com.pocketmind.shared.domain.usecase.ExecuteFinancialCommandUseCase
 import com.pocketmind.shared.domain.usecase.ManualFinanceUseCases
 import com.pocketmind.shared.domain.usecase.ObserveActiveFinancialAccountsUseCase
 import com.pocketmind.ui.components.PocketMessage
+import com.pocketmind.ui.components.PocketContextTopBar
 import com.pocketmind.ui.components.PocketPrimaryButton
 import com.pocketmind.ui.components.pocketBringIntoViewOnFocus
 import com.pocketmind.ui.theme.PocketSpacing
@@ -346,26 +345,11 @@ private fun ManualRecordScreen(
             it.type != FinancialAccountType.LOAN
     }
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        Row(
-            Modifier.fillMaxWidth()
-                .background(MaterialTheme.colorScheme.primary)
-                .statusBarsPadding()
-                .padding(horizontal = PocketSpacing.sm, vertical = PocketSpacing.xxs),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    Icons.AutoMirrored.Rounded.ArrowBack,
-                    stringResource(R.string.accounts_back),
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                )
-            }
-            Text(
-                stringResource(R.string.transaction_editor_create_title),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onPrimary,
-            )
-        }
+        PocketContextTopBar(
+            title = stringResource(R.string.transaction_editor_create_title),
+            onBack = onBack,
+            backContentDescription = stringResource(R.string.accounts_back),
+        )
         Column(
             Modifier.weight(1f)
                 .verticalScroll(rememberScrollState())

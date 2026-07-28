@@ -11,8 +11,14 @@ import com.pocketmind.shared.assistant.AssistantDraftPreview
 import com.pocketmind.shared.assistant.AssistantDraftState
 import com.pocketmind.shared.assistant.AssistantTurnRequest
 import com.pocketmind.shared.domain.command.FinancialCommandCodec
+import com.pocketmind.shared.domain.command.FinancialCommand
 import com.pocketmind.shared.domain.command.FinancialCommandResult
+import com.pocketmind.shared.domain.model.FinancialAccount
+import com.pocketmind.shared.domain.model.FinancialAccountType
+import com.pocketmind.shared.domain.model.FinancialProductConfiguration
+import com.pocketmind.shared.domain.model.Money
 import com.pocketmind.shared.domain.usecase.ExecuteFinancialCommandUseCase
+import com.pocketmind.shared.domain.usecase.ObserveActiveFinancialAccountsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.util.UUID
 import javax.inject.Inject
@@ -20,8 +26,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.jsonObject
 
 enum class AssistantDraftUiState {
     PROPOSED,
@@ -43,7 +51,16 @@ data class AssistantUiMessage(
     val role: String,
     val content: String,
     val draft: AssistantUiDraft? = null,
+    val deliveryState: AssistantMessageDeliveryState = AssistantMessageDeliveryState.SENT,
+    val deliveryError: String? = null,
+    val clientMessageId: String? = null,
 )
+
+enum class AssistantMessageDeliveryState {
+    SENT,
+    SENDING,
+    FAILED,
+}
 
 data class AssistantUiState(
     val input: String = "",
@@ -51,11 +68,27 @@ data class AssistantUiState(
     val isSending: Boolean = false,
     val activeDraftId: String? = null,
     val errorMessage: String? = null,
+    val draftEditor: AssistantDraftEditorState? = null,
+    val products: List<FinancialAccount> = emptyList(),
+)
+
+data class AssistantDraftEditorState(
+    val draft: AssistantUiDraft,
+    val command: FinancialCommand,
+    val amount: String,
+    val merchant: String,
+    val productName: String,
+    val productId: String,
+    val products: List<FinancialAccount>,
+    val installmentCount: String,
+    val annualRatePercent: String,
+    val error: String? = null,
 )
 
 private data class PendingTurn(
     val content: String,
     val clientMessageId: String,
+    val localMessageId: String,
 )
 
 @HiltViewModel
@@ -63,13 +96,18 @@ class AssistantViewModel @Inject constructor(
     private val repository: AssistantRepository,
     private val executeFinancialCommand: ExecuteFinancialCommandUseCase,
     private val syncCoordinator: SyncCoordinator,
+    private val observeAccounts: ObserveActiveFinancialAccountsUseCase,
     private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(AssistantUiState())
     val uiState: StateFlow<AssistantUiState> = mutableState.asStateFlow()
-    private var pendingTurn: PendingTurn? = null
 
     init {
+        viewModelScope.launch {
+            observeAccounts().collect { products ->
+                mutableState.update { state -> state.copy(products = products) }
+            }
+        }
         savedStateHandle.get<String>(PENDING_EXECUTION_DRAFT_ID)
             ?.let { draftId ->
                 mutableState.update { it.copy(activeDraftId = draftId) }
@@ -110,15 +148,23 @@ class AssistantViewModel @Inject constructor(
                 }
             }
         }
-        submit(PendingTurn(content, UUID.randomUUID().toString()))
+        submit(
+            PendingTurn(
+                content = content,
+                clientMessageId = UUID.randomUUID().toString(),
+                localMessageId = UUID.randomUUID().toString(),
+            ),
+            appendOptimisticMessage = true,
+        )
     }
 
-    fun retry() {
-        pendingTurn?.let(::submit)
-    }
-
-    fun dismissError() {
-        mutableState.update { it.copy(errorMessage = null) }
+    fun retry(message: AssistantUiMessage) {
+        if (mutableState.value.isSending || mutableState.value.activeDraftId != null) return
+        val clientMessageId = message.clientMessageId ?: return
+        submit(
+            PendingTurn(message.content, clientMessageId, message.id),
+            appendOptimisticMessage = false,
+        )
     }
 
     fun confirmDraft(draft: AssistantUiDraft) {
@@ -177,78 +223,154 @@ class AssistantViewModel @Inject constructor(
     }
 
     fun cancelDraft(draft: AssistantUiDraft) {
-        cancelOrEditDraft(draft, editAfterCancellation = false)
-    }
-
-    fun editDraft(draft: AssistantUiDraft) {
-        cancelOrEditDraft(draft, editAfterCancellation = true)
-    }
-
-    fun retryDraftCompletion(draft: AssistantUiDraft) {
         if (!beginDraftAction(draft.preview.id)) return
-        recoverConfirmedDraft(draft.preview.id)
-    }
-
-    private fun cancelOrEditDraft(
-        draft: AssistantUiDraft,
-        editAfterCancellation: Boolean,
-    ) {
-        if (!beginDraftAction(draft.preview.id)) return
+        mutableState.update { state ->
+            state.copy(
+                activeDraftId = null,
+                messages = state.messages.map { message ->
+                    if (message.draft?.preview?.id == draft.preview.id) {
+                        message.copy(draft = null)
+                    } else {
+                        message
+                    }
+                },
+            )
+        }
         viewModelScope.launch {
-            updateDraft(draft.preview.id) {
-                it.copy(state = AssistantDraftUiState.PROCESSING, message = null)
-            }
             try {
                 repository.cancelDraft(
                     draftId = draft.preview.id,
                     expectedVersion = draft.preview.version,
                     expectedState = AssistantDraftState.PROPOSED,
                 )
-                finishCancellation(draft, editAfterCancellation)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
-                val recovered = runCatching {
-                    repository.getDraft(draft.preview.id)
-                }.getOrNull()
-                if (recovered?.state == AssistantDraftState.CANCELLED) {
-                    finishCancellation(draft, editAfterCancellation)
-                } else {
-                    finishDraftAction(
-                        draftId = draft.preview.id,
-                        state = AssistantDraftUiState.PROPOSED,
-                        message = failure.safeMessage(),
+                mutableState.update { state ->
+                    state.copy(
+                        messages = state.messages + AssistantUiMessage(
+                            id = "cancel-error-${draft.preview.id}",
+                            role = "assistant",
+                            content = failure.safeMessage(),
+                            draft = draft,
+                        ),
                     )
                 }
             }
         }
     }
 
-    private fun finishCancellation(
-        draft: AssistantUiDraft,
-        editAfterCancellation: Boolean,
-    ) {
-        val editText = if (editAfterCancellation) {
-            draft.preview.editPrompt()
-        } else {
-            mutableState.value.input
-        }
-        mutableState.update { state ->
-            state.copy(
-                input = editText,
-                activeDraftId = null,
-                messages = state.messages.updateDraft(draft.preview.id) {
+    fun editDraft(draft: AssistantUiDraft) {
+        if (!beginDraftAction(draft.preview.id)) return
+        viewModelScope.launch {
+            try {
+                val stored = repository.getDraft(draft.preview.id)
+                val command = FinancialCommandCodec.decode(stored.commandPayload.toString())
+                    .getOrThrow()
+                mutableState.update {
                     it.copy(
-                        state = AssistantDraftUiState.CANCELLED,
-                        message = if (editAfterCancellation) {
-                            "Propuesta abierta para corregir. Envíala cuando esté lista."
-                        } else {
-                            "Propuesta cancelada. No se guardó ningún movimiento."
+                        activeDraftId = null,
+                        draftEditor = command.toEditor(
+                            draft = draft.copy(
+                                preview = draft.preview.copy(version = stored.version),
+                            ),
+                            products = it.products,
+                        ),
+                    )
+                }
+            } catch (failure: Exception) {
+                finishDraftAction(
+                    draft.preview.id,
+                    AssistantDraftUiState.PROPOSED,
+                    failure.safeMessage(),
+                )
+            }
+        }
+    }
+
+    fun updateDraftEditor(
+        transform: (AssistantDraftEditorState) -> AssistantDraftEditorState,
+    ) {
+        mutableState.update { state ->
+            state.copy(draftEditor = state.draftEditor?.let(transform)?.copy(error = null))
+        }
+    }
+
+    fun closeDraftEditor() {
+        mutableState.update { it.copy(draftEditor = null) }
+    }
+
+    fun saveDraftEditor() {
+        val editor = mutableState.value.draftEditor ?: return
+        val revisedCommand = editor.toCommand().getOrElse { failure ->
+            mutableState.update {
+                it.copy(draftEditor = editor.copy(
+                    error = failure.message ?: "Revisa los datos ingresados.",
+                ))
+            }
+            return
+        }
+        if (!beginDraftAction(editor.draft.preview.id)) return
+        viewModelScope.launch {
+            updateDraft(editor.draft.preview.id) {
+                it.copy(state = AssistantDraftUiState.PROCESSING, message = null)
+            }
+            try {
+                val payload = kotlinx.serialization.json.Json
+                    .parseToJsonElement(FinancialCommandCodec.encode(revisedCommand))
+                    .jsonObject
+                val revised = repository.reviseDraft(
+                    draftId = editor.draft.preview.id,
+                    expectedVersion = editor.draft.preview.version,
+                    commandPayload = payload,
+                )
+                val updatedDraft = editor.draft.copy(
+                    preview = editor.draft.preview.copy(
+                        version = revised.version,
+                        amountMinorUnits = editor.amount.toLongOrNull(),
+                        currency = editor.products
+                            .firstOrNull { it.id == editor.productId }
+                            ?.currency
+                            ?.name
+                            ?: editor.draft.preview.currency,
+                        merchant = editor.merchant.trim().ifBlank { null },
+                        primaryProductName = editor.selectedProductName()
+                            ?: editor.productName.trim()
+                                .ifBlank { editor.draft.preview.primaryProductName },
+                        installmentCount = editor.installmentCount.toIntOrNull(),
+                        annualRateBasisPoints = editor.annualRatePercent
+                            .toBasisPointsOrNull(),
+                    ),
+                    state = AssistantDraftUiState.PROPOSED,
+                    message = null,
+                )
+                mutableState.update { state ->
+                    state.copy(
+                        activeDraftId = null,
+                        draftEditor = null,
+                        messages = state.messages.updateDraft(updatedDraft.preview.id) {
+                            updatedDraft
                         },
                     )
-                },
-            )
+                }
+                confirmDraft(updatedDraft)
+            } catch (failure: Exception) {
+                mutableState.update { state ->
+                    state.copy(
+                        activeDraftId = null,
+                        draftEditor = editor.copy(error = failure.safeMessage()),
+                        messages = state.messages.updateDraft(editor.draft.preview.id) {
+                            it.copy(state = AssistantDraftUiState.PROPOSED)
+                        },
+                    )
+                }
+            }
         }
+    }
+
+    fun retryDraftCompletion(draft: AssistantUiDraft) {
+        if (!beginDraftAction(draft.preview.id)) return
+        recoverConfirmedDraft(draft.preview.id)
     }
 
     private fun recoverConfirmedDraft(draftId: String) {
@@ -390,10 +512,36 @@ class AssistantViewModel @Inject constructor(
         }
     }
 
-    private fun submit(turn: PendingTurn) {
-        pendingTurn = turn
+    private fun submit(
+        turn: PendingTurn,
+        appendOptimisticMessage: Boolean,
+    ) {
+        mutableState.update { state ->
+            val optimistic = AssistantUiMessage(
+                id = turn.localMessageId,
+                role = "user",
+                content = turn.content,
+                deliveryState = AssistantMessageDeliveryState.SENDING,
+                clientMessageId = turn.clientMessageId,
+            )
+            state.copy(
+                input = "",
+                isSending = true,
+                errorMessage = null,
+                messages = if (appendOptimisticMessage) {
+                    state.messages + optimistic
+                } else {
+                    state.messages.map { message ->
+                        if (message.id == turn.localMessageId) {
+                            optimistic
+                        } else {
+                            message
+                        }
+                    }
+                },
+            )
+        }
         viewModelScope.launch {
-            mutableState.update { it.copy(isSending = true, errorMessage = null) }
             try {
                 val response = repository.sendTurn(
                     AssistantTurnRequest(
@@ -403,34 +551,45 @@ class AssistantViewModel @Inject constructor(
                     ),
                 )
                 savedStateHandle[CONVERSATION_ID] = response.conversationId
-                val newMessages = listOf(
-                    AssistantUiMessage(
-                        id = response.userMessage.id,
-                        role = response.userMessage.role,
-                        content = response.userMessage.content,
-                    ),
-                    AssistantUiMessage(
-                        id = response.assistantMessage.id,
-                        role = response.assistantMessage.role,
-                        content = response.reply,
-                        draft = response.draft?.let(::AssistantUiDraft),
-                    ),
+                val serverUserMessage = AssistantUiMessage(
+                    id = response.userMessage.id,
+                    role = response.userMessage.role,
+                    content = response.userMessage.content,
                 )
-                mutableState.update {
-                    it.copy(
-                        input = "",
-                        messages = it.messages + newMessages,
+                val assistantMessage = AssistantUiMessage(
+                    id = response.assistantMessage.id,
+                    role = response.assistantMessage.role,
+                    content = response.reply,
+                    draft = response.draft?.let(::AssistantUiDraft),
+                )
+                mutableState.update { state ->
+                    state.copy(
+                        messages = state.messages.flatMap { message ->
+                            if (message.id == turn.localMessageId) {
+                                listOf(serverUserMessage, assistantMessage)
+                            } else {
+                                listOf(message)
+                            }
+                        },
                         isSending = false,
                     )
                 }
-                pendingTurn = null
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
-                mutableState.update {
-                    it.copy(
+                mutableState.update { state ->
+                    state.copy(
                         isSending = false,
-                        errorMessage = failure.safeMessage(),
+                        messages = state.messages.map { message ->
+                            if (message.id == turn.localMessageId) {
+                                message.copy(
+                                    deliveryState = AssistantMessageDeliveryState.FAILED,
+                                    deliveryError = failure.sendFailureMessage(),
+                                )
+                            } else {
+                                message
+                            }
+                        },
                     )
                 }
             }
@@ -492,32 +651,21 @@ class AssistantViewModel @Inject constructor(
     }
 
     private fun Exception.safeMessage(): String = when (this) {
-        is AssistantRequestException -> publicMessage
-        else -> message
-            ?.takeIf { it.startsWith("El asistente") || it.startsWith("Tu sesión") }
-            ?: "El asistente no pudo responder ahora. Tu mensaje sigue aquí para reintentarlo."
+        is AssistantRequestException -> when {
+            publicMessage.startsWith("Tu sesión") -> "Tu sesión venció."
+            publicMessage.contains("sincronizar", ignoreCase = true) ->
+                "No se pudo sincronizar."
+            else -> publicMessage
+        }
+        else -> "No se completó."
     }
 
-    private fun AssistantDraftPreview.editPrompt(): String {
-        val action = when (commandType) {
-            "record_income" -> "ingreso"
-            "record_expense" -> "gasto"
-            "transfer" -> "transferencia"
-            "create_product" -> "nuevo producto"
-            "update_product" -> "cambio de producto"
-            "archive_product" -> "archivo de producto"
-            "record_card_purchase" -> "compra con tarjeta"
-            "record_card_payment" -> "pago de tarjeta"
-            "record_savings_movement" -> "movimiento de ahorro"
-            "record_loan_payment" -> "pago de préstamo"
-            "update_transaction" -> "corrección de movimiento"
-            "delete_transaction" -> "eliminación de movimiento"
-            else -> "acción"
+    private fun Exception.sendFailureMessage(): String =
+        if (this is AssistantRequestException && publicMessage.startsWith("Tu sesión")) {
+            "Tu sesión venció."
+        } else {
+            "No se envió."
         }
-        val destination = destinationProductName?.let { " hacia $it" }.orEmpty()
-        val amount = amountMinorUnits?.let { " de $it ${currency.orEmpty()}" }.orEmpty()
-        return "Corrige este $action$amount en $primaryProductName$destination: "
-    }
 
     private companion object {
         const val CONVERSATION_ID = "assistantConversationId"
@@ -562,3 +710,283 @@ private fun String.normalizedAction(): String =
         .replace(Regex("[^a-z0-9 ]"), " ")
         .replace(Regex("\\s+"), " ")
         .trim()
+
+private fun FinancialCommand.primaryProductId(): String? = when (this) {
+    is FinancialCommand.RecordIncome -> productId
+    is FinancialCommand.RecordExpense -> productId
+    is FinancialCommand.Transfer -> sourceProductId
+    is FinancialCommand.CreateProduct -> null
+    is FinancialCommand.UpdateProduct -> null
+    is FinancialCommand.ArchiveProduct -> productId
+    is FinancialCommand.RecordCardPurchase -> cardId
+    is FinancialCommand.RecordCardPayment -> cardId
+    is FinancialCommand.RecordSavingsMovement -> savingsId
+    is FinancialCommand.RecordLoanPayment -> loanId
+    is FinancialCommand.UpdateTransaction -> productId
+    is FinancialCommand.DeleteTransaction -> null
+}
+
+private fun FinancialCommand.compatibleProducts(
+    products: List<FinancialAccount>,
+): List<FinancialAccount> {
+    val compatibleTypes = when (this) {
+        is FinancialCommand.RecordIncome,
+        is FinancialCommand.RecordExpense,
+        is FinancialCommand.Transfer,
+        is FinancialCommand.UpdateTransaction,
+        -> setOf(
+            FinancialAccountType.CASH,
+            FinancialAccountType.BANK_ACCOUNT,
+            FinancialAccountType.SAVINGS,
+        )
+        is FinancialCommand.RecordCardPurchase,
+        is FinancialCommand.RecordCardPayment,
+        -> setOf(FinancialAccountType.CREDIT_CARD)
+        is FinancialCommand.RecordSavingsMovement ->
+            setOf(FinancialAccountType.SAVINGS)
+        is FinancialCommand.RecordLoanPayment ->
+            setOf(FinancialAccountType.LOAN)
+        is FinancialCommand.CreateProduct,
+        is FinancialCommand.UpdateProduct,
+        is FinancialCommand.ArchiveProduct,
+        is FinancialCommand.DeleteTransaction,
+        -> emptySet()
+    }
+    val excludedDestinationId =
+        (this as? FinancialCommand.Transfer)?.destinationProductId
+    return products.filter { product ->
+        product.type in compatibleTypes &&
+            product.id != excludedDestinationId
+    }
+}
+
+private fun FinancialCommand.toEditor(
+    draft: AssistantUiDraft,
+    products: List<FinancialAccount>,
+): AssistantDraftEditorState = AssistantDraftEditorState(
+    draft = draft,
+    command = this,
+    amount = when (this) {
+        is FinancialCommand.RecordIncome -> amount.minorUnits
+        is FinancialCommand.RecordExpense -> amount.minorUnits
+        is FinancialCommand.Transfer -> amount.minorUnits
+        is FinancialCommand.CreateProduct -> account.openingBalance.minorUnits
+        is FinancialCommand.UpdateProduct -> account.openingBalance.minorUnits
+        is FinancialCommand.ArchiveProduct -> null
+        is FinancialCommand.RecordCardPurchase -> principal.minorUnits
+        is FinancialCommand.RecordCardPayment ->
+            amount?.minorUnits ?: draft.preview.amountMinorUnits
+        is FinancialCommand.RecordSavingsMovement ->
+            amount.minorUnits.takeUnless {
+                movementType == com.pocketmind.shared.domain.model.SavingsMovementType.RATE_CHANGE
+            }
+        is FinancialCommand.RecordLoanPayment ->
+            amount?.minorUnits ?: draft.preview.amountMinorUnits
+        is FinancialCommand.UpdateTransaction -> amount.minorUnits
+        is FinancialCommand.DeleteTransaction -> null
+    }?.toString().orEmpty(),
+    merchant = when (this) {
+        is FinancialCommand.RecordIncome -> merchant
+        is FinancialCommand.RecordExpense -> merchant
+        is FinancialCommand.Transfer -> merchant
+        is FinancialCommand.RecordCardPurchase -> merchant
+        is FinancialCommand.UpdateTransaction -> merchant
+        else -> null
+    }.orEmpty(),
+    productName = when (this) {
+        is FinancialCommand.CreateProduct -> account.name
+        is FinancialCommand.UpdateProduct -> account.name
+        else -> draft.preview.primaryProductName
+    },
+    productId = primaryProductId().orEmpty(),
+    products = compatibleProducts(products),
+    installmentCount = (this as? FinancialCommand.RecordCardPurchase)
+        ?.installmentCount
+        ?.toString()
+        .orEmpty(),
+    annualRatePercent = when (this) {
+        is FinancialCommand.CreateProduct -> configuration.annualRateBasisPoints()
+        is FinancialCommand.UpdateProduct -> configuration.annualRateBasisPoints()
+        is FinancialCommand.RecordSavingsMovement -> annualYieldBasisPoints
+        else -> null
+    }?.let { (it / 100.0).toString() }.orEmpty(),
+)
+
+private fun AssistantDraftEditorState.selectedProductName(): String? =
+    products.firstOrNull { it.id == productId }?.name
+
+private fun AssistantDraftEditorState.toCommand(): Result<FinancialCommand> = runCatching {
+    val selectedProduct = products.firstOrNull { it.id == productId }
+    fun requiredProductId(): String {
+        require(productId.isNotBlank() && selectedProduct != null) {
+            "Selecciona un producto válido."
+        }
+        return productId
+    }
+    fun requiredAmount(currency: com.pocketmind.shared.domain.model.CurrencyCode): Money {
+        val value = amount.toLongOrNull()
+        require(value != null && value > 0) { "Ingresa un valor mayor que cero." }
+        return Money(value, currency)
+    }
+    fun optionalAmount(currency: com.pocketmind.shared.domain.model.CurrencyCode): Money? =
+        amount.trim().takeIf(String::isNotEmpty)?.let {
+            requiredAmount(currency)
+        }
+    val merchantValue = merchant.trim().ifBlank { null }
+    when (val value = command) {
+        is FinancialCommand.RecordIncome -> value.copy(
+            productId = requiredProductId(),
+            amount = requiredAmount(selectedProduct?.currency ?: value.amount.currency),
+            merchant = merchantValue,
+        )
+        is FinancialCommand.RecordExpense -> value.copy(
+            productId = requiredProductId(),
+            amount = requiredAmount(selectedProduct?.currency ?: value.amount.currency),
+            merchant = merchantValue,
+        )
+        is FinancialCommand.Transfer -> value.copy(
+            sourceProductId = requiredProductId(),
+            amount = requiredAmount(selectedProduct?.currency ?: value.amount.currency),
+            merchant = merchantValue,
+        )
+        is FinancialCommand.CreateProduct -> {
+            val name = productName.trim()
+            require(name.isNotEmpty()) { "Escribe el nombre del producto." }
+            value.copy(
+                account = value.account.copy(
+                    name = name,
+                    openingBalance = Money(
+                        amount.toLongOrNull()?.takeIf { it >= 0 }
+                            ?: error("Ingresa un saldo válido."),
+                        value.account.currency,
+                    ),
+                ),
+                configuration = value.configuration.withAnnualRate(
+                    annualRatePercent.toBasisPointsOrNull(),
+                ),
+            )
+        }
+        is FinancialCommand.UpdateProduct -> {
+            val name = productName.trim()
+            require(name.isNotEmpty()) { "Escribe el nombre del producto." }
+            value.copy(
+                account = value.account.copy(
+                    name = name,
+                    openingBalance = Money(
+                        amount.toLongOrNull()?.takeIf { it >= 0 }
+                            ?: error("Ingresa un saldo válido."),
+                        value.account.currency,
+                    ),
+                ),
+                configuration = value.configuration.withAnnualRate(
+                    annualRatePercent.toBasisPointsOrNull(),
+                ),
+            )
+        }
+        is FinancialCommand.ArchiveProduct -> value
+        is FinancialCommand.RecordCardPurchase -> {
+            val installments = installmentCount.toIntOrNull()
+            require(installments != null && installments in 1..60) {
+                "Las cuotas deben estar entre 1 y 60."
+            }
+            require(value.promotionalRatePeriods.all { it.lastInstallment <= installments }) {
+                "Las cuotas no pueden ser menores al periodo promocional."
+            }
+            value.copy(
+                cardId = requiredProductId(),
+                principal = requiredAmount(
+                    selectedProduct?.currency ?: value.principal.currency,
+                ),
+                merchant = merchantValue ?: error("Escribe el comercio o concepto."),
+                installmentCount = installments,
+            )
+        }
+        is FinancialCommand.RecordCardPayment -> value.copy(
+            cardId = requiredProductId(),
+            amount = optionalAmount(
+                selectedProduct?.currency
+                    ?: value.amount?.currency
+                    ?: com.pocketmind.shared.domain.model.CurrencyCode.valueOf(
+                        draft.preview.currency ?: "COP",
+                    ),
+            ),
+        )
+        is FinancialCommand.RecordSavingsMovement -> value.copy(
+            savingsId = requiredProductId(),
+            amount = if (
+                value.movementType ==
+                com.pocketmind.shared.domain.model.SavingsMovementType.RATE_CHANGE
+            ) {
+                value.amount
+            } else {
+                requiredAmount(selectedProduct?.currency ?: value.amount.currency)
+            },
+            annualYieldBasisPoints = if (
+                value.movementType ==
+                com.pocketmind.shared.domain.model.SavingsMovementType.RATE_CHANGE
+            ) {
+                annualRatePercent.toBasisPointsOrNull()
+                    ?: error("Ingresa una tasa válida.")
+            } else {
+                value.annualYieldBasisPoints
+            },
+        )
+        is FinancialCommand.RecordLoanPayment -> value.copy(
+            loanId = requiredProductId(),
+            amount = optionalAmount(
+                selectedProduct?.currency
+                    ?: value.amount?.currency
+                    ?: com.pocketmind.shared.domain.model.CurrencyCode.valueOf(
+                        draft.preview.currency ?: "COP",
+                    ),
+            ),
+        )
+        is FinancialCommand.UpdateTransaction -> value.copy(
+            productId = requiredProductId(),
+            amount = requiredAmount(selectedProduct?.currency ?: value.amount.currency),
+            merchant = merchantValue,
+        )
+        is FinancialCommand.DeleteTransaction -> value
+    }
+}
+
+private fun FinancialProductConfiguration.withAnnualRate(
+    annualRateBasisPoints: Int?,
+): FinancialProductConfiguration = when (this) {
+    FinancialProductConfiguration.Standard -> this
+    is FinancialProductConfiguration.CreditCard -> copy(
+        profile = profile.copy(
+            annualInterestBasisPoints =
+                annualRateBasisPoints ?: profile.annualInterestBasisPoints,
+        ),
+    )
+    is FinancialProductConfiguration.Savings -> copy(
+        profile = profile.copy(
+            annualYieldBasisPoints =
+                annualRateBasisPoints ?: profile.annualYieldBasisPoints,
+        ),
+    )
+    is FinancialProductConfiguration.Loan -> copy(
+        profile = profile.copy(
+            annualInterestBasisPoints =
+                annualRateBasisPoints ?: profile.annualInterestBasisPoints,
+        ),
+    )
+}
+
+private fun FinancialProductConfiguration.annualRateBasisPoints(): Int? = when (this) {
+    FinancialProductConfiguration.Standard -> null
+    is FinancialProductConfiguration.CreditCard -> profile.annualInterestBasisPoints
+    is FinancialProductConfiguration.Savings ->
+        profile.annualYieldBasisPoints.takeUnless {
+            profile.type ==
+                com.pocketmind.shared.domain.model.SavingsProductType.SIMPLE
+        }
+    is FinancialProductConfiguration.Loan -> profile.annualInterestBasisPoints
+}
+
+private fun String.toBasisPointsOrNull(): Int? =
+    replace(',', '.').trim().toDoubleOrNull()
+        ?.takeIf { it >= 0 }
+        ?.times(100)
+        ?.toInt()

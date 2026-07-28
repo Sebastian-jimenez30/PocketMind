@@ -9,13 +9,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
@@ -44,6 +42,7 @@ import com.pocketmind.R
 import com.pocketmind.shared.domain.model.FinancialAccountType
 import com.pocketmind.shared.domain.model.SavingsProductType
 import com.pocketmind.ui.components.PocketMessage
+import com.pocketmind.ui.components.PocketContextTopBar
 import com.pocketmind.ui.components.PocketPrimaryButton
 import com.pocketmind.ui.components.pocketBringIntoViewOnFocus
 import com.pocketmind.ui.theme.PocketSpacing
@@ -60,15 +59,11 @@ fun AccountEditorRoute(onSaved: () -> Unit, onBack: () -> Unit, viewModel: Accou
 private fun AccountEditorScreen(state: AccountEditorUiState, onUpdate: ((AccountEditorUiState) -> AccountEditorUiState) -> Unit, onSave: () -> Unit, onBack: () -> Unit) {
     if (state.isLoading) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return }
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        androidx.compose.foundation.layout.Row(
-            Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primary).statusBarsPadding()
-                .padding(horizontal = PocketSpacing.sm, vertical = PocketSpacing.xxs),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.accounts_back), tint = MaterialTheme.colorScheme.onPrimary) }
-            Spacer(Modifier.padding(PocketSpacing.xs))
-            Text(stringResource(R.string.accounts_title), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
-        }
+        PocketContextTopBar(
+            title = stringResource(R.string.accounts_title),
+            onBack = onBack,
+            backContentDescription = stringResource(R.string.accounts_back),
+        )
         Column(
             Modifier.weight(1f)
                 .verticalScroll(rememberScrollState())

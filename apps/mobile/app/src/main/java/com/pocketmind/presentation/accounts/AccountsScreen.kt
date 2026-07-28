@@ -8,18 +8,17 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ChevronRight
@@ -52,6 +51,7 @@ import com.pocketmind.shared.domain.model.FinancialAccount
 import com.pocketmind.shared.domain.model.FinancialAccountType
 import com.pocketmind.shared.domain.model.Money
 import com.pocketmind.ui.components.PocketPrimaryButton
+import com.pocketmind.ui.components.PocketContextTopBar
 import com.pocketmind.ui.theme.PocketMindTheme
 import com.pocketmind.ui.theme.PocketSpacing
 import java.text.NumberFormat
@@ -66,6 +66,7 @@ fun AccountsRoute(onCreate: () -> Unit, onOpen: (String) -> Unit, onBack: () -> 
 @Composable
 fun AccountsScreen(accounts: List<ProductListItem>, onCreate: () -> Unit, onOpen: (String) -> Unit, onBack: () -> Unit) {
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         floatingActionButton = {
             FloatingActionButton(onClick = onCreate, containerColor = MaterialTheme.colorScheme.primary) {
                 Icon(Icons.Rounded.Add, stringResource(R.string.accounts_add), tint = MaterialTheme.colorScheme.onPrimary)
@@ -111,15 +112,11 @@ private fun ProductsList(accounts: List<ProductListItem>, onOpen: (String) -> Un
 }
 
 @Composable
-private fun AccountsHeader(onBack: () -> Unit) = Row(
-    modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primary).statusBarsPadding()
-        .padding(horizontal = PocketSpacing.sm, vertical = PocketSpacing.xxs),
-    verticalAlignment = Alignment.CenterVertically,
-) {
-    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.accounts_back), tint = MaterialTheme.colorScheme.onPrimary) }
-    Spacer(Modifier.width(PocketSpacing.xs))
-    Text(stringResource(R.string.accounts_title), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
-}
+private fun AccountsHeader(onBack: () -> Unit) = PocketContextTopBar(
+    title = stringResource(R.string.accounts_title),
+    onBack = onBack,
+    backContentDescription = stringResource(R.string.accounts_back),
+)
 
 @Composable
 private fun EmptyAccounts(onCreate: () -> Unit) = Column(
