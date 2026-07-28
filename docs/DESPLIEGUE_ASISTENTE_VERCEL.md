@@ -57,7 +57,7 @@ Configurar en **Project → Settings → Environment Variables**:
 | `OPENAI_API_KEY` | clave nueva y exclusiva del proyecto | **Sensitive** |
 | `POCKETMIND_AGENT_MODEL` | `gpt-4o-mini` | normal |
 | `POCKETMIND_FALLBACK_MODEL` | `gpt-4o` | normal |
-| `POCKETMIND_PROMPT_VERSION` | `assistant-v2` | normal |
+| `POCKETMIND_PROMPT_VERSION` | `assistant-v3` | normal |
 | `POCKETMIND_TOOL_SCHEMA_VERSION` | `1` | normal |
 
 No configurar `PORT`: Vercel lo entrega al contenedor.

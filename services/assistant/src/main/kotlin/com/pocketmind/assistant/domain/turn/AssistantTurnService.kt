@@ -99,33 +99,37 @@ class AssistantTurnService(
         val readService = readServiceFactory.create(session)
         val products = readService.listProducts(includeArchived = false).products
         val tools = toolRegistryFactory.create(readService)
+        val interpreterProducts = products.map {
+            AssistantInterpreterProduct(
+                id = it.id,
+                name = it.name,
+                type = it.type,
+                currency = it.currency,
+                aliases = it.aliases,
+                currentBalanceMinorUnits = it.currentBalance?.minorUnits,
+                currentDebtMinorUnits = it.currentDebt?.minorUnits,
+                availableCreditMinorUnits = it.availableCredit?.minorUnits,
+                nextPaymentMinorUnits = it.nextPayment?.minorUnits,
+                annualRateBasisPoints = it.annualRateBasisPoints,
+                statementClosingDay = it.statementClosingDay,
+                paymentDueDay = it.paymentDueDay,
+                maturityAtEpochMillis = it.maturityAtEpochMillis,
+            )
+        }
         val decision = interpreter.interpret(
             AssistantInterpreterInput(
                 locale = request.locale,
                 timeZoneId = request.timeZoneId,
                 currentEpochMillis = clock.millis(),
-                products = products.map {
-                    AssistantInterpreterProduct(
-                        id = it.id,
-                        name = it.name,
-                        type = it.type,
-                        currency = it.currency,
-                        aliases = it.aliases,
-                        currentBalanceMinorUnits = it.currentBalance?.minorUnits,
-                        currentDebtMinorUnits = it.currentDebt?.minorUnits,
-                        availableCreditMinorUnits = it.availableCredit?.minorUnits,
-                        nextPaymentMinorUnits = it.nextPayment?.minorUnits,
-                        annualRateBasisPoints = it.annualRateBasisPoints,
-                        statementClosingDay = it.statementClosingDay,
-                        paymentDueDay = it.paymentDueDay,
-                        maturityAtEpochMillis = it.maturityAtEpochMillis,
-                    )
-                },
+                products = interpreterProducts,
                 conversation = history.map {
                     AssistantInterpreterMessage(it.role.wireValue, it.content)
                 },
             ),
             tools,
+        ).withSafeProductReferences(
+            products = interpreterProducts,
+            latestUserMessage = request.content,
         )
         return finalizeTurn(
             session = session,

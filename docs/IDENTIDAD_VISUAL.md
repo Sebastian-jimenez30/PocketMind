@@ -436,6 +436,8 @@ usan confirmación explícita. La biometría invoca la experiencia nativa.
   advertencia, una explicación breve y la acción de reintentar.
 - El compositor queda unido visualmente al teclado. Mientras el teclado está
   visible se oculta la navegación inferior para no crear una franja vacía.
+- El compositor no muestra un texto de ejemplo permanente: inicia en una sola
+  línea compacta y crece con el contenido hasta un máximo de tres líneas.
 - Editar una propuesta ocurre dentro de su propia tarjeta mediante campos
   deterministas; no convierte la corrección en otro prompt para el modelo.
 - Cancelar retira de inmediato la propuesta visible y nunca presenta un estado

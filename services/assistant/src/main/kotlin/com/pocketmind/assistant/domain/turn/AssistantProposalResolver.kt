@@ -727,7 +727,11 @@ internal class AssistantProposalResolver(
                     ". ¿Cuál quieres usar?",
             )
             ProductDetailsResolution.NotFound -> throw ProposalClarificationException(
-                "No pude identificar el producto \"$normalized\". ¿Puedes usar su nombre completo?",
+                if (normalized.isOpaqueProductIdentifier()) {
+                    missingMessage
+                } else {
+                    "No pude identificar el producto \"$normalized\". ¿Puedes usar su nombre completo?"
+                },
             )
             ProductDetailsResolution.InvalidConfiguration -> throw ProposalClarificationException(
                 "El producto \"$normalized\" tiene datos incompletos. Revísalo antes de continuar.",

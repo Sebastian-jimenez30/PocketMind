@@ -288,8 +288,13 @@ class KoogAssistantTurnInterpreter(
             - Relaciona referencias naturales con products. "Bancolombia" puede
               identificar "Ahorros Bancolombia" si es la única coincidencia
               compatible. Si hay varias opciones igualmente posibles, aclara.
-            - Cuando identifiques un producto, devuelve preferentemente su id
-              exacto en primaryProductReference o destinationProductReference.
+            - Cuando identifiques un producto, devuelve su nombre exacto tal como
+              aparece en products. Nunca devuelvas IDs internos al usuario ni en
+              primaryProductReference, destinationProductReference,
+              sourceProductReference o reply.
+            - Si el último mensaje responde una aclaración con el nombre de un
+              producto, reemplaza la referencia anterior; no conserves un ID o
+              una referencia que previamente falló.
 
             Reglas de datos:
             - amountMinorUnits es un entero positivo en la unidad usada por la
