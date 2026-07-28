@@ -31,7 +31,7 @@ class MainActivity : ComponentActivity() {
                 val darkTheme = PocketMindTheme.isDarkTheme
                 SideEffect {
                     WindowCompat.getInsetsController(window, view)
-                        .isAppearanceLightStatusBars = darkTheme
+                        .isAppearanceLightStatusBars = !darkTheme
                 }
                 PocketMindApp()
             }

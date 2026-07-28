@@ -1,6 +1,7 @@
 package com.pocketmind.presentation.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.padding
@@ -23,6 +24,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pocketmind.presentation.auth.AuthRoute
 import com.pocketmind.presentation.home.HomeRoute
 import com.pocketmind.presentation.transactions.TransactionEditorRoute
@@ -40,6 +43,8 @@ import com.pocketmind.ui.components.PocketBottomNavigation
 import com.pocketmind.ui.components.PocketNavigationItem
 import com.pocketmind.R
 
+private const val ROOT_GRAPH_ROUTE = "pocketmind-root"
+private const val STARTUP_ROUTE = "startup"
 private const val AUTH_ROUTE = "auth"
 private const val HOME_ROUTE = "home"
 private const val FINANCIAL_ONBOARDING_ROUTE = "financial-onboarding"
@@ -57,14 +62,35 @@ private const val ASSISTANT_ROUTE = "assistant"
 
 /** Root navigation graph. New product flows will be registered here by feature. */
 @Composable
-fun PocketMindApp() {
+fun PocketMindApp(
+    startupViewModel: AppStartupViewModel = hiltViewModel(),
+) {
+    val startupState by startupViewModel.uiState.collectAsStateWithLifecycle()
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
-    val showBottomBar = currentRoute != null &&
+    val showBottomBar = startupState.destination == AppDestination.HOME &&
+        currentRoute != null &&
+        currentRoute != STARTUP_ROUTE &&
         currentRoute != AUTH_ROUTE &&
         currentRoute != FINANCIAL_ONBOARDING_ROUTE
+    val startupTarget = when (startupState.destination) {
+        AppDestination.RESOLVING -> STARTUP_ROUTE
+        AppDestination.AUTH -> AUTH_ROUTE
+        AppDestination.ONBOARDING -> FINANCIAL_ONBOARDING_ROUTE
+        AppDestination.HOME -> HOME_ROUTE
+    }
+
+    LaunchedEffect(startupTarget) {
+        if (currentRoute != startupTarget) {
+            navController.navigate(startupTarget) {
+                popUpTo(ROOT_GRAPH_ROUTE)
+                launchSingleTop = true
+            }
+        }
+    }
+
     fun navigateTopLevel(route: String) {
         if (route == HOME_ROUTE) {
             navController.popBackStack(HOME_ROUTE, inclusive = false)
@@ -120,26 +146,18 @@ fun PocketMindApp() {
     ) { rootPadding ->
         NavHost(
             navController = navController,
-            startDestination = AUTH_ROUTE,
+            startDestination = STARTUP_ROUTE,
+            route = ROOT_GRAPH_ROUTE,
             modifier = Modifier.padding(rootPadding),
         ) {
+        composable(STARTUP_ROUTE) {
+            StartupScreen()
+        }
         composable(AUTH_ROUTE) {
-            AuthRoute(
-                onAuthenticated = {
-                    navController.navigate(FINANCIAL_ONBOARDING_ROUTE) {
-                        popUpTo(AUTH_ROUTE) { inclusive = true }
-                    }
-                },
-            )
+            AuthRoute()
         }
         composable(FINANCIAL_ONBOARDING_ROUTE) {
-            FinancialOnboardingRoute(
-                onCompleted = {
-                    navController.navigate(HOME_ROUTE) {
-                        popUpTo(FINANCIAL_ONBOARDING_ROUTE) { inclusive = true }
-                    }
-                },
-            )
+            FinancialOnboardingRoute()
         }
         composable(HOME_ROUTE) {
             HomeRoute(
@@ -219,11 +237,6 @@ fun PocketMindApp() {
         composable(PROFILE_ROUTE) {
             ProfileRoute(
                 onBack = { navController.popBackStack() },
-                onSignedOut = {
-                    navController.navigate(AUTH_ROUTE) {
-                        popUpTo(AUTH_ROUTE) { inclusive = true }
-                    }
-                },
             )
         }
     }

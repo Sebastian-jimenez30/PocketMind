@@ -23,7 +23,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,13 +45,9 @@ import com.pocketmind.ui.theme.PocketSpacing
 
 @Composable
 fun FinancialOnboardingRoute(
-    onCompleted: () -> Unit,
     viewModel: FinancialOnboardingViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    LaunchedEffect(state.isAlreadyCompleted) {
-        if (state.isAlreadyCompleted) onCompleted()
-    }
     FinancialOnboardingScreen(
         state = state,
         onPrevious = viewModel::previous,

@@ -86,7 +86,6 @@ private enum class ProfileSheet { PERSONAL, PREFERENCES }
 @Composable
 fun ProfileRoute(
     onBack: () -> Unit,
-    onSignedOut: () -> Unit,
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -102,7 +101,7 @@ fun ProfileRoute(
         onChangeEmail = viewModel::changeEmail,
         onChangePassword = viewModel::changePassword,
         onSyncNow = viewModel::syncNow,
-        onSignOut = { viewModel.signOut(onSignedOut) },
+        onSignOut = viewModel::signOut,
     )
 }
 
