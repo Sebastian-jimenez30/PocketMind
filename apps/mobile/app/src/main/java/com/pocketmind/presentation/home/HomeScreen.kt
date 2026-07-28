@@ -88,6 +88,7 @@ fun HomeRoute(
     onManageAccounts: () -> Unit,
     onStartRecord: () -> Unit,
     onOpenProduct: (String) -> Unit,
+    onOpenAssistant: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -101,6 +102,7 @@ fun HomeRoute(
         onManageAccounts = onManageAccounts,
         onStartRecord = onStartRecord,
         onOpenProduct = onOpenProduct,
+        onOpenAssistant = onOpenAssistant,
     )
 }
 
@@ -112,6 +114,7 @@ fun HomeScreen(
     onManageAccounts: () -> Unit,
     onStartRecord: () -> Unit,
     onOpenProduct: (String) -> Unit,
+    onOpenAssistant: () -> Unit,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -148,6 +151,7 @@ fun HomeScreen(
                         onOpenTransactions = onOpenTransactions,
                         onStartRecord = onStartRecord,
                         onOpenProduct = onOpenProduct,
+                        onOpenAssistant = onOpenAssistant,
                     )
                 }
             }
@@ -208,6 +212,7 @@ private fun DashboardContent(
     onOpenTransactions: () -> Unit,
     onStartRecord: () -> Unit,
     onOpenProduct: (String) -> Unit,
+    onOpenAssistant: () -> Unit,
 ) {
     val quickActions = listOf(
         QuickAction(R.string.home_action_expense, Icons.AutoMirrored.Rounded.TrendingDown) {
@@ -217,7 +222,7 @@ private fun DashboardContent(
             onCreateTransaction(TransactionType.INCOME)
         },
         QuickAction(R.string.home_action_products, Icons.Rounded.AccountBalanceWallet, onManageAccounts),
-        QuickAction(R.string.home_action_movements, Icons.AutoMirrored.Rounded.ReceiptLong, onOpenTransactions),
+        QuickAction(R.string.home_action_assistant, Icons.Rounded.AutoAwesome, onOpenAssistant),
     )
     LazyColumn(
         modifier = Modifier
@@ -648,6 +653,7 @@ private fun HomePreview() {
             onManageAccounts = {},
             onStartRecord = {},
             onOpenProduct = {},
+            onOpenAssistant = {},
         )
     }
 }

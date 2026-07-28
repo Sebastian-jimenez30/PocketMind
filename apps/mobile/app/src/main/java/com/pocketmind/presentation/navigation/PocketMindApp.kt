@@ -29,6 +29,7 @@ import com.pocketmind.presentation.profile.ProfileRoute
 import com.pocketmind.presentation.products.ManualActionType
 import com.pocketmind.presentation.products.ProductDetailRoute
 import com.pocketmind.presentation.analysis.AnalysisRoute
+import com.pocketmind.presentation.assistant.AssistantRoute
 import com.pocketmind.ui.components.PocketBottomNavigation
 import com.pocketmind.ui.components.PocketNavigationItem
 import com.pocketmind.R
@@ -46,6 +47,7 @@ private const val ACCOUNT_NEW_ROUTE = "account-new"
 private const val ACCOUNT_EDIT_ROUTE = "account-edit/{accountId}"
 private const val PRODUCT_DETAIL_ROUTE = "product/{accountId}"
 private const val ANALYSIS_ROUTE = "analysis"
+private const val ASSISTANT_ROUTE = "assistant"
 
 /** Root navigation graph. New product flows will be registered here by feature. */
 @Composable
@@ -138,7 +140,11 @@ fun PocketMindApp() {
                 onManageAccounts = { navController.navigate(ACCOUNTS_ROUTE) },
                 onStartRecord = { navController.navigate(MANUAL_RECORD_ROUTE) },
                 onOpenProduct = { id -> navController.navigate("product/$id") },
+                onOpenAssistant = { navController.navigate(ASSISTANT_ROUTE) },
             )
+        }
+        composable(ASSISTANT_ROUTE) {
+            AssistantRoute(onBack = { navController.popBackStack() })
         }
         composable(TRANSACTIONS_ROUTE) {
             TransactionsRoute(

@@ -130,6 +130,7 @@ DELETE /v1/assistant/conversations/{conversationId}
 POST   /v1/assistant/drafts/{draftId}/confirm
 POST   /v1/assistant/drafts/{draftId}/cancel
 POST   /v1/assistant/drafts/{draftId}/complete
+POST   /v1/assistant/turn
 ```
 
 El servicio reenvía el JWT a la Data REST API de Supabase. No usa
@@ -137,12 +138,29 @@ El servicio reenvía el JWT a la Data REST API de Supabase. No usa
 `SupabaseKoogPersistenceStorageProvider` vincula cada instancia a un usuario y
 una conversación concretos.
 
-## Alcance de esta fase
+## Chat de texto
 
-Esta base todavía no recibe turnos ni ejecuta modelos. La memoria multiusuario,
-RLS, retención, borrado y herramientas financieras de lectura ya están
-preparados. La siguiente fase implementa el grafo de chat que produce
-borradores confirmables.
+`POST /v1/assistant/turn` recibe texto autenticado, usa Koog con salida
+estructurada y genera borradores para ingresos, gastos y transferencias. El
+modelo solo dispone de herramientas financieras de lectura; las reglas del
+servicio vuelven a validar cada propuesta antes de persistirla.
+
+Android configura la URL pública del servicio mediante `ASSISTANT_BASE_URL` en
+`apps/mobile/local.properties`. La clave de OpenAI permanece exclusivamente en
+las variables de entorno del servicio.
+
+Esta fase no confirma ni ejecuta el borrador. Consulta
+[`docs/ASISTENTE_CHAT_TEXTO.md`](../../docs/ASISTENTE_CHAT_TEXTO.md) para el
+contrato y los casos de validación.
+
+## Despliegue
+
+El servicio se despliega desde la raíz del monorepo mediante
+`Dockerfile.vercel`. La imagen final usa Java 21, ejecuta un usuario sin
+privilegios y recibe secretos exclusivamente por variables del entorno.
+
+La guía completa está en
+[`docs/DESPLIEGUE_ASISTENTE_VERCEL.md`](../../docs/DESPLIEGUE_ASISTENTE_VERCEL.md).
 
 ## Herramientas financieras
 

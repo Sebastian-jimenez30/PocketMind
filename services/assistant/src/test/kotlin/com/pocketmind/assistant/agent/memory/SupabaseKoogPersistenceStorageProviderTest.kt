@@ -139,6 +139,11 @@ private class CheckpointOnlyRepository : AssistantMemoryRepository {
         value: NewMessage,
     ): AssistantMessage = unsupported()
 
+    override suspend fun findMessageByClientMessageId(
+        session: AuthenticatedUser,
+        clientMessageId: String,
+    ): AssistantMessage? = unsupported()
+
     override suspend fun listMessages(
         session: AuthenticatedUser,
         conversationId: String,
@@ -153,6 +158,11 @@ private class CheckpointOnlyRepository : AssistantMemoryRepository {
     override suspend fun getDraft(
         session: AuthenticatedUser,
         draftId: String,
+    ): AssistantCommandDraft? = unsupported()
+
+    override suspend fun getDraftByIdempotencyKey(
+        session: AuthenticatedUser,
+        idempotencyKey: String,
     ): AssistantCommandDraft? = unsupported()
 
     override suspend fun reviseProposedDraft(

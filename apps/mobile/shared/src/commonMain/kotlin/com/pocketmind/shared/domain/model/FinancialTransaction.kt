@@ -20,6 +20,9 @@ enum class TransactionSource {
     @SerialName("manual")
     MANUAL,
 
+    @SerialName("assistant_text")
+    ASSISTANT_TEXT,
+
     @SerialName("bank_notification")
     BANK_NOTIFICATION,
 

@@ -4,6 +4,7 @@ import com.pocketmind.assistant.auth.AuthenticatedUser
 import com.pocketmind.assistant.auth.SupabaseAccessToken
 import com.pocketmind.assistant.domain.finance.FinancialContextRepository
 import com.pocketmind.assistant.domain.finance.FinancialContextSnapshot
+import com.pocketmind.assistant.domain.finance.FinancialReadService
 import com.pocketmind.assistant.testing.ReadOnlyMemoryRepository
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -12,12 +13,14 @@ import kotlin.test.assertFalse
 class AssistantReadToolRegistryFactoryTest {
     @Test
     fun `registry exposes only the four approved read tools`() {
-        val factory = AssistantReadToolRegistryFactory(
+        val service = FinancialReadService(
             contextRepository = FinancialContextRepository { emptySnapshot() },
             memoryRepository = ReadOnlyMemoryRepository(),
+            session = TEST_SESSION,
         )
+        val factory = AssistantReadToolRegistryFactory()
 
-        val names = factory.create(TEST_SESSION).tools.map { it.name }.toSet()
+        val names = factory.create(service).tools.map { it.name }.toSet()
 
         assertEquals(
             setOf(

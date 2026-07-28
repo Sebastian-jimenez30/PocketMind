@@ -4,12 +4,8 @@ import ai.koog.agents.core.tools.SimpleTool
 import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.serialization.typeToken
-import com.pocketmind.assistant.auth.AuthenticatedUser
-import com.pocketmind.assistant.domain.finance.FinancialContextRepository
 import com.pocketmind.assistant.domain.finance.FinancialReadService
 import com.pocketmind.assistant.domain.finance.TransactionQuery
-import com.pocketmind.assistant.domain.memory.AssistantMemoryRepository
-import java.time.Clock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -21,28 +17,18 @@ import kotlinx.serialization.json.Json
  * generic Supabase client or a write-capable financial repository.
  */
 class AssistantReadToolRegistryFactory(
-    private val contextRepository: FinancialContextRepository,
-    private val memoryRepository: AssistantMemoryRepository,
-    private val clock: Clock = Clock.systemUTC(),
     private val json: Json = Json {
         encodeDefaults = true
         explicitNulls = false
     },
 ) {
-    fun create(session: AuthenticatedUser): ToolRegistry {
-        val service = FinancialReadService(
-            contextRepository = contextRepository,
-            memoryRepository = memoryRepository,
-            session = session,
-            clock = clock,
-        )
-        return ToolRegistry {
+    fun create(service: FinancialReadService): ToolRegistry =
+        ToolRegistry {
             tool(GetFinancialOverviewTool(service, json))
             tool(ListFinancialProductsTool(service, json))
             tool(GetFinancialProductTool(service, json))
             tool(ListFinancialTransactionsTool(service, json))
         }
-    }
 }
 
 @Serializable
@@ -55,7 +41,7 @@ class GetFinancialOverviewArgs
 @Serializable
 @LLMDescription("Lista los productos financieros reales del usuario.")
 data class ListFinancialProductsArgs(
-    @LLMDescription("Incluye productos archivados cuando es true.")
+    @param:LLMDescription("Incluye productos archivados cuando es true.")
     val includeArchived: Boolean = false,
 )
 
@@ -65,7 +51,7 @@ data class ListFinancialProductsArgs(
         "confirmado. Si hay ambigüedad devuelve candidatos y se debe preguntar.",
 )
 data class GetFinancialProductArgs(
-    @LLMDescription("Referencia expresada por el usuario.")
+    @param:LLMDescription("Referencia expresada por el usuario.")
     val reference: String,
 )
 
@@ -75,20 +61,20 @@ data class GetFinancialProductArgs(
         "Los nombres de tipo y estado se escriben en mayúsculas.",
 )
 data class ListFinancialTransactionsArgs(
-    @LLMDescription(
+    @param:LLMDescription(
         "Identificador, nombre o alias del producto. " +
             "Debe quedar null para consultar todos.",
     )
     val productReference: String? = null,
-    @LLMDescription("Inicio UTC inclusivo en milisegundos Unix.")
+    @param:LLMDescription("Inicio UTC inclusivo en milisegundos Unix.")
     val fromEpochMillis: Long? = null,
-    @LLMDescription("Fin UTC inclusivo en milisegundos Unix.")
+    @param:LLMDescription("Fin UTC inclusivo en milisegundos Unix.")
     val toEpochMillis: Long? = null,
-    @LLMDescription("INCOME, EXPENSE o TRANSFER.")
+    @param:LLMDescription("INCOME, EXPENSE o TRANSFER.")
     val type: String? = null,
-    @LLMDescription("POSTED, PENDING o IGNORED. Null incluye todos.")
+    @param:LLMDescription("POSTED, PENDING o IGNORED. Null incluye todos.")
     val status: String? = "POSTED",
-    @LLMDescription("Máximo de resultados entre 1 y 200.")
+    @param:LLMDescription("Máximo de resultados entre 1 y 200.")
     val limit: Int = 50,
 )
 

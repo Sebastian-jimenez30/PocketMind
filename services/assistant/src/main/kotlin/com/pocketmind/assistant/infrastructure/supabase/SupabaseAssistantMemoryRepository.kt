@@ -139,6 +139,23 @@ class SupabaseAssistantMemoryRepository(
         return response.singleRepresentation<MessageDto>("appendMessage").toDomain()
     }
 
+    override suspend fun findMessageByClientMessageId(
+        session: AuthenticatedUser,
+        clientMessageId: String,
+    ): AssistantMessage? {
+        require(clientMessageId.trim().length in 1..160)
+        val response = client.get(tableUrl(MESSAGES)) {
+            authenticate(session)
+            selectAll()
+            parameter("user_id", "eq.${session.userId}")
+            parameter("client_message_id", "eq.${clientMessageId.trim()}")
+            parameter("limit", 1)
+        }
+        return response.optionalRepresentation<MessageDto>(
+            "findMessageByClientMessageId",
+        )?.toDomain()
+    }
+
     override suspend fun listMessages(
         session: AuthenticatedUser,
         conversationId: String,
@@ -193,6 +210,23 @@ class SupabaseAssistantMemoryRepository(
             parameter("limit", 1)
         }
         return response.optionalRepresentation<DraftDto>("getDraft")?.toDomain()
+    }
+
+    override suspend fun getDraftByIdempotencyKey(
+        session: AuthenticatedUser,
+        idempotencyKey: String,
+    ): AssistantCommandDraft? {
+        require(idempotencyKey.trim().length in 16..160)
+        val response = client.get(tableUrl(DRAFTS)) {
+            authenticate(session)
+            selectAll()
+            parameter("user_id", "eq.${session.userId}")
+            parameter("idempotency_key", "eq.${idempotencyKey.trim()}")
+            parameter("limit", 1)
+        }
+        return response.optionalRepresentation<DraftDto>(
+            "getDraftByIdempotencyKey",
+        )?.toDomain()
     }
 
     override suspend fun reviseProposedDraft(

@@ -23,7 +23,15 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "PocketMind"
-include(":app")
+val pocketMindServerOnly = providers
+    .environmentVariable("POCKETMIND_SERVER_ONLY")
+    .orNull
+    ?.equals("true", ignoreCase = true)
+    ?: false
+
+if (!pocketMindServerOnly) {
+    include(":app")
+}
 include(":shared")
 include(":assistant-service")
 project(":assistant-service").projectDir = file("../../services/assistant")

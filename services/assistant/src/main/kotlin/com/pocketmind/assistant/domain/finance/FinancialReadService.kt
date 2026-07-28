@@ -22,6 +22,8 @@ class FinancialReadService(
     private val session: AuthenticatedUser,
     private val clock: Clock = Clock.systemUTC(),
 ) {
+    private var cachedContext: ResolvedContext? = null
+
     suspend fun listProducts(includeArchived: Boolean): ProductListResult {
         val context = loadContext()
         return ProductListResult(
@@ -225,6 +227,7 @@ class FinancialReadService(
     }
 
     private suspend fun loadContext(): ResolvedContext {
+        cachedContext?.let { return it }
         val snapshot = contextRepository.fetchSnapshot(session)
         val confirmedAliases = memoryRepository.listProductAliases(session)
             .groupBy { it.productId }
@@ -247,7 +250,7 @@ class FinancialReadService(
                 remoteRecordCount = snapshot.remoteRecordCount,
                 unknownEntityTypes = snapshot.unknownEntityTypes.toList(),
             ),
-        )
+        ).also { cachedContext = it }
     }
 
     private data class ResolvedContext(
@@ -403,6 +406,20 @@ class FinancialReadService(
         private const val DATA_COMPLETE = "complete"
         private const val DATA_MISSING_PROFILE = "missing_profile"
     }
+}
+
+class FinancialReadServiceFactory(
+    private val contextRepository: FinancialContextRepository,
+    private val memoryRepository: AssistantMemoryRepository,
+    private val clock: Clock = Clock.systemUTC(),
+) {
+    fun create(session: AuthenticatedUser): FinancialReadService =
+        FinancialReadService(
+            contextRepository = contextRepository,
+            memoryRepository = memoryRepository,
+            session = session,
+            clock = clock,
+        )
 }
 
 data class TransactionQuery(
