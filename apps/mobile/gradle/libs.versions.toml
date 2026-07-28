@@ -22,6 +22,9 @@ ktor = "3.2.3"
 firebaseBom = "34.16.0"
 googleServices = "4.5.0"
 firebaseCrashlyticsPlugin = "3.0.7"
+ktorServer = "3.5.1"
+koog = "1.0.0"
+logback = "1.5.38"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -58,6 +61,21 @@ supabase-bom = { group = "io.github.jan-tennert.supabase", name = "bom", version
 supabase-auth-kt = { group = "io.github.jan-tennert.supabase", name = "auth-kt" }
 supabase-postgrest-kt = { group = "io.github.jan-tennert.supabase", name = "postgrest-kt" }
 ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
+ktor-server-core = { group = "io.ktor", name = "ktor-server-core", version.ref = "ktorServer" }
+ktor-server-netty = { group = "io.ktor", name = "ktor-server-netty", version.ref = "ktorServer" }
+ktor-server-auth = { group = "io.ktor", name = "ktor-server-auth", version.ref = "ktorServer" }
+ktor-server-call-id = { group = "io.ktor", name = "ktor-server-call-id", version.ref = "ktorServer" }
+ktor-server-call-logging = { group = "io.ktor", name = "ktor-server-call-logging", version.ref = "ktorServer" }
+ktor-server-content-negotiation = { group = "io.ktor", name = "ktor-server-content-negotiation", version.ref = "ktorServer" }
+ktor-server-status-pages = { group = "io.ktor", name = "ktor-server-status-pages", version.ref = "ktorServer" }
+ktor-server-test-host = { group = "io.ktor", name = "ktor-server-test-host", version.ref = "ktorServer" }
+ktor-client-core-server = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktorServer" }
+ktor-client-cio-server = { group = "io.ktor", name = "ktor-client-cio", version.ref = "ktorServer" }
+ktor-client-content-negotiation-server = { group = "io.ktor", name = "ktor-client-content-negotiation", version.ref = "ktorServer" }
+ktor-client-mock-server = { group = "io.ktor", name = "ktor-client-mock", version.ref = "ktorServer" }
+ktor-serialization-kotlinx-json-server = { group = "io.ktor", name = "ktor-serialization-kotlinx-json", version.ref = "ktorServer" }
+koog-agents = { group = "ai.koog", name = "koog-agents", version.ref = "koog" }
+logback-classic = { group = "ch.qos.logback", name = "logback-classic", version.ref = "logback" }
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics" }
 
@@ -67,6 +85,7 @@ kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
