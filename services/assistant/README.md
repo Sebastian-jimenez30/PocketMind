@@ -17,7 +17,9 @@ API, Koog para la orquestación y Supabase Auth como autoridad de identidad.
 
 ```text
 services/assistant/
-├── agent/memory/           Adaptador de checkpoints de Koog
+├── agent/
+│   ├── memory/             Adaptador de checkpoints de Koog
+│   └── tools/              Catálogo financiero de solo lectura
 ├── api/                    Contratos HTTP y errores públicos
 ├── application/            Composición, plugins y rutas
 ├── auth/                   Principal y puerto de validación
@@ -25,7 +27,7 @@ services/assistant/
 ├── domain/memory/           Modelos y puertos de persistencia
 └── infrastructure/
     ├── openai/             Frontera de construcción de Koog
-    └── supabase/           Validación remota del JWT
+    └── supabase/           JWT, memoria y snapshot financiero remoto
 ```
 
 El módulo `:assistant-service` está registrado en `apps/mobile/settings.gradle.kts`
@@ -138,6 +140,24 @@ una conversación concretos.
 ## Alcance de esta fase
 
 Esta base todavía no recibe turnos ni ejecuta modelos. La memoria multiusuario,
-RLS, retención y borrado ya están preparados. La siguiente fase añade
-herramientas de lectura; después se implementa el grafo que produce borradores
-confirmables.
+RLS, retención, borrado y herramientas financieras de lectura ya están
+preparados. La siguiente fase implementa el grafo de chat que produce
+borradores confirmables.
+
+## Herramientas financieras
+
+El registro creado por `AssistantReadToolRegistryFactory` queda ligado al JWT
+del usuario e incluye:
+
+```text
+get_financial_overview
+list_financial_products
+get_financial_product
+list_financial_transactions
+```
+
+El snapshot remoto conserva una versión estable para revalidar futuros
+borradores y advierte que puede no incluir cambios que todavía estén en el
+outbox de un dispositivo. Consulta
+[`docs/ASISTENTE_HERRAMIENTAS_LECTURA.md`](../../docs/ASISTENTE_HERRAMIENTAS_LECTURA.md)
+para los contratos y reglas completas.

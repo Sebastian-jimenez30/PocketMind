@@ -519,10 +519,27 @@ Salida: conversación recuperable sin mezclar usuarios.
 
 Rama: `feat/assistant-read-tools`.
 
+Estado: implementada en código; pendiente de validación local.
+
 - Implementar catálogo de lectura y contratos mínimos.
 - Resolver productos y alias.
 - Gestionar estado desactualizado.
 - Probar aislamiento.
+
+Decisiones aplicadas:
+
+- El servicio reconstruye un snapshot tipado desde `finance_sync_records`
+  usando la clave pública y el JWT del usuario.
+- La versión financiera cambia con cualquier sobre remoto, incluidos
+  tombstones y tipos desconocidos.
+- Los resultados declaran que pueden quedar detrás de cambios todavía
+  pendientes en el outbox del dispositivo.
+- Los cálculos de tarjeta, ahorro, préstamo y resolución de producto se
+  reutilizan desde `shared`.
+- Los nombres y alias solo se resuelven por coincidencia exacta normalizada;
+  una ambigüedad siempre produce candidatos.
+- El registro Koog contiene cuatro herramientas de lectura y ninguna
+  dependencia financiera con permisos de escritura.
 
 Salida: contexto real sin entidades inventadas.
 
