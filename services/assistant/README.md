@@ -60,7 +60,7 @@ alcance de esta fase.
 | `OPENAI_API_KEY` | Secreto del servidor, nunca del APK. |
 | `POCKETMIND_AGENT_MODEL` | Modelo principal configurable; inicialmente `gpt-4o-mini`. |
 | `POCKETMIND_FALLBACK_MODEL` | Respaldo configurable; inicialmente `gpt-4o`. |
-| `POCKETMIND_PROMPT_VERSION` | Versión auditable del prompt; actualmente `assistant-v2`. |
+| `POCKETMIND_PROMPT_VERSION` | Versión auditable del prompt; actualmente `assistant-v3`. |
 | `POCKETMIND_TOOL_SCHEMA_VERSION` | Versión positiva del catálogo de herramientas. |
 
 `.env.example` documenta el contrato, pero el servicio deliberadamente no carga

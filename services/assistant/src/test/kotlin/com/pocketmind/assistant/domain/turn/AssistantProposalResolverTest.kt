@@ -31,6 +31,7 @@ import java.time.ZoneOffset
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -86,6 +87,24 @@ class AssistantProposalResolverTest {
         assertEquals(null, command.amount)
         assertEquals(BANK.id, command.sourceProductId)
         assertTrue(requireNotNull(proposal.amount).minorUnits > 0)
+    }
+
+    @Test
+    fun `unknown internal product id is never exposed in clarification`() = runTest {
+        val internalId = "a3924ade-4ed5-4530-bf68-bff93a152354"
+        val result = resolver.resolve(
+            decision = proposal(
+                intent = AssistantFinancialIntent.RECORD_CARD_PAYMENT,
+                primaryProductReference = internalId,
+                paymentType = "FULL_BALANCE",
+            ),
+            readService = readService(),
+            commandId = "safe-clarification",
+        )
+
+        val clarification = assertIs<AssistantProposalResolution.Clarification>(result)
+        assertEquals("¿Cuál tarjeta quieres pagar?", clarification.message)
+        assertFalse(clarification.message.contains(internalId))
     }
 
     @Test

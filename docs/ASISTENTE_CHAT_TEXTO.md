@@ -30,6 +30,9 @@ Cada turno recibe los productos activos y el historial reciente completo. Una
 respuesta corta como `20000` debe completar los datos ya mencionados, no iniciar
 una interpretación nueva. Una referencia parcial como `Bancolombia` se resuelve
 automáticamente únicamente cuando existe un producto compatible inequívoco.
+El nombre visible indicado en el mensaje más reciente reemplaza cualquier
+referencia anterior que haya fallado. Los identificadores internos sirven solo
+para consultar el contexto y nunca se incluyen en respuestas para el usuario.
 Las transferencias son movimientos entre dos productos propios; enviar dinero
 a una persona o comercio desde una cuenta se interpreta como gasto.
 
@@ -124,6 +127,7 @@ Android confirma únicamente la versión revisada.
 9. La edición permite escoger otro producto compatible desde los productos
    activos locales. El identificador y la moneda seleccionados se incorporan al
    comando revisado antes de confirmarlo.
+10. El compositor inicia vacío en una línea compacta y crece hasta tres líneas.
 
 ## Configuración Android
 
@@ -150,6 +154,8 @@ Gradle Files** antes de ejecutar la app.
   saldos detallados y demás registros solo se consultan mediante herramientas
   cuando son necesarios.
 - Los logs no contienen mensajes, tokens ni payloads financieros.
+- Los identificadores internos de productos se sustituyen por nombres visibles
+  o por una aclaración genérica antes de construir una respuesta.
 - Los borradores expiran a los 15 minutos.
 - Una ambigüedad de producto siempre genera una pregunta.
 
@@ -174,3 +180,5 @@ Gradle Files** antes de ejecutar la app.
 16. Editar un movimiento preserva todos los campos no mencionados.
 17. Una solicitud con dos escrituras solicita elegir cuál preparar primero.
 18. Seguridad, privacidad y permisos se cambian únicamente en su pantalla.
+19. Una referencia inválida nunca expone un UUID y una respuesta como
+    `Crédito Nu` reemplaza la referencia fallida.

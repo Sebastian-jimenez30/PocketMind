@@ -347,7 +347,7 @@
     <string name="assistant_back">Volver</string>
     <string name="assistant_welcome_title">Registra con tus palabras</string>
     <string name="assistant_welcome_body">Cuéntame un ingreso, gasto o transferencia. Consultaré tus productos y te mostraré una propuesta antes de guardar.</string>
-    <string name="assistant_input_hint">Ej. Gasté 35.000 en almuerzo con Bancolombia</string>
+    <string name="assistant_input_description">Mensaje para el asistente</string>
     <string name="assistant_send">Enviar</string>
     <string name="assistant_thinking">Analizando…</string>
     <string name="assistant_message_failed">No se envió.</string>
