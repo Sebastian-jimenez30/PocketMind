@@ -25,7 +25,8 @@ class KtorAssistantRepository @Inject constructor(
         check(baseUrl.isNotEmpty()) {
             "El asistente todavía no está configurado en este dispositivo."
         }
-        val accessToken = supabase.auth.currentSessionOrNull()?.accessToken
+        supabase.auth.awaitInitialization()
+        val accessToken = supabase.auth.currentAccessTokenOrNull()
         check(!accessToken.isNullOrBlank()) {
             "Tu sesión expiró. Inicia sesión nuevamente."
         }
