@@ -33,5 +33,8 @@ if (!pocketMindServerOnly) {
     include(":app")
 }
 include(":shared")
+if (pocketMindServerOnly) {
+    project(":shared").buildFileName = "build.server.gradle.kts"
+}
 include(":assistant-service")
 project(":assistant-service").projectDir = file("../../services/assistant")
