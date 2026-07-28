@@ -47,8 +47,8 @@ data class AssistantDraftPreview(
     val id: String,
     val version: Long,
     val commandType: String,
-    val amountMinorUnits: Long,
-    val currency: String,
+    val amountMinorUnits: Long? = null,
+    val currency: String? = null,
     val primaryProductId: String,
     val primaryProductName: String,
     val destinationProductId: String? = null,
@@ -56,6 +56,11 @@ data class AssistantDraftPreview(
     val merchant: String? = null,
     val categoryId: String? = null,
     val occurredAtEpochMillis: Long,
+    val productType: String? = null,
+    val installmentCount: Int? = null,
+    val annualRateBasisPoints: Int? = null,
+    val paymentType: String? = null,
+    val movementType: String? = null,
     val expiresAt: String,
 )
 

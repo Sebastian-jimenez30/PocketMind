@@ -12,13 +12,15 @@ estado `conversation` y nunca se confunden con una propuesta de escritura.
 
 ## Alcance actual
 
-Se soportan tres intenciones:
+Se soporta el mismo catálogo de comandos financieros del registro manual:
 
-| Intención | Datos mínimos |
+| Grupo | Acciones |
 |---|---|
-| Ingreso | monto y producto líquido |
-| Gasto | monto y producto líquido |
-| Transferencia | monto, origen líquido y destino líquido |
+| Movimientos | Ingreso, gasto, transferencia, edición y eliminación |
+| Productos | Crear, editar y archivar |
+| Tarjetas | Compra a cuotas, promociones, cuota, saldo total y abonos |
+| Ahorros | Aporte, retiro, cambio de tasa, cajita y CDT |
+| Préstamos | Cuota, saldo total y abono a capital |
 
 La fecha es opcional y toma la hora del servicio cuando el usuario no la
 indica. Comercio, nota y categoría también son opcionales. COP y USD son las
@@ -31,8 +33,9 @@ automáticamente únicamente cuando existe un producto compatible inequívoco.
 Las transferencias son movimientos entre dos productos propios; enviar dinero
 a una persona o comercio desde una cuenta se interpreta como gasto.
 
-Tarjetas de crédito, préstamos, ahorros, CDT, creación de productos, edición y
-eliminación pertenecen a la fase de paridad completa.
+Las solicitudes que contienen dos escrituras independientes se separan: el
+asistente pregunta cuál preparar primero. Crear un producto con su saldo o deuda
+inicial sí constituye una sola acción.
 
 ## Flujo seguro
 
@@ -49,15 +52,15 @@ sequenceDiagram
     S->>DB: Recupera conversación y contexto con RLS
     S->>K: Historial + productos activos + herramientas de lectura
     K-->>S: Decisión estructurada
-    S->>S: Revalida monto, moneda, fecha y productos
+    S->>S: Revalida comando, cálculos, fecha y productos
     S->>DB: Guarda mensaje y borrador proposed
     S-->>A: Respuesta + vista previa
     A-->>U: Tarjeta "Aún no está guardado"
 ```
 
-El modelo nunca recibe una herramienta de escritura. La futura confirmación
-revalidará el estado financiero y ejecutará el mismo `FinancialCommand` usado
-por las pantallas manuales.
+El modelo nunca recibe una herramienta de escritura. La confirmación revalida
+el estado financiero y ejecuta el mismo `FinancialCommand` usado por las
+pantallas manuales.
 
 ## Contrato HTTP
 
@@ -127,3 +130,10 @@ Gradle Files** antes de ejecutar la app.
    un único producto líquido Bancolombia.
 10. Una respuesta corta conserva intención, monto y producto de turnos previos.
 11. `Hola` y `¿qué puedes hacer?` producen respuestas conversacionales.
+12. Una compra a cuotas conserva promociones sin interés sin solaparlas.
+13. `Pagué la cuota` deriva el valor desde el estado real de la deuda.
+14. Un cambio de tasa de ahorro no crea una entrada o salida de dinero.
+15. Crear un CDT exige tasa, apertura y vencimiento válidos.
+16. Editar un movimiento preserva todos los campos no mencionados.
+17. Una solicitud con dos escrituras solicita elegir cuál preparar primero.
+18. Seguridad, privacidad y permisos se cambian únicamente en su pantalla.

@@ -294,21 +294,83 @@ private fun DraftReviewCard(
                 text = preview.commandLabel(),
                 style = MaterialTheme.typography.labelLarge,
             )
+            preview.amountMinorUnits?.let { amount ->
+                preview.currency?.let { currency ->
+                    Text(
+                        text = formatAmount(amount, currency),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+            val destinationProductName = preview.destinationProductName
             Text(
-                text = formatAmount(preview.amountMinorUnits, preview.currency),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = if (preview.destinationProductName == null) {
-                    preview.primaryProductName
+                text = if (
+                    preview.commandType == "transfer" &&
+                    destinationProductName != null
+                ) {
+                    "${preview.primaryProductName} → $destinationProductName"
                 } else {
-                    "${preview.primaryProductName} → ${preview.destinationProductName}"
+                    preview.primaryProductName
                 },
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (
+                preview.commandType != "transfer" &&
+                destinationProductName != null
+            ) {
+                Text(
+                    text = stringResource(
+                        R.string.assistant_related_product,
+                        destinationProductName,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             preview.merchant?.let {
                 Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            preview.productType?.let {
+                Text(
+                    text = stringResource(
+                        R.string.assistant_product_type_detail,
+                        stringResource(it.productTypeLabelResource()),
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            preview.installmentCount?.let {
+                Text(
+                    text = stringResource(R.string.assistant_installments_detail, it),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            preview.annualRateBasisPoints?.let {
+                Text(
+                    text = stringResource(
+                        R.string.assistant_rate_detail,
+                        formatBasisPoints(it),
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            preview.paymentType?.let {
+                Text(
+                    text = stringResource(
+                        R.string.assistant_payment_type_detail,
+                        stringResource(it.paymentTypeLabelResource()),
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            preview.movementType?.let {
+                Text(
+                    text = stringResource(
+                        R.string.assistant_movement_type_detail,
+                        stringResource(it.movementTypeLabelResource()),
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
             Text(
                 text = draft.message ?: stringResource(
@@ -465,7 +527,17 @@ private fun AssistantDraftPreview.commandLabel(): String = stringResource(
     when (commandType) {
         "record_income" -> R.string.assistant_income
         "record_expense" -> R.string.assistant_expense
-        else -> R.string.assistant_transfer
+        "transfer" -> R.string.assistant_transfer
+        "create_product" -> R.string.assistant_create_product
+        "update_product" -> R.string.assistant_update_product
+        "archive_product" -> R.string.assistant_archive_product
+        "record_card_purchase" -> R.string.assistant_card_purchase
+        "record_card_payment" -> R.string.assistant_card_payment
+        "record_savings_movement" -> R.string.assistant_savings_movement
+        "record_loan_payment" -> R.string.assistant_loan_payment
+        "update_transaction" -> R.string.assistant_update_transaction
+        "delete_transaction" -> R.string.assistant_delete_transaction
+        else -> R.string.assistant_proposal
     },
 )
 
@@ -476,3 +548,34 @@ private fun formatAmount(amount: Long, currency: String): String =
         this.currency = java.util.Currency.getInstance(currency)
         maximumFractionDigits = 0
     }.format(amount)
+
+private fun formatBasisPoints(value: Int): String =
+    NumberFormat.getNumberInstance(
+        Locale.Builder().setLanguage("es").setRegion("CO").build(),
+    ).apply {
+        minimumFractionDigits = 0
+        maximumFractionDigits = 2
+    }.format(value / 100.0)
+
+private fun String.productTypeLabelResource(): Int = when (this) {
+    "CASH" -> R.string.assistant_product_cash
+    "BANK_ACCOUNT" -> R.string.assistant_product_bank
+    "SAVINGS" -> R.string.assistant_product_savings
+    "CREDIT_CARD" -> R.string.assistant_product_card
+    "LOAN" -> R.string.assistant_product_loan
+    else -> R.string.assistant_unknown_detail
+}
+
+private fun String.paymentTypeLabelResource(): Int = when (this) {
+    "SCHEDULED_INSTALLMENT" -> R.string.assistant_payment_scheduled
+    "FULL_BALANCE" -> R.string.assistant_payment_full
+    "EXTRA_PRINCIPAL" -> R.string.assistant_payment_principal
+    else -> R.string.assistant_payment_custom
+}
+
+private fun String.movementTypeLabelResource(): Int = when (this) {
+    "DEPOSIT" -> R.string.assistant_savings_deposit
+    "WITHDRAWAL" -> R.string.assistant_savings_withdrawal
+    "RATE_CHANGE" -> R.string.assistant_savings_rate_change
+    else -> R.string.assistant_unknown_detail
+}

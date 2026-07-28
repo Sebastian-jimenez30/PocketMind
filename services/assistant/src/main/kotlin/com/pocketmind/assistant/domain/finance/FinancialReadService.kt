@@ -5,6 +5,8 @@ import com.pocketmind.assistant.domain.memory.AssistantMemoryRepository
 import com.pocketmind.shared.domain.model.CurrencyCode
 import com.pocketmind.shared.domain.model.FinancialAccount
 import com.pocketmind.shared.domain.model.FinancialAccountType
+import com.pocketmind.shared.domain.model.FinancialProductConfiguration
+import com.pocketmind.shared.domain.model.FinancialTransaction
 import com.pocketmind.shared.domain.model.ProductReferenceResolution
 import com.pocketmind.shared.domain.model.TransactionStatus
 import com.pocketmind.shared.domain.model.TransactionType
@@ -229,6 +231,37 @@ class FinancialReadService(
         )
     }
 
+    /**
+     * Full deterministic product state used only while constructing a command.
+     *
+     * It is intentionally not exposed as an LLM tool result: the model receives
+     * summaries, while this service owns merging edits with stored values.
+     */
+    suspend fun resolveProductDetails(
+        reference: String,
+        allowedTypes: Set<FinancialAccountType> = emptySet(),
+    ): ProductDetailsResolution {
+        val context = loadContext()
+        return when (val resolution = context.resolve(reference, allowedTypes)) {
+            is ProductReferenceResolution.Resolved -> {
+                val configuration = context.configurationFor(resolution.product)
+                    ?: return ProductDetailsResolution.InvalidConfiguration
+                ProductDetailsResolution.Resolved(
+                    account = resolution.product,
+                    configuration = configuration,
+                )
+            }
+            is ProductReferenceResolution.Ambiguous ->
+                ProductDetailsResolution.Ambiguous(
+                    resolution.candidates.map(context::summarize),
+                )
+            ProductReferenceResolution.NotFound -> ProductDetailsResolution.NotFound
+        }
+    }
+
+    suspend fun getTransactionById(transactionId: String): FinancialTransaction? =
+        loadContext().snapshot.transactions.singleOrNull { it.id == transactionId.trim() }
+
     private suspend fun loadContext(): ResolvedContext {
         cachedContext?.let { return it }
         val snapshot = contextRepository.fetchSnapshot(session)
@@ -402,6 +435,23 @@ class FinancialReadService(
             summarize(account).currentDebt?.minorUnits
                 ?: account.openingBalance.minorUnits
 
+        fun configurationFor(
+            account: FinancialAccount,
+        ): FinancialProductConfiguration? = when (account.type) {
+            FinancialAccountType.CASH,
+            FinancialAccountType.BANK_ACCOUNT,
+            -> FinancialProductConfiguration.Standard
+            FinancialAccountType.CREDIT_CARD -> snapshot.creditCardProfiles
+                .singleOrNull { it.accountId == account.id }
+                ?.let { FinancialProductConfiguration.CreditCard(it) }
+            FinancialAccountType.SAVINGS -> snapshot.savingsProfiles
+                .singleOrNull { it.accountId == account.id }
+                ?.let { FinancialProductConfiguration.Savings(it) }
+            FinancialAccountType.LOAN -> snapshot.loanProfiles
+                .singleOrNull { it.accountId == account.id }
+                ?.let { FinancialProductConfiguration.Loan(it) }
+        }
+
         private fun FinancialAccount.moneyValue(minorUnits: Long): MoneyValue =
             MoneyValue(minorUnits, currency.name)
     }
@@ -415,6 +465,20 @@ class FinancialReadService(
         private const val DATA_COMPLETE = "complete"
         private const val DATA_MISSING_PROFILE = "missing_profile"
     }
+}
+
+sealed interface ProductDetailsResolution {
+    data class Resolved(
+        val account: FinancialAccount,
+        val configuration: FinancialProductConfiguration,
+    ) : ProductDetailsResolution
+
+    data class Ambiguous(
+        val candidates: List<ProductSummary>,
+    ) : ProductDetailsResolution
+
+    data object NotFound : ProductDetailsResolution
+    data object InvalidConfiguration : ProductDetailsResolution
 }
 
 class FinancialReadServiceFactory(
