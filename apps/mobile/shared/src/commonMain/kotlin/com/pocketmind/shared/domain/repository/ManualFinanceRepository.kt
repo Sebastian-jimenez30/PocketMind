@@ -44,4 +44,9 @@ interface ManualFinanceRepository {
         ledgerTransaction: FinancialTransaction,
         sourceSavingsMovement: SavingsMovement?,
     )
+    /**
+     * Removes every deterministic local effect produced by a reversible
+     * movement command, including its ledger and product-specific records.
+     */
+    suspend fun deleteRecordedMovement(commandId: String)
 }

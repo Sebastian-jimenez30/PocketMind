@@ -9,10 +9,12 @@ import com.pocketmind.shared.domain.command.FinancialCommandResult
 interface AssistantRepository {
     suspend fun sendTurn(request: AssistantTurnRequest): AssistantTurnResponse
     suspend fun getDraft(draftId: String): AssistantCommandDraft
+    suspend fun getDraftByCommandId(commandId: String): AssistantCommandDraft
     suspend fun confirmDraft(draftId: String, expectedVersion: Long): AssistantCommandDraft
     suspend fun reviseDraft(
         draftId: String,
         expectedVersion: Long,
+        expectedState: AssistantDraftState,
         commandPayload: kotlinx.serialization.json.JsonObject,
     ): AssistantCommandDraft
     suspend fun cancelDraft(

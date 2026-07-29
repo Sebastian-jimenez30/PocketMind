@@ -60,4 +60,16 @@ interface ManualFinanceDao {
 
     @Query("DELETE FROM loan_profiles WHERE accountId = :accountId")
     suspend fun deleteLoanProfile(accountId: String)
+
+    @Query("DELETE FROM installment_purchases WHERE id = :id")
+    suspend fun deleteInstallmentPurchase(id: String)
+
+    @Query("DELETE FROM savings_movements WHERE id IN (:ids)")
+    suspend fun deleteSavingsMovementEffects(ids: Set<String>)
+
+    @Query("DELETE FROM credit_card_payments WHERE id = :id")
+    suspend fun deleteCreditCardPayment(id: String)
+
+    @Query("DELETE FROM loan_payments WHERE id = :id")
+    suspend fun deleteLoanPayment(id: String)
 }

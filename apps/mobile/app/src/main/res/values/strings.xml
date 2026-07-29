@@ -189,6 +189,11 @@
     <string name="transactions_income">Ingreso</string>
     <string name="transactions_expense">Gasto</string>
     <string name="transactions_source_manual">Registro manual</string>
+    <string name="transactions_source_assistant">Asistente</string>
+    <string name="transactions_source_notification">Notificación bancaria</string>
+    <string name="transactions_source_voice">Registro por voz</string>
+    <string name="transactions_source_receipt">Factura escaneada</string>
+    <string name="transactions_source_import">Registro importado</string>
     <string name="transactions_unknown_account">Producto no disponible</string>
     <string name="transactions_edit">Editar movimiento</string>
     <string name="transaction_editor_create_title">Registrar</string>

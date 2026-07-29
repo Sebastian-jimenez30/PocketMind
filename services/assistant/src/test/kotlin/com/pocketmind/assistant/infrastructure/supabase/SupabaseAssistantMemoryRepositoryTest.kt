@@ -28,6 +28,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 
 class SupabaseAssistantMemoryRepositoryTest {
     @Test
@@ -98,6 +99,24 @@ class SupabaseAssistantMemoryRepositoryTest {
                 ),
             )
         }
+        client.close()
+    }
+
+    @Test
+    fun `draft can be found by command payload id`() = runTest {
+        val client = testClient(
+            MockEngine { request ->
+                assertEquals(
+                    "eq.$DRAFT_ID",
+                    request.url.parameters["command_payload->>command_id"],
+                )
+                assertEquals("eq.$USER_ID", request.url.parameters["user_id"])
+                respondJson("[]", HttpStatusCode.OK)
+            },
+        )
+        val repository = SupabaseAssistantMemoryRepository(client, testConfig())
+
+        assertNull(repository.getDraftByCommandId(testSession(), DRAFT_ID))
         client.close()
     }
 

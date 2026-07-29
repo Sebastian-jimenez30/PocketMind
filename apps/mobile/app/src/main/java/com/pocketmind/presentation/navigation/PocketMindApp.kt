@@ -61,6 +61,8 @@ private const val ACCOUNT_EDIT_ROUTE = "account-edit/{accountId}"
 private const val PRODUCT_DETAIL_ROUTE = "product/{accountId}"
 private const val ANALYSIS_ROUTE = "analysis"
 private const val ASSISTANT_ROUTE = "assistant"
+private const val ASSISTANT_PATTERN =
+    "assistant?commandId={commandId}&transactionId={transactionId}"
 private const val BUDGETS_ROUTE = "budgets"
 private const val SAVINGS_ROUTE = "savings"
 
@@ -177,13 +179,30 @@ fun PocketMindApp(
                 onManageSavings = { navController.navigate(SAVINGS_ROUTE) },
             )
         }
-        composable(ASSISTANT_ROUTE) {
+        composable(
+            route = ASSISTANT_PATTERN,
+            arguments = listOf(
+                navArgument("commandId") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+                navArgument("transactionId") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+            ),
+        ) {
             AssistantRoute(onBack = { navController.popBackStack() })
         }
         composable(TRANSACTIONS_ROUTE) {
             TransactionsRoute(
                 onCreate = { navController.navigate(MANUAL_RECORD_ROUTE) },
                 onEdit = { id -> navController.navigate("transaction-edit/$id") },
+                onEditAssistant = { commandId, transactionId ->
+                    navController.navigate(
+                        "$ASSISTANT_ROUTE?commandId=$commandId&transactionId=$transactionId",
+                    )
+                },
                 onManageAccounts = { navController.navigate(ACCOUNTS_ROUTE) },
                 onBack = { navController.popBackStack() },
             )

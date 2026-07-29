@@ -42,6 +42,7 @@ data class TransactionEditorUiState(
     val merchant: String = "",
     val note: String = "",
     val date: String = LocalDate.now().toDisplayDate(),
+    val source: TransactionSource = TransactionSource.MANUAL,
     val canDelete: Boolean = false,
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
@@ -103,6 +104,7 @@ class TransactionEditorViewModel @Inject constructor(
                             merchant = transaction.merchant.orEmpty(),
                             note = transaction.note.orEmpty(),
                             date = transaction.occurredAtEpochMillis.toDisplayDate(),
+                            source = transaction.source,
                             canDelete = !transaction.id.hasLinkedProduct(),
                         )
                     }
@@ -135,7 +137,7 @@ class TransactionEditorViewModel @Inject constructor(
                     type = state.type,
                     amount = Money(amount, product.currency),
                     occurredAtEpochMillis = occurredAt,
-                    source = TransactionSource.MANUAL,
+                    source = state.source,
                     categoryId = state.categoryId,
                     merchant = state.merchant,
                     note = state.note,

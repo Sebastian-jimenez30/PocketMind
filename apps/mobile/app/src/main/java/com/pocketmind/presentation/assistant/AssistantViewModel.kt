@@ -16,9 +16,14 @@ import com.pocketmind.shared.domain.command.FinancialCommandResult
 import com.pocketmind.shared.domain.model.FinancialAccount
 import com.pocketmind.shared.domain.model.FinancialAccountType
 import com.pocketmind.shared.domain.model.FinancialProductConfiguration
+import com.pocketmind.shared.domain.model.FinancialTransaction
+import com.pocketmind.shared.domain.model.CustomCategory
 import com.pocketmind.shared.domain.model.Money
+import com.pocketmind.shared.domain.model.TransactionCategoryId
 import com.pocketmind.shared.domain.usecase.ExecuteFinancialCommandUseCase
+import com.pocketmind.shared.domain.usecase.GetTransactionUseCase
 import com.pocketmind.shared.domain.usecase.ObserveActiveFinancialAccountsUseCase
+import com.pocketmind.shared.domain.usecase.ObserveCustomCategoriesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.util.UUID
 import javax.inject.Inject
@@ -27,6 +32,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.jsonObject
@@ -44,7 +50,10 @@ data class AssistantUiDraft(
     val preview: AssistantDraftPreview,
     val state: AssistantDraftUiState = AssistantDraftUiState.PROPOSED,
     val message: String? = null,
-)
+) {
+    val isReversibleMovement: Boolean
+        get() = preview.isReversibleMovement()
+}
 
 data class AssistantUiMessage(
     val id: String,
@@ -70,6 +79,7 @@ data class AssistantUiState(
     val errorMessage: String? = null,
     val draftEditor: AssistantDraftEditorState? = null,
     val products: List<FinancialAccount> = emptyList(),
+    val customCategories: List<CustomCategory> = emptyList(),
 )
 
 data class AssistantDraftEditorState(
@@ -80,8 +90,13 @@ data class AssistantDraftEditorState(
     val productName: String,
     val productId: String,
     val products: List<FinancialAccount>,
+    val relatedProductId: String,
+    val relatedProducts: List<FinancialAccount>,
     val installmentCount: String,
     val annualRatePercent: String,
+    val categoryId: String,
+    val customCategories: List<CustomCategory>,
+    val note: String,
     val error: String? = null,
 )
 
@@ -97,6 +112,9 @@ class AssistantViewModel @Inject constructor(
     private val executeFinancialCommand: ExecuteFinancialCommandUseCase,
     private val syncCoordinator: SyncCoordinator,
     private val observeAccounts: ObserveActiveFinancialAccountsUseCase,
+    private val observeCustomCategories: ObserveCustomCategoriesUseCase,
+    private val getTransaction: GetTransactionUseCase,
+    private val manualFinanceRepository: com.pocketmind.shared.domain.repository.ManualFinanceRepository,
     private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(AssistantUiState())
@@ -108,11 +126,75 @@ class AssistantViewModel @Inject constructor(
                 mutableState.update { state -> state.copy(products = products) }
             }
         }
+        viewModelScope.launch {
+            observeCustomCategories().collect { categories ->
+                mutableState.update { state ->
+                    state.copy(customCategories = categories)
+                }
+            }
+        }
         savedStateHandle.get<String>(PENDING_EXECUTION_DRAFT_ID)
             ?.let { draftId ->
                 mutableState.update { it.copy(activeDraftId = draftId) }
                 recoverConfirmedDraft(draftId)
             }
+        val requestedCommandId = savedStateHandle.get<String>("commandId")
+            ?.takeIf(String::isNotBlank)
+        val requestedTransactionId = savedStateHandle.get<String>("transactionId")
+            ?.takeIf(String::isNotBlank)
+        if (requestedCommandId != null && requestedTransactionId != null) {
+            openHistoryDraft(requestedCommandId, requestedTransactionId)
+        }
+    }
+
+    private fun openHistoryDraft(commandId: String, transactionId: String) {
+        viewModelScope.launch {
+            try {
+                val stored = repository.getDraftByCommandId(commandId)
+                require(stored.state == AssistantDraftState.COMPLETED) {
+                    "El movimiento ya no está disponible."
+                }
+                val command = FinancialCommandCodec.decode(
+                    stored.commandPayload.toString(),
+                ).getOrThrow()
+                val transaction = getTransaction(transactionId)
+                    ?: error("El movimiento ya no está disponible.")
+                val products = observeAccounts().first()
+                val customCategories = observeCustomCategories().first()
+                val uiDraft = AssistantUiDraft(
+                    preview = command.toHistoryPreview(
+                        draft = stored,
+                        transaction = transaction,
+                        products = products,
+                    ),
+                    state = AssistantDraftUiState.COMPLETED,
+                    message = "Movimiento guardado.",
+                )
+                mutableState.update { state ->
+                    state.copy(
+                        messages = listOf(
+                            AssistantUiMessage(
+                                id = "history-${stored.id}",
+                                role = "assistant",
+                                content = "Puedes corregir o cancelar este movimiento.",
+                                draft = uiDraft,
+                            ),
+                        ),
+                        draftEditor = command.toEditor(
+                            draft = uiDraft,
+                            products = products,
+                            customCategories = customCategories,
+                        ),
+                    )
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                mutableState.update {
+                    it.copy(errorMessage = failure.safeMessage())
+                }
+            }
+        }
     }
 
     fun onInputChanged(value: String) {
@@ -170,53 +252,85 @@ class AssistantViewModel @Inject constructor(
     fun confirmDraft(draft: AssistantUiDraft) {
         if (!beginDraftAction(draft.preview.id)) return
         viewModelScope.launch {
-            updateDraft(draft.preview.id) {
-                it.copy(state = AssistantDraftUiState.PROCESSING, message = null)
+            confirmAndExecuteDraft(draft, synchronizeBeforeConfirm = true)
+        }
+    }
+
+    private suspend fun saveDraftsSequentially(drafts: List<AssistantUiDraft>) {
+        if (drafts.isEmpty()) return
+        try {
+            synchronizeFinancialState()
+        } catch (failure: Exception) {
+            drafts.forEach { draft ->
+                updateDraft(draft.preview.id) {
+                    it.copy(
+                        state = AssistantDraftUiState.PROPOSED,
+                        message = failure.safeMessage(),
+                    )
+                }
             }
-            try {
-                synchronizeFinancialState()
-                val confirmed = repository.confirmDraft(
-                    draftId = draft.preview.id,
-                    expectedVersion = draft.preview.version,
+            return
+        }
+        drafts.forEach { draft ->
+            if (beginDraftAction(draft.preview.id)) {
+                confirmAndExecuteDraft(
+                    draft = draft,
+                    synchronizeBeforeConfirm = false,
                 )
-                savedStateHandle[PENDING_EXECUTION_DRAFT_ID] = confirmed.id
-                executeConfirmedDraft(confirmed)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (failure: Exception) {
-                val recovered = runCatching {
-                    repository.getDraft(draft.preview.id)
-                }.getOrNull()
-                when (recovered?.state) {
-                    AssistantDraftState.CONFIRMED -> {
-                        savedStateHandle[PENDING_EXECUTION_DRAFT_ID] = recovered.id
-                        executeConfirmedDraft(recovered)
-                    }
-                    AssistantDraftState.COMPLETED -> {
-                        savedStateHandle.remove<String>(PENDING_EXECUTION_DRAFT_ID)
-                        finishDraftAction(
-                            draft.preview.id,
-                            AssistantDraftUiState.COMPLETED,
-                            "Movimiento guardado. La sincronización continuará en segundo plano.",
-                        )
-                    }
-                    AssistantDraftState.CANCELLED,
-                    AssistantDraftState.EXPIRED,
-                    -> {
-                        savedStateHandle.remove<String>(PENDING_EXECUTION_DRAFT_ID)
-                        finishDraftAction(
-                            draft.preview.id,
-                            AssistantDraftUiState.CANCELLED,
-                            failure.safeMessage(),
-                        )
-                    }
-                    else -> {
-                        finishDraftAction(
-                            draftId = draft.preview.id,
-                            state = AssistantDraftUiState.PROPOSED,
-                            message = failure.safeMessage(),
-                        )
-                    }
+            }
+        }
+    }
+
+    private suspend fun confirmAndExecuteDraft(
+        draft: AssistantUiDraft,
+        synchronizeBeforeConfirm: Boolean,
+    ) {
+        updateDraft(draft.preview.id) {
+            it.copy(state = AssistantDraftUiState.PROCESSING, message = null)
+        }
+        try {
+            if (synchronizeBeforeConfirm) synchronizeFinancialState()
+            val confirmed = repository.confirmDraft(
+                draftId = draft.preview.id,
+                expectedVersion = draft.preview.version,
+            )
+            savedStateHandle[PENDING_EXECUTION_DRAFT_ID] = confirmed.id
+            executeConfirmedDraft(confirmed)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            val recovered = runCatching {
+                repository.getDraft(draft.preview.id)
+            }.getOrNull()
+            when (recovered?.state) {
+                AssistantDraftState.CONFIRMED -> {
+                    savedStateHandle[PENDING_EXECUTION_DRAFT_ID] = recovered.id
+                    executeConfirmedDraft(recovered)
+                }
+                AssistantDraftState.COMPLETED -> {
+                    savedStateHandle.remove<String>(PENDING_EXECUTION_DRAFT_ID)
+                    finishDraftAction(
+                        draft.preview.id,
+                        AssistantDraftUiState.COMPLETED,
+                        "Movimiento guardado.",
+                    )
+                }
+                AssistantDraftState.CANCELLED,
+                AssistantDraftState.EXPIRED,
+                -> {
+                    savedStateHandle.remove<String>(PENDING_EXECUTION_DRAFT_ID)
+                    finishDraftAction(
+                        draft.preview.id,
+                        AssistantDraftUiState.CANCELLED,
+                        failure.safeMessage(),
+                    )
+                }
+                else -> {
+                    finishDraftAction(
+                        draftId = draft.preview.id,
+                        state = AssistantDraftUiState.PROPOSED,
+                        message = failure.safeMessage(),
+                    )
                 }
             }
         }
@@ -229,7 +343,12 @@ class AssistantViewModel @Inject constructor(
                 activeDraftId = null,
                 messages = state.messages.map { message ->
                     if (message.draft?.preview?.id == draft.preview.id) {
-                        message.copy(draft = null)
+                        message.copy(
+                            draft = message.draft.copy(
+                                state = AssistantDraftUiState.CANCELLED,
+                                message = "Movimiento cancelado y eliminado.",
+                            ),
+                        )
                     } else {
                         message
                     }
@@ -238,22 +357,40 @@ class AssistantViewModel @Inject constructor(
         }
         viewModelScope.launch {
             try {
-                repository.cancelDraft(
-                    draftId = draft.preview.id,
-                    expectedVersion = draft.preview.version,
-                    expectedState = AssistantDraftState.PROPOSED,
-                )
+                val currentDraft = runCatching { repository.getDraft(draft.preview.id) }.getOrNull()
+                val stateToCancel = currentDraft?.state ?: AssistantDraftState.COMPLETED
+                if (
+                    stateToCancel == AssistantDraftState.COMPLETED ||
+                    stateToCancel == AssistantDraftState.CANCELLED
+                ) {
+                    require(draft.preview.isReversibleMovement()) {
+                        "Esta acción no se puede deshacer desde el chat."
+                    }
+                }
+                if (stateToCancel != AssistantDraftState.CANCELLED) {
+                    repository.cancelDraft(
+                        draftId = draft.preview.id,
+                        expectedVersion = currentDraft?.version ?: draft.preview.version,
+                        expectedState = stateToCancel,
+                    )
+                }
+                if (
+                    stateToCancel == AssistantDraftState.COMPLETED ||
+                    stateToCancel == AssistantDraftState.CANCELLED
+                ) {
+                    manualFinanceRepository.deleteRecordedMovement(
+                        draft.preview.commandId,
+                    )
+                }
+                syncCoordinator.syncCurrentSession()
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
                 mutableState.update { state ->
                     state.copy(
-                        messages = state.messages + AssistantUiMessage(
-                            id = "cancel-error-${draft.preview.id}",
-                            role = "assistant",
-                            content = failure.safeMessage(),
-                            draft = draft,
-                        ),
+                        messages = state.messages.updateDraft(draft.preview.id) {
+                            draft.copy(message = failure.safeMessage())
+                        },
                     )
                 }
             }
@@ -275,13 +412,14 @@ class AssistantViewModel @Inject constructor(
                                 preview = draft.preview.copy(version = stored.version),
                             ),
                             products = it.products,
+                            customCategories = it.customCategories,
                         ),
                     )
                 }
             } catch (failure: Exception) {
                 finishDraftAction(
                     draft.preview.id,
-                    AssistantDraftUiState.PROPOSED,
+                    draft.state,
                     failure.safeMessage(),
                 )
             }
@@ -312,6 +450,7 @@ class AssistantViewModel @Inject constructor(
         }
         if (!beginDraftAction(editor.draft.preview.id)) return
         viewModelScope.launch {
+            var revisedVersion: Long? = null
             updateDraft(editor.draft.preview.id) {
                 it.copy(state = AssistantDraftUiState.PROCESSING, message = null)
             }
@@ -322,8 +461,15 @@ class AssistantViewModel @Inject constructor(
                 val revised = repository.reviseDraft(
                     draftId = editor.draft.preview.id,
                     expectedVersion = editor.draft.preview.version,
+                    expectedState = editor.draft.toStoredState(),
                     commandPayload = payload,
                 )
+                revisedVersion = revised.version
+                if (editor.draft.state == AssistantDraftUiState.COMPLETED) {
+                    manualFinanceRepository.deleteRecordedMovement(
+                        editor.draft.preview.commandId,
+                    )
+                }
                 val updatedDraft = editor.draft.copy(
                     preview = editor.draft.preview.copy(
                         version = revised.version,
@@ -334,9 +480,16 @@ class AssistantViewModel @Inject constructor(
                             ?.name
                             ?: editor.draft.preview.currency,
                         merchant = editor.merchant.trim().ifBlank { null },
+                        categoryId = editor.categoryId.trim().ifBlank { null },
+                        primaryProductId = editor.productId
+                            .takeIf(String::isNotBlank)
+                            ?: editor.draft.preview.primaryProductId,
                         primaryProductName = editor.selectedProductName()
                             ?: editor.productName.trim()
                                 .ifBlank { editor.draft.preview.primaryProductName },
+                        destinationProductId = editor.relatedProductId
+                            .takeIf(String::isNotBlank),
+                        destinationProductName = editor.selectedRelatedProductName(),
                         installmentCount = editor.installmentCount.toIntOrNull(),
                         annualRateBasisPoints = editor.annualRatePercent
                             .toBasisPointsOrNull(),
@@ -353,14 +506,28 @@ class AssistantViewModel @Inject constructor(
                         },
                     )
                 }
-                confirmDraft(updatedDraft)
+                if (beginDraftAction(updatedDraft.preview.id)) {
+                    confirmAndExecuteDraft(
+                        updatedDraft,
+                        synchronizeBeforeConfirm = false,
+                    )
+                }
             } catch (failure: Exception) {
                 mutableState.update { state ->
+                    val retryEditor = revisedVersion?.let { version ->
+                        editor.copy(
+                            draft = editor.draft.copy(
+                                preview = editor.draft.preview.copy(version = version),
+                                state = AssistantDraftUiState.PROPOSED,
+                            ),
+                            error = failure.safeMessage(),
+                        )
+                    } ?: editor.copy(error = failure.safeMessage())
                     state.copy(
                         activeDraftId = null,
-                        draftEditor = editor.copy(error = failure.safeMessage()),
+                        draftEditor = retryEditor,
                         messages = state.messages.updateDraft(editor.draft.preview.id) {
-                            it.copy(state = AssistantDraftUiState.PROPOSED)
+                            retryEditor.draft
                         },
                     )
                 }
@@ -562,11 +729,20 @@ class AssistantViewModel @Inject constructor(
                     content = response.reply,
                     draft = response.draft?.let(::AssistantUiDraft),
                 )
+                val allDrafts = listOfNotNull(response.draft) + response.additionalDrafts
+                val additionalMessages = response.additionalDrafts.mapIndexed { idx, preview ->
+                    AssistantUiMessage(
+                        id = "${response.assistantMessage.id}-add-$idx",
+                        role = "assistant",
+                        content = "También interpreté:",
+                        draft = AssistantUiDraft(preview),
+                    )
+                }
                 mutableState.update { state ->
                     state.copy(
                         messages = state.messages.flatMap { message ->
                             if (message.id == turn.localMessageId) {
-                                listOf(serverUserMessage, assistantMessage)
+                                listOf(serverUserMessage, assistantMessage) + additionalMessages
                             } else {
                                 listOf(message)
                             }
@@ -574,6 +750,11 @@ class AssistantViewModel @Inject constructor(
                         isSending = false,
                     )
                 }
+                saveDraftsSequentially(
+                    allDrafts
+                        .filter(AssistantDraftPreview::isReversibleMovement)
+                        .map(::AssistantUiDraft),
+                )
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
@@ -700,6 +881,25 @@ private fun List<AssistantUiMessage>.updateDraft(
     }
 }
 
+private fun AssistantUiDraft.toStoredState(): AssistantDraftState = when (state) {
+    AssistantDraftUiState.COMPLETED -> AssistantDraftState.COMPLETED
+    AssistantDraftUiState.FAILED -> AssistantDraftState.FAILED
+    else -> AssistantDraftState.PROPOSED
+}
+
+private fun AssistantDraftPreview.isReversibleMovement(): Boolean =
+    commandType in REVERSIBLE_MOVEMENT_COMMAND_TYPES
+
+private val REVERSIBLE_MOVEMENT_COMMAND_TYPES = setOf(
+    "record_income",
+    "record_expense",
+    "transfer",
+    "record_card_purchase",
+    "record_card_payment",
+    "record_savings_movement",
+    "record_loan_payment",
+)
+
 private fun String.normalizedAction(): String =
     lowercase()
         .replace("á", "a")
@@ -763,6 +963,7 @@ private fun FinancialCommand.compatibleProducts(
 private fun FinancialCommand.toEditor(
     draft: AssistantUiDraft,
     products: List<FinancialAccount>,
+    customCategories: List<CustomCategory>,
 ): AssistantDraftEditorState = AssistantDraftEditorState(
     draft = draft,
     command = this,
@@ -800,6 +1001,8 @@ private fun FinancialCommand.toEditor(
     },
     productId = primaryProductId().orEmpty(),
     products = compatibleProducts(products),
+    relatedProductId = relatedProductId().orEmpty(),
+    relatedProducts = relatedCompatibleProducts(products),
     installmentCount = (this as? FinancialCommand.RecordCardPurchase)
         ?.installmentCount
         ?.toString()
@@ -810,13 +1013,118 @@ private fun FinancialCommand.toEditor(
         is FinancialCommand.RecordSavingsMovement -> annualYieldBasisPoints
         else -> null
     }?.let { (it / 100.0).toString() }.orEmpty(),
+    categoryId = categoryId().orEmpty().ifBlank {
+        TransactionCategoryId.OTHER.name
+    },
+    customCategories = customCategories,
+    note = note().orEmpty(),
 )
 
 private fun AssistantDraftEditorState.selectedProductName(): String? =
     products.firstOrNull { it.id == productId }?.name
 
+private fun AssistantDraftEditorState.selectedRelatedProductName(): String? =
+    relatedProducts.firstOrNull { it.id == relatedProductId }?.name
+
+private fun FinancialCommand.relatedProductId(): String? = when (this) {
+    is FinancialCommand.Transfer -> destinationProductId
+    is FinancialCommand.RecordCardPayment -> sourceProductId
+    is FinancialCommand.RecordSavingsMovement -> when (movementType) {
+        com.pocketmind.shared.domain.model.SavingsMovementType.DEPOSIT -> sourceProductId
+        com.pocketmind.shared.domain.model.SavingsMovementType.WITHDRAWAL ->
+            destinationProductId
+        com.pocketmind.shared.domain.model.SavingsMovementType.RATE_CHANGE -> null
+    }
+    is FinancialCommand.RecordLoanPayment -> sourceProductId
+    else -> null
+}
+
+private fun FinancialCommand.toHistoryPreview(
+    draft: AssistantCommandDraft,
+    transaction: FinancialTransaction,
+    products: List<FinancialAccount>,
+): AssistantDraftPreview {
+    val primaryId = requireNotNull(primaryProductId())
+    val relatedId = relatedProductId()
+    val primary = products.firstOrNull { it.id == primaryId }
+    val related = products.firstOrNull { it.id == relatedId }
+    return AssistantDraftPreview(
+        id = draft.id,
+        commandId = commandId,
+        version = draft.version,
+        commandType = draft.commandType,
+        amountMinorUnits = transaction.amount.minorUnits,
+        currency = transaction.amount.currency.name,
+        primaryProductId = primaryId,
+        primaryProductName = primary?.name ?: "Producto",
+        destinationProductId = relatedId,
+        destinationProductName = related?.name,
+        merchant = transaction.merchant,
+        categoryId = transaction.categoryId,
+        occurredAtEpochMillis = transaction.occurredAtEpochMillis,
+        productType = primary?.type?.name,
+        installmentCount = (this as? FinancialCommand.RecordCardPurchase)
+            ?.installmentCount,
+        annualRateBasisPoints =
+            (this as? FinancialCommand.RecordSavingsMovement)
+                ?.annualYieldBasisPoints,
+        paymentType = when (this) {
+            is FinancialCommand.RecordCardPayment -> paymentType.name
+            is FinancialCommand.RecordLoanPayment -> paymentType.name
+            else -> null
+        },
+        movementType = (this as? FinancialCommand.RecordSavingsMovement)
+            ?.movementType
+            ?.name,
+        expiresAt = draft.expiresAt,
+    )
+}
+
+private fun FinancialCommand.relatedCompatibleProducts(
+    products: List<FinancialAccount>,
+): List<FinancialAccount> {
+    if (relatedProductId() == null && this !is FinancialCommand.Transfer) {
+        return when (this) {
+            is FinancialCommand.RecordCardPayment,
+            is FinancialCommand.RecordSavingsMovement,
+            is FinancialCommand.RecordLoanPayment,
+            -> products.filter(FinancialAccount::isLiquidProduct)
+            else -> emptyList()
+        }
+    }
+    return products.filter(FinancialAccount::isLiquidProduct)
+}
+
+private fun FinancialAccount.isLiquidProduct(): Boolean =
+    type == FinancialAccountType.CASH ||
+        type == FinancialAccountType.BANK_ACCOUNT ||
+        type == FinancialAccountType.SAVINGS
+
+private fun FinancialCommand.categoryId(): String? = when (this) {
+    is FinancialCommand.RecordIncome -> categoryId
+    is FinancialCommand.RecordExpense -> categoryId
+    is FinancialCommand.Transfer -> categoryId
+    is FinancialCommand.RecordCardPurchase -> categoryId
+    is FinancialCommand.UpdateTransaction -> categoryId
+    else -> null
+}
+
+private fun FinancialCommand.note(): String? = when (this) {
+    is FinancialCommand.RecordIncome -> note
+    is FinancialCommand.RecordExpense -> note
+    is FinancialCommand.Transfer -> note
+    is FinancialCommand.RecordCardPurchase -> note
+    is FinancialCommand.RecordCardPayment -> note
+    is FinancialCommand.RecordSavingsMovement -> note
+    is FinancialCommand.RecordLoanPayment -> note
+    is FinancialCommand.UpdateTransaction -> note
+    else -> null
+}
+
 private fun AssistantDraftEditorState.toCommand(): Result<FinancialCommand> = runCatching {
     val selectedProduct = products.firstOrNull { it.id == productId }
+    val selectedRelatedProduct = relatedProducts
+        .firstOrNull { it.id == relatedProductId }
     fun requiredProductId(): String {
         require(productId.isNotBlank() && selectedProduct != null) {
             "Selecciona un producto válido."
@@ -828,26 +1136,51 @@ private fun AssistantDraftEditorState.toCommand(): Result<FinancialCommand> = ru
         require(value != null && value > 0) { "Ingresa un valor mayor que cero." }
         return Money(value, currency)
     }
+    fun requiredRelatedProductId(): String {
+        require(
+            relatedProductId.isNotBlank() &&
+                selectedRelatedProduct != null &&
+                relatedProductId != productId,
+        ) {
+            "Selecciona un producto de destino válido."
+        }
+        return relatedProductId
+    }
+    fun optionalRelatedProductId(): String? =
+        relatedProductId.takeIf { id ->
+            id.isNotBlank() &&
+                id != productId &&
+                selectedRelatedProduct != null
+        }
     fun optionalAmount(currency: com.pocketmind.shared.domain.model.CurrencyCode): Money? =
         amount.trim().takeIf(String::isNotEmpty)?.let {
             requiredAmount(currency)
         }
     val merchantValue = merchant.trim().ifBlank { null }
+    val categoryValue = categoryId.trim().ifBlank { null }
+    val noteValue = note.trim().ifBlank { null }
     when (val value = command) {
         is FinancialCommand.RecordIncome -> value.copy(
             productId = requiredProductId(),
             amount = requiredAmount(selectedProduct?.currency ?: value.amount.currency),
             merchant = merchantValue,
+            categoryId = categoryValue,
+            note = noteValue,
         )
         is FinancialCommand.RecordExpense -> value.copy(
             productId = requiredProductId(),
             amount = requiredAmount(selectedProduct?.currency ?: value.amount.currency),
             merchant = merchantValue,
+            categoryId = categoryValue,
+            note = noteValue,
         )
         is FinancialCommand.Transfer -> value.copy(
             sourceProductId = requiredProductId(),
+            destinationProductId = requiredRelatedProductId(),
             amount = requiredAmount(selectedProduct?.currency ?: value.amount.currency),
             merchant = merchantValue,
+            categoryId = categoryValue,
+            note = noteValue,
         )
         is FinancialCommand.CreateProduct -> {
             val name = productName.trim()
@@ -899,6 +1232,8 @@ private fun AssistantDraftEditorState.toCommand(): Result<FinancialCommand> = ru
                 ),
                 merchant = merchantValue ?: error("Escribe el comercio o concepto."),
                 installmentCount = installments,
+                categoryId = categoryValue,
+                note = noteValue,
             )
         }
         is FinancialCommand.RecordCardPayment -> value.copy(
@@ -910,6 +1245,8 @@ private fun AssistantDraftEditorState.toCommand(): Result<FinancialCommand> = ru
                         draft.preview.currency ?: "COP",
                     ),
             ),
+            sourceProductId = optionalRelatedProductId(),
+            note = noteValue,
         )
         is FinancialCommand.RecordSavingsMovement -> value.copy(
             savingsId = requiredProductId(),
@@ -930,6 +1267,17 @@ private fun AssistantDraftEditorState.toCommand(): Result<FinancialCommand> = ru
             } else {
                 value.annualYieldBasisPoints
             },
+            sourceProductId = when (value.movementType) {
+                com.pocketmind.shared.domain.model.SavingsMovementType.DEPOSIT ->
+                    optionalRelatedProductId()
+                else -> value.sourceProductId
+            },
+            destinationProductId = when (value.movementType) {
+                com.pocketmind.shared.domain.model.SavingsMovementType.WITHDRAWAL ->
+                    optionalRelatedProductId()
+                else -> value.destinationProductId
+            },
+            note = noteValue,
         )
         is FinancialCommand.RecordLoanPayment -> value.copy(
             loanId = requiredProductId(),
@@ -940,11 +1288,15 @@ private fun AssistantDraftEditorState.toCommand(): Result<FinancialCommand> = ru
                         draft.preview.currency ?: "COP",
                     ),
             ),
+            sourceProductId = optionalRelatedProductId(),
+            note = noteValue,
         )
         is FinancialCommand.UpdateTransaction -> value.copy(
             productId = requiredProductId(),
             amount = requiredAmount(selectedProduct?.currency ?: value.amount.currency),
             merchant = merchantValue,
+            categoryId = categoryValue,
+            note = noteValue,
         )
         is FinancialCommand.DeleteTransaction -> value
     }
