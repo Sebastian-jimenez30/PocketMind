@@ -17,6 +17,8 @@ import com.pocketmind.shared.domain.model.calculateLoanOverview
 import com.pocketmind.shared.domain.usecase.ManualFinanceUseCases
 import com.pocketmind.shared.domain.repository.TransactionRepository
 import com.pocketmind.shared.domain.usecase.ObserveActiveFinancialAccountsUseCase
+import com.pocketmind.shared.domain.usecase.ObserveBudgetSummariesUseCase
+import com.pocketmind.shared.domain.usecase.ObserveCustomCategoriesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,6 +34,8 @@ class HomeViewModel @Inject constructor(
     transactionRepository: TransactionRepository,
     manualFinance: ManualFinanceUseCases,
     private val profileRepository: ProfileRepository,
+    observeBudgetSummaries: ObserveBudgetSummariesUseCase,
+    observeCustomCategories: ObserveCustomCategoriesUseCase,
 ) : ViewModel() {
     private val profileName = MutableStateFlow("")
 
@@ -54,6 +58,8 @@ class HomeViewModel @Inject constructor(
         manualFinance.observeLoanProfiles(),
         manualFinance.observeLoanPayments(),
         profileName,
+        observeBudgetSummaries.execute { System.currentTimeMillis() },
+        observeCustomCategories(),
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         val accounts = values[0] as List<com.pocketmind.shared.domain.model.FinancialAccount>
@@ -74,6 +80,10 @@ class HomeViewModel @Inject constructor(
         @Suppress("UNCHECKED_CAST")
         val loanPayments = values[8] as List<com.pocketmind.shared.domain.model.LoanPayment>
         val displayName = values[9] as String
+        @Suppress("UNCHECKED_CAST")
+        val budgets = values[10] as List<com.pocketmind.shared.domain.model.BudgetProgress>
+        @Suppress("UNCHECKED_CAST")
+        val customCategories = values[11] as List<com.pocketmind.shared.domain.model.CustomCategory>
         val posted = transactions.filter { it.status == TransactionStatus.POSTED }
         val accountOverviews = accounts.map { account ->
             val accountTransactions = posted.filter { it.accountId == account.id }
@@ -124,7 +134,14 @@ class HomeViewModel @Inject constructor(
             monthlyIncome = Money(monthlyIncome, CurrencyCode.COP),
             monthlyExpense = Money(monthlyExpense, CurrencyCode.COP),
         )
-        HomeUiState.Content(summary, accountOverviews, posted.take(3), displayName)
+        HomeUiState.Content(
+            summary = summary,
+            accounts = accountOverviews,
+            budgets = budgets,
+            customCategories = customCategories,
+            recentTransactions = posted.take(3),
+            displayName = displayName,
+        )
     }
         .stateIn(
             scope = viewModelScope,
