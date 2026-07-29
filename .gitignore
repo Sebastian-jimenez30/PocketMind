@@ -27,7 +27,6 @@ replay_pid*
 .kotlin/
 build/
 
-.github
 .idea
 .agents
 skills-lock.json

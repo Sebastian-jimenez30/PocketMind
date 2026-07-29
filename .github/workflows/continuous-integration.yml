@@ -1,0 +1,149 @@
+name: PocketMind CI
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pocketmind-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: "true"
+
+jobs:
+  quality:
+    name: Unit tests, build and lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/mobile
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+
+      - name: Configure non-secret CI values
+        run: |
+          cat > local.properties <<'EOF'
+          SUPABASE_URL=https://ci-placeholder.supabase.co
+          SUPABASE_PUBLISHABLE_KEY=ci-placeholder
+          ASSISTANT_BASE_URL=https://ci-placeholder.invalid
+          EOF
+
+      - name: Run automated validation
+        run: |
+          chmod +x gradlew
+          ./gradlew \
+            --no-daemon \
+            --stacktrace \
+            --continue \
+            -Pkotlin.native.ignoreDisabledTargets=true \
+            :shared:testAndroidHostTest \
+            :assistant-service:test \
+            :app:testDebugUnitTest \
+            :app:compileDebugAndroidTestKotlin \
+            :app:assembleDebug \
+            :app:lintDebug
+
+      - name: Upload validation reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: validation-reports-${{ github.run_attempt }}
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            apps/mobile/**/build/reports/**
+            apps/mobile/**/build/test-results/**
+            services/assistant/build/reports/**
+            services/assistant/build/test-results/**
+
+  instrumented:
+    name: Android instrumented tests
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/mobile
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+
+      - name: Configure non-secret CI values
+        run: |
+          cat > local.properties <<'EOF'
+          SUPABASE_URL=https://ci-placeholder.supabase.co
+          SUPABASE_PUBLISHABLE_KEY=ci-placeholder
+          ASSISTANT_BASE_URL=https://ci-placeholder.invalid
+          EOF
+
+      - name: Prepare Gradle wrapper
+        run: chmod +x gradlew
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run tests on Android emulator
+        uses: ReactiveCircus/android-emulator-runner@v2.37.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          working-directory: ./apps/mobile
+          disable-animations: true
+          emulator-options: >-
+            -no-window -gpu swiftshader_indirect -no-snapshot -noaudio
+            -no-boot-anim -no-metrics -camera-back none
+          script: >-
+            ./gradlew --no-daemon --stacktrace
+            -Pkotlin.native.ignoreDisabledTargets=true
+            :app:connectedDebugAndroidTest
+
+      - name: Upload instrumented test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: instrumented-reports-${{ github.run_attempt }}
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            apps/mobile/app/build/reports/androidTests/**
+            apps/mobile/app/build/outputs/androidTest-results/**
