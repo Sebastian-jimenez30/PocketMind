@@ -147,6 +147,39 @@ class PocketMindDatabaseMigrationTest {
         migrated.close()
     }
 
+    @Test
+    fun migration6To7_addsBudgetsTableAndSyncTriggers() {
+        helper.createDatabase("migration-budgets-test", 6).apply {
+            execSQL(
+                "INSERT INTO accounts " +
+                    "(id, name, type, currency, openingBalanceMinorUnits, isArchived, aliasesJson) " +
+                    "VALUES ('cash', 'Efectivo', 'CASH', 'COP', 250000, 0, '[]')",
+            )
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(
+            "migration-budgets-test",
+            7,
+            true,
+            PocketMindDatabase.MIGRATION_6_7,
+        )
+
+        assertEquals(
+            1,
+            migrated.singleLong(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'budgets'",
+            ),
+        )
+        assertEquals(
+            1,
+            migrated.singleLong(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'index_budgets_categoryId'",
+            ),
+        )
+        migrated.close()
+    }
+
     private fun SupportSQLiteDatabase.singleLong(query: String): Long =
         this.query(query).use { cursor ->
             check(cursor.moveToFirst())

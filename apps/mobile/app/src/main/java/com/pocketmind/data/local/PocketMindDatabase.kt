@@ -5,11 +5,13 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.pocketmind.data.local.dao.AccountDao
+import com.pocketmind.data.local.dao.BudgetDao
 import com.pocketmind.data.local.dao.FinancialSetupDao
 import com.pocketmind.data.local.dao.ManualFinanceDao
 import com.pocketmind.data.local.dao.SyncDao
 import com.pocketmind.data.local.dao.TransactionDao
 import com.pocketmind.data.local.entity.AccountEntity
+import com.pocketmind.data.local.entity.BudgetEntity
 import com.pocketmind.data.local.entity.DebtEntity
 import com.pocketmind.data.local.entity.CreditCardPaymentEntity
 import com.pocketmind.data.local.entity.CreditCardProfileEntity
@@ -44,12 +46,14 @@ import com.pocketmind.data.local.entity.SyncOutboxEntity
         LoanPaymentEntity::class,
         SyncOutboxEntity::class,
         SyncControlEntity::class,
+        BudgetEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class PocketMindDatabase : RoomDatabase() {
     abstract fun accountDao(): AccountDao
+    abstract fun budgetDao(): BudgetDao
     abstract fun transactionDao(): TransactionDao
     abstract fun financialSetupDao(): FinancialSetupDao
     abstract fun manualFinanceDao(): ManualFinanceDao
@@ -259,6 +263,21 @@ abstract class PocketMindDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `budgets` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, " +
+                        "`categoryId` TEXT NOT NULL, `maxAmountMinorUnits` INTEGER NOT NULL, `currency` TEXT NOT NULL, " +
+                        "`periodType` TEXT NOT NULL, `startDateEpochMillis` INTEGER NOT NULL, " +
+                        "`endDateEpochMillis` INTEGER NOT NULL, `isRecurring` INTEGER NOT NULL, " +
+                        "`status` TEXT NOT NULL, `notificationThresholdPercent` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_budgets_categoryId` ON `budgets` (`categoryId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_budgets_startDateEpochMillis` ON `budgets` (`startDateEpochMillis`)")
+                createSyncTriggers(db, SyncTrigger("budgets", "id", "BUDGET"))
+            }
+        }
+
         /**
          * Migrations install this infrastructure for upgraded databases, while
          * the Room callback invokes it for both fresh and restored databases.
@@ -284,9 +303,21 @@ abstract class PocketMindDatabase : RoomDatabase() {
                 SyncTrigger("savings_movements", "id", "SAVINGS_MOVEMENT"),
                 SyncTrigger("loan_profiles", "accountId", "LOAN_PROFILE"),
                 SyncTrigger("loan_payments", "id", "LOAN_PAYMENT"),
+                SyncTrigger("budgets", "id", "BUDGET"),
             ).forEach { trigger ->
-                createSyncTriggers(database, trigger)
+                if (tableExists(database, trigger.table)) {
+                    createSyncTriggers(database, trigger)
+                }
             }
+        }
+
+        private fun tableExists(
+            database: SupportSQLiteDatabase,
+            tableName: String,
+        ): Boolean = database.query(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '$tableName'",
+        ).use { cursor ->
+            cursor.moveToFirst() && cursor.getLong(0) > 0L
         }
 
         private data class SyncTrigger(

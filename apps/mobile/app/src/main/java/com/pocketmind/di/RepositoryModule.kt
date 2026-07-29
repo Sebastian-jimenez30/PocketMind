@@ -20,6 +20,12 @@ import com.pocketmind.shared.domain.repository.TransactionRepository
 import com.pocketmind.shared.domain.usecase.ObserveDashboardSummaryUseCase
 import com.pocketmind.shared.domain.usecase.GetFinancialAccountUseCase
 import com.pocketmind.shared.domain.usecase.GetTransactionUseCase
+import com.pocketmind.data.repository.RoomBudgetRepository
+import com.pocketmind.shared.domain.repository.BudgetRepository
+import com.pocketmind.shared.domain.usecase.CreateBudgetUseCase
+import com.pocketmind.shared.domain.usecase.DeleteBudgetUseCase
+import com.pocketmind.shared.domain.usecase.ObserveBudgetSummariesUseCase
+import com.pocketmind.shared.domain.usecase.UpdateBudgetUseCase
 import com.pocketmind.shared.domain.usecase.ObserveActiveFinancialAccountsUseCase
 import com.pocketmind.shared.domain.usecase.CreditCardPaymentDateCalculator
 import com.pocketmind.shared.domain.usecase.ExecuteFinancialCommandUseCase
@@ -64,6 +70,12 @@ abstract class RepositoryModule {
     abstract fun bindManualFinanceRepository(
         implementation: RoomManualFinanceRepository,
     ): ManualFinanceRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindBudgetRepository(
+        implementation: RoomBudgetRepository,
+    ): BudgetRepository
 
     @Binds
     @Singleton
@@ -132,5 +144,26 @@ abstract class RepositoryModule {
             manualFinanceRepository = manualFinanceRepository,
             cardPaymentDateCalculator = cardPaymentDateCalculator,
         )
+
+        @Provides
+        fun provideObserveBudgetSummariesUseCase(
+            budgetRepository: BudgetRepository,
+            transactionRepository: TransactionRepository,
+        ): ObserveBudgetSummariesUseCase = ObserveBudgetSummariesUseCase(budgetRepository, transactionRepository)
+
+        @Provides
+        fun provideCreateBudgetUseCase(
+            budgetRepository: BudgetRepository,
+        ): CreateBudgetUseCase = CreateBudgetUseCase(budgetRepository)
+
+        @Provides
+        fun provideUpdateBudgetUseCase(
+            budgetRepository: BudgetRepository,
+        ): UpdateBudgetUseCase = UpdateBudgetUseCase(budgetRepository)
+
+        @Provides
+        fun provideDeleteBudgetUseCase(
+            budgetRepository: BudgetRepository,
+        ): DeleteBudgetUseCase = DeleteBudgetUseCase(budgetRepository)
     }
 }
