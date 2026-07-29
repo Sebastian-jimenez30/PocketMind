@@ -17,12 +17,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
 import androidx.compose.material.icons.automirrored.rounded.TrendingDown
 import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material.icons.rounded.AccountBalanceWallet
@@ -30,12 +29,14 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddCircle
 import androidx.compose.material.icons.rounded.Analytics
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.CreditCard
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Payments
 import androidx.compose.material.icons.rounded.Savings
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -88,8 +89,6 @@ import com.pocketmind.shared.domain.model.Money
 import com.pocketmind.shared.domain.model.TransactionType
 import com.pocketmind.ui.components.PocketBrandMark
 import com.pocketmind.ui.components.PocketContentSheet
-import com.pocketmind.ui.components.PocketPrimaryButton
-import com.pocketmind.ui.components.PocketSectionCard
 import com.pocketmind.ui.testing.PocketMindTestTags
 import com.pocketmind.ui.theme.PocketMindTheme
 import com.pocketmind.ui.theme.PocketSpacing
@@ -106,6 +105,7 @@ fun HomeRoute(
     onOpenProduct: (String) -> Unit,
     onOpenAssistant: () -> Unit,
     onOpenBudgets: () -> Unit,
+    onManageSavings: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -121,6 +121,7 @@ fun HomeRoute(
         onOpenProduct = onOpenProduct,
         onOpenAssistant = onOpenAssistant,
         onOpenBudgets = onOpenBudgets,
+        onManageSavings = onManageSavings,
     )
 }
 
@@ -134,6 +135,7 @@ fun HomeScreen(
     onOpenProduct: (String) -> Unit,
     onOpenAssistant: () -> Unit,
     onOpenBudgets: () -> Unit = {},
+    onManageSavings: () -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -153,18 +155,36 @@ fun HomeScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             if (uiState is HomeUiState.Content) {
-                FloatingActionButton(
-                    onClick = { showQuickActions = true },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = CircleShape,
-                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Add,
-                        contentDescription = stringResource(R.string.home_quick_actions_title),
-                        modifier = Modifier.size(28.dp),
-                    )
+                    FloatingActionButton(
+                        onClick = onOpenAssistant,
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        shape = CircleShape,
+                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.AutoAwesome,
+                            contentDescription = stringResource(R.string.home_fab_action_assistant),
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                    FloatingActionButton(
+                        onClick = { showQuickActions = true },
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        shape = CircleShape,
+                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = stringResource(R.string.home_quick_actions_title),
+                            modifier = Modifier.size(28.dp),
+                        )
+                    }
                 }
             }
         },
@@ -195,6 +215,7 @@ fun HomeScreen(
                             onOpenProduct = onOpenProduct,
                             onOpenAssistant = onOpenAssistant,
                             onOpenBudgets = onOpenBudgets,
+                            onManageSavings = onManageSavings,
                         )
                     }
                 }
@@ -208,14 +229,6 @@ fun HomeScreen(
                     showQuickActions = false
                     onStartRecord()
                 },
-                onCreateExpense = {
-                    showQuickActions = false
-                    onCreateTransaction(TransactionType.EXPENSE)
-                },
-                onCreateIncome = {
-                    showQuickActions = false
-                    onCreateTransaction(TransactionType.INCOME)
-                },
                 onManageAccounts = {
                     showQuickActions = false
                     onManageAccounts()
@@ -224,13 +237,9 @@ fun HomeScreen(
                     showQuickActions = false
                     onOpenBudgets()
                 },
-                onOpenAssistant = {
+                onManageSavings = {
                     showQuickActions = false
-                    onOpenAssistant()
-                },
-                onOpenTransactions = {
-                    showQuickActions = false
-                    onOpenTransactions()
+                    onManageSavings()
                 },
             )
         }
@@ -295,6 +304,7 @@ private fun DashboardContent(
     onOpenProduct: (String) -> Unit,
     onOpenAssistant: () -> Unit,
     onOpenBudgets: () -> Unit,
+    onManageSavings: () -> Unit,
 ) {
     var amountsVisible by rememberSaveable { mutableStateOf(true) }
 
@@ -311,17 +321,13 @@ private fun DashboardContent(
         verticalArrangement = Arrangement.spacedBy(PocketSpacing.lg),
     ) {
         item {
-            FinancialSummaryCard(summary = summary, amountsVisible = amountsVisible, onToggleVisibility = {
-                amountsVisible = !amountsVisible
-            })
-        }
-
-        item {
-            ProductsSection(
+            PanoramaAndProductsCard(
+                summary = summary,
                 accounts = accounts,
                 amountsVisible = amountsVisible,
-                onManageAccounts = onManageAccounts,
+                onToggleVisibility = { amountsVisible = !amountsVisible },
                 onOpenProduct = onOpenProduct,
+                onManageAccounts = onManageAccounts,
             )
         }
 
@@ -345,168 +351,112 @@ private fun DashboardContent(
 }
 
 @Composable
-private fun FinancialSummaryCard(
+private fun PanoramaAndProductsCard(
     summary: DashboardSummary,
+    accounts: List<AccountOverview>,
     amountsVisible: Boolean,
     onToggleVisibility: () -> Unit,
+    onOpenProduct: (String) -> Unit,
+    onManageAccounts: () -> Unit,
 ) {
     val visibilityDescription = stringResource(
         if (amountsVisible) R.string.home_privacy_hide else R.string.home_privacy_show,
     )
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
     ) {
         Column(
-            modifier = Modifier.padding(PocketSpacing.lg),
+            modifier = Modifier.padding(vertical = PocketSpacing.lg),
             verticalArrangement = Arrangement.spacedBy(PocketSpacing.md),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
+            Column(
+                modifier = Modifier.padding(horizontal = PocketSpacing.lg),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.home_summary_title),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.82f),
-                    )
-                    Text(
-                        text = stringResource(R.string.home_available_balance),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.74f),
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = visibleAmount(summary.availableBalance.minorUnits, amountsVisible),
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                    )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.home_summary_title),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
+                        )
+                        Text(
+                            text = stringResource(R.string.home_available_balance),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.72f),
+                        )
+                    }
+                    IconButton(onClick = onToggleVisibility) {
+                        Icon(
+                            imageVector = if (amountsVisible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                            contentDescription = visibilityDescription,
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    }
                 }
-                IconButton(onClick = onToggleVisibility) {
-                    Icon(
-                        imageVector = if (amountsVisible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                        contentDescription = visibilityDescription,
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                    )
-                }
+
+                Text(
+                    text = visibleAmount(summary.availableBalance.minorUnits, amountsVisible),
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                )
             }
 
             HorizontalDivider(
-                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.16f),
+                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.18f),
                 thickness = 1.dp,
+                modifier = Modifier.padding(horizontal = PocketSpacing.lg),
             )
 
-            Row(horizontalArrangement = Arrangement.spacedBy(PocketSpacing.md)) {
-                SummaryMiniStat(
-                    label = stringResource(R.string.home_income),
-                    amount = visibleAmount(summary.monthlyIncome.minorUnits, amountsVisible),
-                    icon = Icons.AutoMirrored.Rounded.TrendingUp,
-                    modifier = Modifier.weight(1f),
-                )
-                SummaryMiniStat(
-                    label = stringResource(R.string.home_expenses),
-                    amount = visibleAmount(summary.monthlyExpense.minorUnits, amountsVisible),
-                    icon = Icons.AutoMirrored.Rounded.TrendingDown,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SummaryMiniStat(
-    label: String,
-    amount: String,
-    icon: ImageVector,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(PocketSpacing.sm),
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.86f),
-            modifier = Modifier.size(16.dp),
-        )
-        Column {
-            Text(
-                label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.76f),
-            )
-            Text(
-                amount,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onPrimary,
-            )
-        }
-    }
-}
-
-@Composable
-private fun ProductsSection(
-    accounts: List<AccountOverview>,
-    amountsVisible: Boolean,
-    onManageAccounts: () -> Unit,
-    onOpenProduct: (String) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(PocketSpacing.sm)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
             Text(
                 text = stringResource(R.string.home_section_products),
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
+                modifier = Modifier.padding(horizontal = PocketSpacing.lg),
             )
-            TextButton(onClick = onManageAccounts) {
-                Text(text = stringResource(R.string.accounts_manage))
-            }
-        }
 
-        if (accounts.isEmpty()) {
-            PocketSectionCard {
-                Text(
-                    text = stringResource(R.string.accounts_empty_title),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    text = stringResource(R.string.accounts_empty_description),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(PocketSpacing.xs))
-                PocketPrimaryButton(
-                    text = stringResource(R.string.accounts_add),
-                    onClick = onManageAccounts,
-                )
-            }
-        } else {
-            val chunked = remember(accounts) { accounts.chunked(3) }
-            val pagerState = rememberPagerState(pageCount = { chunked.size })
-
-            HorizontalPager(
-                state = pagerState,
-                pageSpacing = PocketSpacing.md,
-                modifier = Modifier.fillMaxWidth(),
-            ) { pageIndex ->
-                val pageAccounts = chunked[pageIndex]
+            if (accounts.isEmpty()) {
                 Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(PocketSpacing.sm),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = PocketSpacing.lg, vertical = PocketSpacing.sm),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    pageAccounts.forEach { overview ->
-                        AccountCompactTile(
+                    Text(
+                        text = stringResource(R.string.accounts_empty_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.accounts_empty_description),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.76f),
+                    )
+                    Spacer(Modifier.height(PocketSpacing.sm))
+                    TextButton(
+                        onClick = onManageAccounts,
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onPrimary),
+                    ) {
+                        Text(text = stringResource(R.string.accounts_add), fontWeight = FontWeight.Bold)
+                    }
+                }
+            } else {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = PocketSpacing.lg),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(accounts, key = { it.account.id }) { overview ->
+                        ProductMiniCard(
                             overview = overview,
                             amountsVisible = amountsVisible,
                             onOpenProduct = onOpenProduct,
@@ -514,34 +464,12 @@ private fun ProductsSection(
                     }
                 }
             }
-
-            if (chunked.size > 1) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = PocketSpacing.xs),
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    repeat(chunked.size) { index ->
-                        Box(
-                            modifier = Modifier
-                                .padding(horizontal = 3.dp)
-                                .size(if (pagerState.currentPage == index) 7.dp else 5.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (pagerState.currentPage == index) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                                ),
-                        )
-                    }
-                }
-            }
         }
     }
 }
 
 @Composable
-private fun AccountCompactTile(
+private fun ProductMiniCard(
     overview: AccountOverview,
     amountsVisible: Boolean,
     onOpenProduct: (String) -> Unit,
@@ -549,56 +477,55 @@ private fun AccountCompactTile(
     val icon = when (overview.account.type) {
         FinancialAccountType.CREDIT_CARD -> Icons.Rounded.CreditCard
         FinancialAccountType.SAVINGS -> Icons.Rounded.Savings
+        FinancialAccountType.LOAN -> Icons.Rounded.Payments
         else -> Icons.Rounded.AccountBalanceWallet
     }
     Card(
         modifier = Modifier
-            .fillMaxWidth()
+            .width(115.dp)
             .clickable { onOpenProduct(overview.account.id) },
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.12f),
+        ),
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = PocketSpacing.md, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .padding(horizontal = 8.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Box(
                 modifier = Modifier
-                    .size(38.dp)
+                    .size(36.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surface),
+                    .background(MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(20.dp),
                 )
             }
-            Spacer(Modifier.width(PocketSpacing.md))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = overview.account.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = stringResource(
-                        if (overview.isLiability) R.string.home_account_debt else R.string.home_available_balance,
-                    ),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Text(
+                text = overview.account.name,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+            )
             Text(
                 text = visibleAmount(overview.currentBalance.minorUnits, amountsVisible),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -611,33 +538,43 @@ private fun BudgetsSection(
     amountsVisible: Boolean,
     onOpenBudgets: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(PocketSpacing.xs)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onOpenBudgets),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(PocketSpacing.lg),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(
-                text = stringResource(R.string.home_section_budgets),
-                style = MaterialTheme.typography.titleLarge,
-            )
-            TextButton(onClick = onOpenBudgets) {
-                Text(text = stringResource(R.string.home_see_all))
-            }
-        }
-
-        if (budgets.isEmpty()) {
-            Text(
-                text = stringResource(R.string.home_budgets_empty),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(vertical = PocketSpacing.xs),
-            )
-        } else {
-            Column(
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
+                Text(
+                    text = stringResource(R.string.home_section_budgets),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Icon(
+                    imageVector = Icons.Rounded.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            if (budgets.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.home_budgets_empty),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 4.dp),
+                )
+            } else {
                 budgets.forEach { item ->
                     BudgetsSlimRow(
                         item = item,
@@ -707,89 +644,87 @@ private fun RecentMovementsCard(
     amountsVisible: Boolean,
     onOpenTransactions: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(PocketSpacing.sm)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onOpenTransactions),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(PocketSpacing.lg),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(
-                text = stringResource(R.string.home_recent_title),
-                style = MaterialTheme.typography.titleLarge,
-            )
-            if (transactions.isNotEmpty()) {
-                TextButton(onClick = onOpenTransactions) {
-                    Text(text = stringResource(R.string.home_see_all))
-                }
-            }
-        }
-
-        if (transactions.isEmpty()) {
-            PocketSectionCard {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        Icons.Rounded.Payments,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                Text(stringResource(R.string.home_recent_empty_title), style = MaterialTheme.typography.titleMedium)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
                 Text(
-                    stringResource(R.string.home_recent_empty_description),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = stringResource(R.string.home_recent_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Icon(
+                    imageVector = Icons.Rounded.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-        } else {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onOpenTransactions),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                shape = RoundedCornerShape(16.dp),
-            ) {
-                Column(Modifier.padding(PocketSpacing.md)) {
-                    transactions.forEachIndexed { index, transaction ->
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = PocketSpacing.sm),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                when (transaction.type) {
-                                    TransactionType.INCOME -> Icons.AutoMirrored.Rounded.TrendingUp
-                                    TransactionType.EXPENSE -> Icons.AutoMirrored.Rounded.TrendingDown
-                                    TransactionType.TRANSFER -> Icons.Rounded.AccountBalanceWallet
-                                },
-                                contentDescription = null,
-                                tint = when (transaction.type) {
-                                    TransactionType.INCOME -> MaterialTheme.colorScheme.secondary
-                                    TransactionType.EXPENSE -> MaterialTheme.colorScheme.error
-                                    TransactionType.TRANSFER -> MaterialTheme.colorScheme.primary
-                                },
-                            )
-                            Spacer(Modifier.width(PocketSpacing.sm))
-                            Text(
-                                transaction.merchant.orEmpty().ifBlank { transaction.note.orEmpty() },
-                                modifier = Modifier.weight(1f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                visibleAmount(transaction.amount.minorUnits, amountsVisible),
-                                style = MaterialTheme.typography.titleSmall,
-                            )
-                        }
-                        if (index < transactions.lastIndex) {
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        }
+
+            if (transactions.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.home_recent_empty_title),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text = stringResource(R.string.home_recent_empty_description),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                transactions.forEachIndexed { index, transaction ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            when (transaction.type) {
+                                TransactionType.INCOME -> Icons.AutoMirrored.Rounded.TrendingUp
+                                TransactionType.EXPENSE -> Icons.AutoMirrored.Rounded.TrendingDown
+                                TransactionType.TRANSFER -> Icons.Rounded.AccountBalanceWallet
+                            },
+                            contentDescription = null,
+                            tint = when (transaction.type) {
+                                TransactionType.INCOME -> MaterialTheme.colorScheme.secondary
+                                TransactionType.EXPENSE -> MaterialTheme.colorScheme.error
+                                TransactionType.TRANSFER -> MaterialTheme.colorScheme.primary
+                            },
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(Modifier.width(PocketSpacing.sm))
+                        Text(
+                            text = transaction.merchant.orEmpty().ifBlank { transaction.note.orEmpty() },
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = visibleAmount(transaction.amount.minorUnits, amountsVisible),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                    if (index < transactions.lastIndex) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(top = 4.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                        )
                     }
                 }
             }
@@ -802,12 +737,9 @@ private fun RecentMovementsCard(
 private fun QuickActionsSheet(
     onDismiss: () -> Unit,
     onStartRecord: () -> Unit,
-    onCreateExpense: () -> Unit,
-    onCreateIncome: () -> Unit,
     onManageAccounts: () -> Unit,
     onOpenBudgets: () -> Unit,
-    onOpenAssistant: () -> Unit,
-    onOpenTransactions: () -> Unit,
+    onManageSavings: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
@@ -835,16 +767,6 @@ private fun QuickActionsSheet(
                 onClick = onStartRecord,
             )
             QuickActionSheetRow(
-                icon = Icons.AutoMirrored.Rounded.TrendingDown,
-                label = stringResource(R.string.home_fab_action_expense),
-                onClick = onCreateExpense,
-            )
-            QuickActionSheetRow(
-                icon = Icons.AutoMirrored.Rounded.TrendingUp,
-                label = stringResource(R.string.home_fab_action_income),
-                onClick = onCreateIncome,
-            )
-            QuickActionSheetRow(
                 icon = Icons.Rounded.AccountBalanceWallet,
                 label = stringResource(R.string.home_action_products),
                 onClick = onManageAccounts,
@@ -855,14 +777,9 @@ private fun QuickActionsSheet(
                 onClick = onOpenBudgets,
             )
             QuickActionSheetRow(
-                icon = Icons.Rounded.AutoAwesome,
-                label = stringResource(R.string.home_fab_action_assistant),
-                onClick = onOpenAssistant,
-            )
-            QuickActionSheetRow(
-                icon = Icons.AutoMirrored.Rounded.ReceiptLong,
-                label = stringResource(R.string.home_action_movements),
-                onClick = onOpenTransactions,
+                icon = Icons.Rounded.Savings,
+                label = stringResource(R.string.home_action_savings),
+                onClick = onManageSavings,
             )
         }
     }

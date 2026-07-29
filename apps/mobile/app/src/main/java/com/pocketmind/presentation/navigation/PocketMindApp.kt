@@ -40,6 +40,7 @@ import com.pocketmind.presentation.products.ProductDetailRoute
 import com.pocketmind.presentation.analysis.AnalysisRoute
 import com.pocketmind.presentation.assistant.AssistantRoute
 import com.pocketmind.presentation.budgets.BudgetsRoute
+import com.pocketmind.presentation.savings.SavingsRoute
 import com.pocketmind.ui.components.PocketBottomNavigation
 import com.pocketmind.ui.components.PocketNavigationItem
 import com.pocketmind.R
@@ -61,6 +62,7 @@ private const val PRODUCT_DETAIL_ROUTE = "product/{accountId}"
 private const val ANALYSIS_ROUTE = "analysis"
 private const val ASSISTANT_ROUTE = "assistant"
 private const val BUDGETS_ROUTE = "budgets"
+private const val SAVINGS_ROUTE = "savings"
 
 /** Root navigation graph. New product flows will be registered here by feature. */
 @Composable
@@ -172,6 +174,7 @@ fun PocketMindApp(
                 onOpenProduct = { id -> navController.navigate("product/$id") },
                 onOpenAssistant = { navController.navigate(ASSISTANT_ROUTE) },
                 onOpenBudgets = { navController.navigate(BUDGETS_ROUTE) },
+                onManageSavings = { navController.navigate(SAVINGS_ROUTE) },
             )
         }
         composable(ASSISTANT_ROUTE) {
@@ -244,6 +247,13 @@ fun PocketMindApp(
         }
         composable(BUDGETS_ROUTE) {
             BudgetsRoute(onBack = { navController.popBackStack() })
+        }
+        composable(SAVINGS_ROUTE) {
+            SavingsRoute(
+                onCreateSavings = { navController.navigate(ACCOUNT_NEW_ROUTE) },
+                onOpenSavings = { id -> navController.navigate("product/$id") },
+                onBack = { navController.popBackStack() },
+            )
         }
     }
     }
