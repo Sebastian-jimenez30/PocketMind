@@ -410,4 +410,31 @@
     <string name="assistant_unknown_detail">Información adicional</string>
     <string name="assistant_retry">Reintentar</string>
     <string name="assistant_dismiss">Cerrar</string>
+
+    <!-- Budgets -->
+    <string name="budgets_title">Presupuestos</string>
+    <string name="budgets_create_title">Nuevo presupuesto</string>
+    <string name="budgets_empty_title">Aún no tienes presupuestos</string>
+    <string name="budgets_empty_description">Define límites máximos de gasto por categoría y monitorea su cumplimiento en tiempo real.</string>
+    <string name="budgets_name_label">Nombre del presupuesto</string>
+    <string name="budgets_amount_label">Límite máximo</string>
+    <string name="budgets_category_label">Categoría</string>
+    <string name="budgets_period_label">Período</string>
+    <string name="budgets_period_monthly">Mensual</string>
+    <string name="budgets_period_weekly">Semanal</string>
+    <string name="budgets_period_biweekly">Quincenal</string>
+    <string name="budgets_status_on_track">En curso</string>
+    <string name="budgets_status_warning">Cerca del límite</string>
+    <string name="budgets_status_exceeded">Límite excedido</string>
+    <string name="budgets_status_finished">Finalizado</string>
+    <string name="budgets_status_paused">Pausado</string>
+    <string name="nav_back">Volver</string>
+    <string name="budgets_spent_label">Gastado</string>
+    <string name="budgets_available_label">Disponible</string>
+    <string name="budgets_execution_label">Ejecución: %1$d%%</string>
+    <string name="budgets_create_button">Crear presupuesto</string>
+    <string name="budgets_delete_confirm">¿Eliminar este presupuesto?</string>
+    <string name="budgets_delete_action">Eliminar</string>
+    <string name="budgets_recurring_label">Renovar automáticamente</string>
+    <string name="home_action_budgets">Presupuestos</string>
 </resources>

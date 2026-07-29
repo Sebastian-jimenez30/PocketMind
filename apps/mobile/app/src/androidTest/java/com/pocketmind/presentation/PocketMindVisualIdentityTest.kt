@@ -60,6 +60,7 @@ class PocketMindVisualIdentityTest {
                     onStartRecord = {},
                     onOpenProduct = {},
                     onOpenAssistant = {},
+                    onOpenBudgets = {},
                 )
             }
         }
@@ -69,6 +70,9 @@ class PocketMindVisualIdentityTest {
         composeRule.onNodeWithTag(PocketMindTestTags.HOME_CONTENT)
             .performScrollToNode(hasText("Productos"))
         composeRule.onNodeWithText("Productos").assertIsDisplayed()
+        composeRule.onNodeWithTag(PocketMindTestTags.HOME_CONTENT)
+            .performScrollToNode(hasText("Presupuestos"))
+        composeRule.onNodeWithText("Presupuestos").assertIsDisplayed()
     }
 
     @Test

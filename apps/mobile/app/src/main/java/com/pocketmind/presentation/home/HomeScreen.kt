@@ -27,6 +27,7 @@ import androidx.compose.material.icons.automirrored.rounded.TrendingDown
 import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.AddCircle
+import androidx.compose.material.icons.rounded.Analytics
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Payments
@@ -91,6 +92,7 @@ fun HomeRoute(
     onStartRecord: () -> Unit,
     onOpenProduct: (String) -> Unit,
     onOpenAssistant: () -> Unit,
+    onOpenBudgets: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -105,6 +107,7 @@ fun HomeRoute(
         onStartRecord = onStartRecord,
         onOpenProduct = onOpenProduct,
         onOpenAssistant = onOpenAssistant,
+        onOpenBudgets = onOpenBudgets,
     )
 }
 
@@ -117,6 +120,7 @@ fun HomeScreen(
     onStartRecord: () -> Unit,
     onOpenProduct: (String) -> Unit,
     onOpenAssistant: () -> Unit,
+    onOpenBudgets: () -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -155,6 +159,7 @@ fun HomeScreen(
                         onStartRecord = onStartRecord,
                         onOpenProduct = onOpenProduct,
                         onOpenAssistant = onOpenAssistant,
+                        onOpenBudgets = onOpenBudgets,
                     )
                 }
             }
@@ -217,6 +222,7 @@ private fun DashboardContent(
     onStartRecord: () -> Unit,
     onOpenProduct: (String) -> Unit,
     onOpenAssistant: () -> Unit,
+    onOpenBudgets: () -> Unit,
 ) {
     val quickActions = listOf(
         QuickAction(R.string.home_action_expense, Icons.AutoMirrored.Rounded.TrendingDown) {
@@ -226,6 +232,7 @@ private fun DashboardContent(
             onCreateTransaction(TransactionType.INCOME)
         },
         QuickAction(R.string.home_action_products, Icons.Rounded.AccountBalanceWallet, onManageAccounts),
+        QuickAction(R.string.home_action_budgets, Icons.Rounded.Analytics, onOpenBudgets),
         QuickAction(R.string.home_action_assistant, Icons.Rounded.AutoAwesome, onOpenAssistant),
     )
     LazyColumn(
@@ -658,6 +665,7 @@ private fun HomePreview() {
             onStartRecord = {},
             onOpenProduct = {},
             onOpenAssistant = {},
+            onOpenBudgets = {},
         )
     }
 }
