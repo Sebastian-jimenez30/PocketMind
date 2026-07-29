@@ -229,9 +229,28 @@ class SupabaseAssistantMemoryRepository(
         )?.toDomain()
     }
 
-    override suspend fun reviseProposedDraft(
+    override suspend fun getDraftByCommandId(
+        session: AuthenticatedUser,
+        commandId: String,
+    ): AssistantCommandDraft? {
+        val normalizedCommandId = commandId.requireUuid()
+        val response = client.get(tableUrl(DRAFTS)) {
+            authenticate(session)
+            selectAll()
+            parameter("user_id", "eq.${session.userId}")
+            parameter("command_payload->>command_id", "eq.$normalizedCommandId")
+            parameter("order", "created_at.desc")
+            parameter("limit", 1)
+        }
+        return response.optionalRepresentation<DraftDto>(
+            "getDraftByCommandId",
+        )?.toDomain()
+    }
+
+    override suspend fun reviseDraft(
         session: AuthenticatedUser,
         draftId: String,
+        expectedState: DraftState,
         expectedVersion: Long,
         revision: ProposedDraftRevision,
     ): AssistantCommandDraft {
@@ -240,19 +259,23 @@ class SupabaseAssistantMemoryRepository(
             returnRepresentation()
             parameter("id", "eq.${draftId.requireUuid()}")
             parameter("user_id", "eq.${session.userId}")
-            parameter("state", "eq.${DraftState.PROPOSED.wireValue}")
+            parameter("state", "eq.${expectedState.wireValue}")
             parameter("version", "eq.$expectedVersion")
             setBody(
                 DraftRevisionDto(
+                    state = DraftState.PROPOSED.wireValue,
                     commandType = revision.commandType,
                     commandPayload = revision.commandPayload,
                     commandSchemaVersion = revision.commandSchemaVersion,
                     payloadHash = CanonicalJson.sha256(revision.commandPayload),
                     financialStateVersion = revision.financialStateVersion,
+                    expiresAt = revision.expiresAt.toString(),
+                    executionResult = null,
+                    errorCode = null,
                 ),
             )
         }
-        return response.requiredMutation<DraftDto>("reviseProposedDraft").toDomain()
+        return response.requiredMutation<DraftDto>("reviseDraft").toDomain()
     }
 
     override suspend fun transitionDraft(
@@ -605,6 +628,7 @@ private data class DraftCreateDto(
 
 @Serializable
 private data class DraftRevisionDto(
+    val state: String,
     @SerialName("command_type")
     val commandType: String,
     @SerialName("command_payload")
@@ -615,6 +639,12 @@ private data class DraftRevisionDto(
     val payloadHash: String,
     @SerialName("financial_state_version")
     val financialStateVersion: Long,
+    @SerialName("expires_at")
+    val expiresAt: String,
+    @SerialName("execution_result")
+    val executionResult: JsonObject?,
+    @SerialName("error_code")
+    val errorCode: String?,
 )
 
 @Serializable

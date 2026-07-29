@@ -329,6 +329,15 @@ fun Application.assistantModule(dependencies: AppDependencies) {
                 call.respond(HttpStatusCode.NoContent)
             }
 
+            get("/v1/assistant/drafts/by-command/{commandId}") {
+                val user = call.authenticatedUser()
+                val commandId = call.parameters.requireUuid("commandId")
+                val draft = dependencies.memoryRepository
+                    .getDraftByCommandId(user, commandId)
+                    ?: throw notFound()
+                call.respond(draft.toResponse())
+            }
+
             get("/v1/assistant/drafts/{draftId}") {
                 val user = call.authenticatedUser()
                 val draftId = call.parameters.requireUuid("draftId")
@@ -350,8 +359,17 @@ fun Application.assistantModule(dependencies: AppDependencies) {
                 val revisedCommand = FinancialCommandCodec
                     .decode(request.commandPayload.toString())
                     .getOrElse { throw invalidRequest() }
-                require(current.state == DraftState.PROPOSED)
-                if (!current.expiresAt.isAfter(java.time.Instant.now())) {
+                val expectedState = request.expectedState.toDomain()
+                require(
+                    expectedState == DraftState.PROPOSED ||
+                        expectedState == DraftState.COMPLETED ||
+                        expectedState == DraftState.FAILED,
+                )
+                require(current.state == expectedState)
+                if (
+                    expectedState == DraftState.PROPOSED &&
+                    !current.expiresAt.isAfter(java.time.Instant.now())
+                ) {
                     throw ApiException(
                         status = HttpStatusCode.Gone,
                         code = "DRAFT_EXPIRED",
@@ -362,15 +380,19 @@ fun Application.assistantModule(dependencies: AppDependencies) {
                 require(previousCommand.commandId == revisedCommand.commandId)
                 require(previousCommand.wireType == revisedCommand.wireType)
                 val financialState = dependencies.financialContextRepository.fetchSnapshot(user)
-                val draft = dependencies.memoryRepository.reviseProposedDraft(
+                val draft = dependencies.memoryRepository.reviseDraft(
                     session = user,
                     draftId = draftId,
+                    expectedState = expectedState,
                     expectedVersion = request.expectedVersion,
                     revision = ProposedDraftRevision(
                         commandType = revisedCommand.wireType,
                         commandPayload = request.commandPayload,
                         commandSchemaVersion = CURRENT_FINANCIAL_COMMAND_SCHEMA_VERSION,
                         financialStateVersion = financialState.stateVersion,
+                        expiresAt = java.time.Instant.now().plus(
+                            java.time.Duration.ofMinutes(15),
+                        ),
                     ),
                 )
                 call.respond(draft.toResponse())
@@ -441,7 +463,12 @@ fun Application.assistantModule(dependencies: AppDependencies) {
                 request.requirePositiveVersion()
                 val expectedState = request.expectedState
                     ?.toDomain()
-                    ?.takeIf { it == DraftState.PROPOSED || it == DraftState.CONFIRMED }
+                    ?.takeIf {
+                        it == DraftState.PROPOSED ||
+                            it == DraftState.CONFIRMED ||
+                            it == DraftState.COMPLETED ||
+                            it == DraftState.FAILED
+                    }
                     ?: throw invalidRequest()
                 val draft = dependencies.memoryRepository.transitionDraft(
                     session = user,

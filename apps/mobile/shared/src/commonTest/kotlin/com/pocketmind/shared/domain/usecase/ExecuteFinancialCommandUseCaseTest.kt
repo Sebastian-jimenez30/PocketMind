@@ -584,6 +584,8 @@ class ExecuteFinancialCommandUseCaseTest {
             loanPayments.value = loanPayments.value + payment
             sourceSavingsMovement?.let { savingsMovements.value = savingsMovements.value + it }
         }
+
+        override suspend fun deleteRecordedMovement(commandId: String) {}
     }
 
     private companion object {

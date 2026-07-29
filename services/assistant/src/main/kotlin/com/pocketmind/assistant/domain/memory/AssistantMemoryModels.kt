@@ -113,6 +113,7 @@ data class ProposedDraftRevision(
     val commandPayload: JsonObject,
     val commandSchemaVersion: Int,
     val financialStateVersion: Long,
+    val expiresAt: Instant,
 )
 
 data class DraftTransition(

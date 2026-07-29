@@ -104,19 +104,19 @@ fun DynamicCategorySelector(
             horizontalArrangement = Arrangement.spacedBy(PocketSpacing.sm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            items(allowedCoreCategories) { coreCategory ->
-                FilterChip(
-                    selected = selectedCategoryId == coreCategory.name,
-                    onClick = { onSelectCategory(coreCategory.name) },
-                    label = { Text(categoryLabel(coreCategory.name, customCategories)) },
-                )
-            }
-
             items(customCategories) { customCategory ->
                 FilterChip(
                     selected = selectedCategoryId == customCategory.id,
                     onClick = { onSelectCategory(customCategory.id) },
                     label = { Text(customCategory.name) },
+                )
+            }
+
+            items(allowedCoreCategories) { coreCategory ->
+                FilterChip(
+                    selected = selectedCategoryId == coreCategory.name,
+                    onClick = { onSelectCategory(coreCategory.name) },
+                    label = { Text(categoryLabel(coreCategory.name, customCategories)) },
                 )
             }
 

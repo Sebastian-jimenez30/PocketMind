@@ -29,6 +29,7 @@ import com.pocketmind.shared.domain.model.SavingsProductType
 import com.pocketmind.shared.domain.model.SavingsProfile
 import com.pocketmind.shared.domain.repository.ManualFinanceRepository
 import com.pocketmind.shared.domain.repository.TransactionRepository
+import com.pocketmind.shared.domain.command.recordedMovementEffects
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -135,6 +136,15 @@ class RoomManualFinanceRepository @Inject constructor(
         dao.upsertLoanPayment(payment.toEntity())
         sourceSavingsMovement?.let { dao.upsertSavingsMovement(it.toEntity()) }
         transactionRepository.save(ledgerTransaction)
+    }
+
+    override suspend fun deleteRecordedMovement(commandId: String) = database.withTransaction {
+        val effects = recordedMovementEffects(commandId)
+        dao.deleteInstallmentPurchase(effects.commandId)
+        dao.deleteSavingsMovementEffects(effects.savingsMovementIds)
+        dao.deleteCreditCardPayment(effects.commandId)
+        dao.deleteLoanPayment(effects.commandId)
+        effects.ledgerTransactionIds.forEach { transactionRepository.delete(it) }
     }
 }
 

@@ -61,6 +61,7 @@ class AssistantDraftContractsTest {
     fun `revision request preserves exact version and structured command`() {
         val request = AssistantDraftRevisionRequest(
             expectedVersion = 4,
+            expectedState = AssistantDraftState.COMPLETED,
             commandPayload = buildJsonObject {
                 put("type", "record_expense")
                 put("command_id", "33333333-3333-4333-8333-333333333333")
@@ -77,6 +78,7 @@ class AssistantDraftContractsTest {
         )
 
         assertEquals(4, decoded.expectedVersion)
+        assertEquals(AssistantDraftState.COMPLETED, decoded.expectedState)
         assertEquals(
             "\"record_expense\"",
             decoded.commandPayload["type"].toString(),

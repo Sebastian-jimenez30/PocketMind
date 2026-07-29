@@ -162,6 +162,7 @@ data class AssistantModelDecision(
     val clearNote: Boolean = false,
     val clearRelatedProduct: Boolean = false,
     val missingFields: List<String> = emptyList(),
+    val additionalDecisions: List<AssistantModelDecision> = emptyList(),
 )
 
 internal fun createAssistantDecisionOutputStructure(
@@ -272,8 +273,13 @@ class KoogAssistantTurnInterpreter(
             - record_savings_movement y record_loan_payment.
             - update_transaction y delete_transaction.
 
-            Si un mensaje contiene dos acciones independientes, no las mezcles
-            en un comando. Usa clarify y pide confirmar cuál preparar primero.
+            Si un mensaje contiene varios movimientos independientes, prepara
+            el primer movimiento en action/intent y genera las propuestas
+            adicionales en la lista additionalDecisions.
+            Conserva el orden en que el usuario contó las acciones, incluye
+            todas las que puedas resolver (máximo 5 en total), usa PROPOSE en
+            cada acción financiera y no anides additionalDecisions dentro de
+            otra decisión adicional.
             Crear un producto con su saldo o deuda inicial sí es una sola acción.
 
             Interpretación financiera:

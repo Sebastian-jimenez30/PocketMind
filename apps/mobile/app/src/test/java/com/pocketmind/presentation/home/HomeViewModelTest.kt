@@ -87,6 +87,7 @@ class HomeViewModelTest {
                 ledgerTransaction: FinancialTransaction,
                 sourceSavingsMovement: SavingsMovement?,
             ) = Unit
+            override suspend fun deleteRecordedMovement(commandId: String) = Unit
         }
 
         val viewModel = HomeViewModel(

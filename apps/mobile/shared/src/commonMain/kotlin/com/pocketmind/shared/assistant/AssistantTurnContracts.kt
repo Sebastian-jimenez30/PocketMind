@@ -7,7 +7,9 @@ import kotlinx.serialization.json.JsonObject
 /**
  * Stable transport contracts shared by Android, iOS and the assistant service.
  *
- * A turn may create a proposal, but it never executes a financial command.
+ * A turn only interprets the user's intent and creates one or more drafts.
+ * Platform clients may auto-confirm supported reversible movements so the
+ * user only intervenes to edit, cancel or resolve missing information.
  */
 @Serializable
 data class AssistantTurnRequest(
@@ -45,6 +47,7 @@ data class AssistantChatMessage(
 @Serializable
 data class AssistantDraftPreview(
     val id: String,
+    val commandId: String,
     val version: Long,
     val commandType: String,
     val amountMinorUnits: Long? = null,
@@ -73,6 +76,7 @@ data class AssistantTurnResponse(
     val userMessage: AssistantChatMessage,
     val assistantMessage: AssistantChatMessage,
     val draft: AssistantDraftPreview? = null,
+    val additionalDrafts: List<AssistantDraftPreview> = emptyList(),
 )
 
 @Serializable
@@ -131,6 +135,7 @@ data class AssistantDraftTransitionRequest(
 @Serializable
 data class AssistantDraftRevisionRequest(
     val expectedVersion: Long,
+    val expectedState: AssistantDraftState = AssistantDraftState.PROPOSED,
     val commandPayload: JsonObject,
 )
 
