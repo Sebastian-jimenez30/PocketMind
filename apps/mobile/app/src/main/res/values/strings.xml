@@ -435,6 +435,17 @@
     <string name="budgets_create_button">Crear presupuesto</string>
     <string name="budgets_delete_confirm">¿Eliminar este presupuesto?</string>
     <string name="budgets_delete_action">Eliminar</string>
-    <string name="budgets_recurring_label">Renovar automáticamente</string>
     <string name="home_action_budgets">Presupuestos</string>
+
+    <!-- Custom Categories -->
+    <string name="category_other_create">Otro (Crear nueva)</string>
+    <string name="custom_category_new_title">Nueva categoría</string>
+    <string name="custom_category_name_label">Nombre de la categoría</string>
+    <string name="custom_category_name_placeholder">Ej. Mascotas, Educación...</string>
+    <string name="custom_category_save">Crear categoría</string>
+    <string name="custom_category_update_save">Guardar cambios</string>
+    <string name="custom_category_recommended_title">¿Buscas alguna común?</string>
+    <string name="custom_category_edit_title">Editar categoría</string>
+    <string name="custom_category_delete_title">Eliminar categoría</string>
+    <string name="custom_category_delete_confirm">¿Deseas eliminar esta categoría personalizada?</string>
 </resources>

@@ -49,6 +49,8 @@ import com.pocketmind.ui.components.PocketPrimaryButton
 import com.pocketmind.ui.components.pocketBringIntoViewOnFocus
 import com.pocketmind.ui.theme.PocketSpacing
 
+import com.pocketmind.presentation.common.DynamicCategorySelector
+
 @Composable
 fun TransactionEditorRoute(
     onSaved: () -> Unit,
@@ -57,7 +59,16 @@ fun TransactionEditorRoute(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     LaunchedEffect(state.saved) { if (state.saved) onSaved() }
-    TransactionEditorScreen(state, viewModel::update, viewModel::save, viewModel::delete, onBack)
+    TransactionEditorScreen(
+        state = state,
+        onUpdate = viewModel::update,
+        onSave = viewModel::save,
+        onDelete = viewModel::delete,
+        onBack = onBack,
+        onCreateCustomCategory = viewModel::createCustomCategory,
+        onUpdateCustomCategory = viewModel::updateCustomCategory,
+        onDeleteCustomCategory = viewModel::deleteCustomCategory,
+    )
 }
 
 @Composable
@@ -67,6 +78,9 @@ fun TransactionEditorScreen(
     onSave: () -> Unit,
     onDelete: () -> Unit,
     onBack: () -> Unit,
+    onCreateCustomCategory: (String, (String) -> Unit) -> Unit = { _, _ -> },
+    onUpdateCustomCategory: (String, String) -> Unit = { _, _ -> },
+    onDeleteCustomCategory: (String) -> Unit = {},
 ) {
     if (state.isLoading) {
         androidx.compose.foundation.layout.Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -100,7 +114,20 @@ fun TransactionEditorScreen(
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth().pocketBringIntoViewOnFocus(),
             )
-            CategorySelector(state.category) { category -> onUpdate { it.copy(category = category) } }
+            Column(verticalArrangement = Arrangement.spacedBy(PocketSpacing.xs)) {
+                Text(
+                    text = stringResource(R.string.transaction_editor_category),
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                DynamicCategorySelector(
+                    selectedCategoryId = state.categoryId,
+                    onSelectCategory = { id -> onUpdate { it.copy(categoryId = id) } },
+                    customCategories = state.customCategories,
+                    onCreateCustomCategory = onCreateCustomCategory,
+                    onUpdateCustomCategory = onUpdateCustomCategory,
+                    onDeleteCustomCategory = onDeleteCustomCategory,
+                )
+            }
             OutlinedTextField(
                 value = state.merchant,
                 onValueChange = { value -> onUpdate { it.copy(merchant = value) } },
@@ -232,53 +259,9 @@ private fun AccountSelector(accounts: List<FinancialAccount>, selectedId: String
     }
 }
 
-@Composable
-@OptIn(ExperimentalMaterial3Api::class)
-private fun CategorySelector(selected: TransactionCategoryId, onSelect: (TransactionCategoryId) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(PocketSpacing.sm)) {
-        var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-        ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
-            OutlinedTextField(
-                value = stringResource(selected.labelRes()),
-                onValueChange = {},
-                readOnly = true,
-                label = { Text(stringResource(R.string.transaction_editor_category)) },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true),
-                shape = RoundedCornerShape(16.dp),
-            )
-            ExposedDropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-                shape = RoundedCornerShape(16.dp),
-            ) {
-                TransactionCategoryId.entries.forEach { category ->
-                    DropdownMenuItem(text = { Text(stringResource(category.labelRes())) }, onClick = { onSelect(category); expanded = false })
-                }
-            }
-        }
-    }
-}
-
 private fun TransactionType.labelRes(): Int = when (this) {
     TransactionType.INCOME -> R.string.transactions_income
     TransactionType.EXPENSE -> R.string.transactions_expense
     TransactionType.TRANSFER -> R.string.transactions_transfer
 }
 
-private fun TransactionCategoryId.labelRes(): Int = when (this) {
-    TransactionCategoryId.SALARY -> R.string.category_salary
-    TransactionCategoryId.FREELANCE -> R.string.category_freelance
-    TransactionCategoryId.TRANSFER -> R.string.category_transfer
-    TransactionCategoryId.FOOD -> R.string.category_food
-    TransactionCategoryId.TRANSPORT -> R.string.category_transport
-    TransactionCategoryId.HOME -> R.string.category_home
-    TransactionCategoryId.HEALTH -> R.string.category_health
-    TransactionCategoryId.EDUCATION -> R.string.category_education
-    TransactionCategoryId.ENTERTAINMENT -> R.string.category_entertainment
-    TransactionCategoryId.SHOPPING -> R.string.category_shopping
-    TransactionCategoryId.SERVICES -> R.string.category_services
-    TransactionCategoryId.DEBT_PAYMENT -> R.string.category_debt_payment
-    TransactionCategoryId.SAVINGS -> R.string.category_savings
-    TransactionCategoryId.OTHER -> R.string.category_other
-}

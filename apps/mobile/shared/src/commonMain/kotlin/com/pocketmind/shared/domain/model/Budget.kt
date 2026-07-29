@@ -56,7 +56,7 @@ data class Budget(
     val id: String,
     val name: String,
     @SerialName("category_id")
-    val categoryId: TransactionCategoryId,
+    val categoryId: String,
     @SerialName("max_amount")
     val maxAmount: Money,
     @SerialName("period_type")
@@ -74,6 +74,7 @@ data class Budget(
     init {
         require(id.isNotBlank()) { "A budget id is required." }
         require(name.isNotBlank()) { "A budget name is required." }
+        require(categoryId.isNotBlank()) { "A category id is required." }
         require(maxAmount.isPositive) { "A budget max amount must be positive." }
         require(startDateEpochMillis > 0) { "A budget start date is required." }
         require(endDateEpochMillis >= startDateEpochMillis) { "A budget end date cannot be before its start date." }

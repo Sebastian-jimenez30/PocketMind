@@ -102,7 +102,7 @@ fun TransactionsScreen(
     var query by rememberSaveable { mutableStateOf("") }
     var selectedAccountId by rememberSaveable { mutableStateOf("") }
     var selectedType by rememberSaveable { mutableStateOf<TransactionType?>(null) }
-    var selectedCategory by rememberSaveable { mutableStateOf<TransactionCategoryId?>(null) }
+    var selectedCategory by rememberSaveable { mutableStateOf<String?>(null) }
     var currentMonthOnly by rememberSaveable { mutableStateOf(false) }
     var showFilters by rememberSaveable { mutableStateOf(false) }
     val monthStart = Calendar.getInstance().apply {
@@ -119,7 +119,7 @@ fun TransactionsScreen(
             (selectedAccountId.isBlank() || item.transaction.accountId == selectedAccountId ||
                 item.transaction.relatedAccountId == selectedAccountId) &&
             (selectedType == null || item.transaction.type == selectedType) &&
-            (selectedCategory == null || item.transaction.categoryId == selectedCategory?.name) &&
+            (selectedCategory == null || item.transaction.categoryId == selectedCategory) &&
             (!currentMonthOnly || item.transaction.occurredAtEpochMillis >= monthStart)
     }
     Scaffold(
@@ -220,19 +220,27 @@ fun TransactionsScreen(
                                 state.accounts.map { it.id to it.name },
                             onSelect = { selectedAccountId = it },
                         )
+                        val categoryOptions = listOf("" to stringResource(R.string.transactions_filter_all)) +
+                            listOf(
+                                TransactionCategoryId.FOOD.name,
+                                TransactionCategoryId.TRANSPORT.name,
+                                TransactionCategoryId.SERVICES.name,
+                                TransactionCategoryId.HEALTH.name,
+                                TransactionCategoryId.ENTERTAINMENT.name,
+                            ).map { it to com.pocketmind.presentation.common.categoryLabel(it, state.customCategories) } +
+                            state.customCategories.map { it.id to it.name }
+
                         FilterDropdown(
                             label = stringResource(R.string.transactions_filter_category),
-                            selected = selectedCategory?.let { stringResource(it.toCategoryLabelRes()) }
-                                ?: stringResource(R.string.transactions_filter_all),
-                            options = listOf("" to stringResource(R.string.transactions_filter_all)) +
-                                TransactionCategoryId.entries.map {
-                                    it.name to stringResource(it.toCategoryLabelRes())
-                                },
+                            selected = selectedCategory?.let {
+                                com.pocketmind.presentation.common.categoryLabel(it, state.customCategories)
+                            } ?: stringResource(R.string.transactions_filter_all),
+                            options = categoryOptions,
                             onSelect = {
                                 selectedCategory = it.takeIf(String::isNotBlank)
-                                    ?.let(TransactionCategoryId::valueOf)
                             },
                         )
+
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 stringResource(R.string.transactions_filter_month),
@@ -269,7 +277,7 @@ fun TransactionsScreen(
             when {
                 state.isLoading -> LoadingState()
                 state.items.isEmpty() -> EmptyTransactions(onCreate, onManageAccounts)
-                else -> TransactionsList(filtered, onEdit)
+                else -> TransactionsList(filtered, onEdit, state.customCategories)
             }
         }
     }
@@ -300,7 +308,7 @@ private fun EmptyTransactions(onCreate: () -> Unit, onManageAccounts: () -> Unit
         Spacer(Modifier.height(PocketSpacing.xs))
         Text(stringResource(R.string.transactions_empty_description), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(PocketSpacing.lg))
-        PocketPrimaryButton(stringResource(R.string.transactions_add), onCreate)
+        PocketPrimaryButton(stringResource(R.string.transactions_add), onClick = onCreate)
         Spacer(Modifier.height(PocketSpacing.sm))
         androidx.compose.material3.OutlinedButton(onClick = onManageAccounts, modifier = Modifier.fillMaxWidth().height(PocketSpacing.primaryButtonHeight)) {
             Text(stringResource(R.string.accounts_manage))
@@ -309,7 +317,11 @@ private fun EmptyTransactions(onCreate: () -> Unit, onManageAccounts: () -> Unit
 }
 
 @Composable
-private fun TransactionsList(items: List<TransactionListItem>, onEdit: (String) -> Unit) {
+private fun TransactionsList(
+    items: List<TransactionListItem>,
+    onEdit: (String) -> Unit,
+    customCategories: List<com.pocketmind.shared.domain.model.CustomCategory> = emptyList(),
+) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(PocketSpacing.xl),
@@ -320,7 +332,9 @@ private fun TransactionsList(items: List<TransactionListItem>, onEdit: (String) 
             item(key = "day-$day") {
                 Text(day, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = PocketSpacing.xs))
             }
-            items(dayItems, key = { it.transaction.id }) { item -> TransactionRow(item, onEdit) }
+            items(dayItems, key = { it.transaction.id }) { item ->
+                TransactionRow(item, onEdit, customCategories)
+            }
         }
     }
 }
@@ -365,7 +379,11 @@ private fun FilterDropdown(
 }
 
 @Composable
-private fun TransactionRow(item: TransactionListItem, onEdit: (String) -> Unit) {
+private fun TransactionRow(
+    item: TransactionListItem,
+    onEdit: (String) -> Unit,
+    customCategories: List<com.pocketmind.shared.domain.model.CustomCategory> = emptyList(),
+) {
     val transaction = item.transaction
     val isIncome = transaction.type == TransactionType.INCOME
     val isTransfer = transaction.type == TransactionType.TRANSFER
@@ -401,7 +419,7 @@ private fun TransactionRow(item: TransactionListItem, onEdit: (String) -> Unit) 
             )
             Spacer(Modifier.width(PocketSpacing.md))
             Column(modifier = Modifier.weight(1f)) {
-                Text(transaction.merchant.orEmpty().ifBlank { categoryLabel(transaction.categoryId) }, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(transaction.merchant.orEmpty().ifBlank { categoryLabel(transaction.categoryId, customCategories) }, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
                     if (isTransfer) {
                         "${item.accountName} → ${item.destinationAccountName}"
@@ -431,26 +449,10 @@ private fun TransactionRow(item: TransactionListItem, onEdit: (String) -> Unit) 
 }
 
 @Composable
-private fun categoryLabel(id: String?): String = stringResource(
-    runCatching { id?.let(TransactionCategoryId::valueOf) }.getOrNull().toCategoryLabelRes(),
-)
+private fun categoryLabel(id: String?, customCategories: List<com.pocketmind.shared.domain.model.CustomCategory> = emptyList()): String =
+    id?.let { com.pocketmind.presentation.common.categoryLabel(it, customCategories) }
+        ?: stringResource(R.string.category_other)
 
-private fun TransactionCategoryId?.toCategoryLabelRes(): Int = when (this) {
-    TransactionCategoryId.SALARY -> R.string.category_salary
-    TransactionCategoryId.FREELANCE -> R.string.category_freelance
-    TransactionCategoryId.TRANSFER -> R.string.category_transfer
-    TransactionCategoryId.FOOD -> R.string.category_food
-    TransactionCategoryId.TRANSPORT -> R.string.category_transport
-    TransactionCategoryId.HOME -> R.string.category_home
-    TransactionCategoryId.HEALTH -> R.string.category_health
-    TransactionCategoryId.EDUCATION -> R.string.category_education
-    TransactionCategoryId.ENTERTAINMENT -> R.string.category_entertainment
-    TransactionCategoryId.SHOPPING -> R.string.category_shopping
-    TransactionCategoryId.SERVICES -> R.string.category_services
-    TransactionCategoryId.DEBT_PAYMENT -> R.string.category_debt_payment
-    TransactionCategoryId.SAVINGS -> R.string.category_savings
-    TransactionCategoryId.OTHER, null -> R.string.category_other
-}
 
 private fun amountText(amount: Money, income: Boolean): String {
     val currency = NumberFormat.getCurrencyInstance(Locale.Builder().setLanguage("es").setRegion("CO").build()).apply { maximumFractionDigits = 0 }.format(amount.minorUnits)

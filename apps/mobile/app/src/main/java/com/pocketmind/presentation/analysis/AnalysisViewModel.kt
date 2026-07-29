@@ -13,23 +13,29 @@ import java.time.ZoneId
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 
-data class CategoryAmount(val category: TransactionCategoryId, val amount: Money)
+
+data class CategoryAmount(val categoryId: String, val amount: Money)
 
 data class AnalysisUiState(
     val income: Money = Money(0, CurrencyCode.COP),
     val expense: Money = Money(0, CurrencyCode.COP),
     val categories: List<CategoryAmount> = emptyList(),
+    val customCategories: List<com.pocketmind.shared.domain.model.CustomCategory> = emptyList(),
     val isLoading: Boolean = true,
 )
 
 @HiltViewModel
 class AnalysisViewModel @Inject constructor(
     transactionRepository: TransactionRepository,
+    observeCustomCategories: com.pocketmind.shared.domain.usecase.ObserveCustomCategoriesUseCase,
 ) : ViewModel() {
-    val uiState: StateFlow<AnalysisUiState> = transactionRepository.observeAll().map { transactions ->
+    val uiState: StateFlow<AnalysisUiState> = combine(
+        transactionRepository.observeAll(),
+        observeCustomCategories(),
+    ) { transactions, customCategories ->
         val start = LocalDate.now().withDayOfMonth(1)
             .atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
         val month = transactions.filter { it.occurredAtEpochMillis >= start }
@@ -39,11 +45,11 @@ class AnalysisViewModel @Inject constructor(
             income = Money(income, CurrencyCode.COP),
             expense = Money(expenses.sumOf { it.amount.minorUnits }, CurrencyCode.COP),
             categories = expenses.groupBy {
-                runCatching { TransactionCategoryId.valueOf(it.categoryId.orEmpty()) }
-                    .getOrDefault(TransactionCategoryId.OTHER)
-            }.map { (category, items) ->
-                CategoryAmount(category, Money(items.sumOf { it.amount.minorUnits }, CurrencyCode.COP))
+                it.categoryId ?: TransactionCategoryId.OTHER.name
+            }.map { (categoryId, items) ->
+                CategoryAmount(categoryId, Money(items.sumOf { it.amount.minorUnits }, CurrencyCode.COP))
             }.sortedByDescending { it.amount.minorUnits },
+            customCategories = customCategories,
             isLoading = false,
         )
     }.stateIn(
@@ -52,3 +58,4 @@ class AnalysisViewModel @Inject constructor(
         AnalysisUiState(),
     )
 }
+

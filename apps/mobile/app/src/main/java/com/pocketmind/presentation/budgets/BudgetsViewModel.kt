@@ -6,15 +6,19 @@ import com.pocketmind.shared.domain.model.Budget
 import com.pocketmind.shared.domain.model.BudgetPeriodType
 import com.pocketmind.shared.domain.model.BudgetProgress
 import com.pocketmind.shared.domain.model.CurrencyCode
+import com.pocketmind.shared.domain.model.CustomCategory
 import com.pocketmind.shared.domain.model.Money
 import com.pocketmind.shared.domain.model.TransactionCategoryId
 import com.pocketmind.shared.domain.usecase.CreateBudgetUseCase
 import com.pocketmind.shared.domain.usecase.DeleteBudgetUseCase
+import com.pocketmind.shared.domain.usecase.DeleteCustomCategoryUseCase
 import com.pocketmind.shared.domain.usecase.ObserveBudgetSummariesUseCase
+import com.pocketmind.shared.domain.usecase.ObserveCustomCategoriesUseCase
+import com.pocketmind.shared.domain.usecase.SaveCustomCategoryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
@@ -26,29 +30,39 @@ import javax.inject.Inject
 data class BudgetsUiState(
     val isLoading: Boolean = true,
     val progressList: List<BudgetProgress> = emptyList(),
+    val customCategories: List<CustomCategory> = emptyList(),
     val error: String? = null,
 )
 
 @HiltViewModel
 class BudgetsViewModel @Inject constructor(
     private val observeBudgetSummariesUseCase: ObserveBudgetSummariesUseCase,
+    private val observeCustomCategoriesUseCase: ObserveCustomCategoriesUseCase,
+    private val saveCustomCategoryUseCase: SaveCustomCategoryUseCase,
+    private val deleteCustomCategoryUseCase: DeleteCustomCategoryUseCase,
     private val createBudgetUseCase: CreateBudgetUseCase,
     private val deleteBudgetUseCase: DeleteBudgetUseCase,
 ) : ViewModel() {
 
-    val uiState: StateFlow<BudgetsUiState> = observeBudgetSummariesUseCase.execute { System.currentTimeMillis() }
-        .map { progressList ->
-            BudgetsUiState(isLoading = false, progressList = progressList)
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = BudgetsUiState(isLoading = true),
+    val uiState: StateFlow<BudgetsUiState> = combine(
+        observeBudgetSummariesUseCase.execute { System.currentTimeMillis() },
+        observeCustomCategoriesUseCase(),
+    ) { progressList, customCategories ->
+        BudgetsUiState(
+            isLoading = false,
+            progressList = progressList,
+            customCategories = customCategories,
         )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = BudgetsUiState(isLoading = true),
+    )
+
 
     fun createBudget(
         name: String,
-        categoryId: TransactionCategoryId,
+        categoryId: String,
         maxAmountMinorUnits: Long,
         currency: CurrencyCode,
         periodType: BudgetPeriodType,
@@ -77,6 +91,28 @@ class BudgetsViewModel @Inject constructor(
             deleteBudgetUseCase.execute(id)
         }
     }
+
+    fun createCustomCategory(name: String, onCreated: (String) -> Unit = {}) {
+        viewModelScope.launch {
+            val cat = CustomCategory(id = UUID.randomUUID().toString(), name = name.trim(), createdAtEpochMillis = System.currentTimeMillis())
+            saveCustomCategoryUseCase(cat)
+            onCreated(cat.id)
+        }
+    }
+
+    fun updateCustomCategory(id: String, newName: String) {
+        viewModelScope.launch {
+            val cat = CustomCategory(id = id, name = newName.trim(), createdAtEpochMillis = System.currentTimeMillis())
+            saveCustomCategoryUseCase(cat)
+        }
+    }
+
+    fun deleteCustomCategory(id: String) {
+        viewModelScope.launch {
+            deleteCustomCategoryUseCase(id)
+        }
+    }
+
 
     private fun calculatePeriodBounds(periodType: BudgetPeriodType): Pair<Long, Long> {
         val zone = ZoneId.systemDefault()
