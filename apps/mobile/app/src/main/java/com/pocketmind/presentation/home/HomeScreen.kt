@@ -487,7 +487,7 @@ private fun ProductsSection(
                 )
                 Spacer(Modifier.height(PocketSpacing.xs))
                 PocketPrimaryButton(
-                    text = stringResource(R.string.accounts_create),
+                    text = stringResource(R.string.accounts_add),
                     onClick = onManageAccounts,
                 )
             }
@@ -658,7 +658,7 @@ private fun BudgetsSlimRow(
 ) {
     val categoryName = categoryLabel(item.budget.categoryId, customCategories)
     val maxUnits = item.budget.maxAmount.minorUnits
-    val spentUnits = item.spent.minorUnits
+    val spentUnits = item.spentAmount.minorUnits
     val percentage = if (maxUnits > 0L) {
         ((spentUnits.toDouble() / maxUnits.toDouble()) * 100.0).toInt()
     } else {

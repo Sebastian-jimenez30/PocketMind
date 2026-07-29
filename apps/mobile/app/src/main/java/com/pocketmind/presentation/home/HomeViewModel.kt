@@ -10,6 +10,7 @@ import com.pocketmind.shared.domain.model.Money
 import com.pocketmind.shared.domain.model.TransactionStatus
 import com.pocketmind.shared.domain.model.TransactionType
 import com.pocketmind.shared.domain.model.FinancialAccountType
+import com.pocketmind.shared.domain.model.TransactionCategoryId
 import com.pocketmind.shared.domain.model.calculateCreditCardOverview
 import com.pocketmind.shared.domain.model.calculateSavingsProjection
 import com.pocketmind.shared.domain.model.calculateLoanOverview
@@ -57,7 +58,7 @@ class HomeViewModel @Inject constructor(
         manualFinance.observeLoanProfiles(),
         manualFinance.observeLoanPayments(),
         profileName,
-        observeBudgetSummaries(),
+        observeBudgetSummaries.execute { System.currentTimeMillis() },
         observeCustomCategories(),
     ) { values ->
         @Suppress("UNCHECKED_CAST")
