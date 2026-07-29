@@ -11,7 +11,7 @@ class BudgetEvaluatorTest {
     private val foodBudget = Budget(
         id = "budget-food-1",
         name = "Comida Mensual",
-        categoryId = TransactionCategoryId.FOOD,
+        categoryId = TransactionCategoryId.FOOD.name,
         maxAmount = Money(500_000, CurrencyCode.COP),
         periodType = BudgetPeriodType.MONTHLY,
         startDateEpochMillis = startMillis,

@@ -91,11 +91,11 @@ private fun AnalysisScreen(state: AnalysisUiState, onBack: () -> Unit) {
                     }
                 } else {
                     val max = state.categories.maxOf { it.amount.minorUnits }.coerceAtLeast(1)
-                    items(state.categories, key = { it.category.name }) { item ->
+                    items(state.categories, key = { it.categoryId }) { item ->
                         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                             Column(Modifier.padding(PocketSpacing.md), verticalArrangement = Arrangement.spacedBy(PocketSpacing.xs)) {
                                 Row {
-                                    Text(categoryLabel(item.category), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                                    Text(categoryLabel(item.categoryId, state.customCategories), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                                     Text(money(item.amount), fontWeight = FontWeight.SemiBold)
                                 }
                                 LinearProgressIndicator(
@@ -122,24 +122,10 @@ private fun androidx.compose.foundation.layout.RowScope.AnalysisStat(label: Stri
 }
 
 @Composable
-private fun categoryLabel(category: TransactionCategoryId): String = stringResource(
-    when (category) {
-        TransactionCategoryId.SALARY -> R.string.category_salary
-        TransactionCategoryId.FREELANCE -> R.string.category_freelance
-        TransactionCategoryId.TRANSFER -> R.string.category_transfer
-        TransactionCategoryId.FOOD -> R.string.category_food
-        TransactionCategoryId.TRANSPORT -> R.string.category_transport
-        TransactionCategoryId.HOME -> R.string.category_home
-        TransactionCategoryId.HEALTH -> R.string.category_health
-        TransactionCategoryId.EDUCATION -> R.string.category_education
-        TransactionCategoryId.ENTERTAINMENT -> R.string.category_entertainment
-        TransactionCategoryId.SHOPPING -> R.string.category_shopping
-        TransactionCategoryId.SERVICES -> R.string.category_services
-        TransactionCategoryId.DEBT_PAYMENT -> R.string.category_debt_payment
-        TransactionCategoryId.SAVINGS -> R.string.category_savings
-        TransactionCategoryId.OTHER -> R.string.category_other
-    },
-)
+private fun categoryLabel(id: String?, customCategories: List<com.pocketmind.shared.domain.model.CustomCategory> = emptyList()): String =
+    id?.let { com.pocketmind.presentation.common.categoryLabel(it, customCategories) }
+        ?: stringResource(R.string.category_other)
+
 
 private fun money(value: Money): String = NumberFormat.getCurrencyInstance(
     Locale.Builder().setLanguage("es").setRegion("CO").build(),

@@ -22,6 +22,8 @@ import com.pocketmind.data.local.entity.RecurringObligationEntity
 import com.pocketmind.data.local.entity.SavingsPlanEntity
 import com.pocketmind.data.local.entity.SavingsMovementEntity
 import com.pocketmind.data.local.entity.SavingsProfileEntity
+import com.pocketmind.data.local.dao.CustomCategoryDao
+import com.pocketmind.data.local.entity.CustomCategoryEntity
 import com.pocketmind.data.local.entity.LoanPaymentEntity
 import com.pocketmind.data.local.entity.LoanProfileEntity
 import com.pocketmind.data.local.entity.TransactionEntity
@@ -47,13 +49,15 @@ import com.pocketmind.data.local.entity.SyncOutboxEntity
         SyncOutboxEntity::class,
         SyncControlEntity::class,
         BudgetEntity::class,
+        CustomCategoryEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 abstract class PocketMindDatabase : RoomDatabase() {
     abstract fun accountDao(): AccountDao
     abstract fun budgetDao(): BudgetDao
+    abstract fun customCategoryDao(): CustomCategoryDao
     abstract fun transactionDao(): TransactionDao
     abstract fun financialSetupDao(): FinancialSetupDao
     abstract fun manualFinanceDao(): ManualFinanceDao
@@ -278,6 +282,16 @@ abstract class PocketMindDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `custom_categories` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, " +
+                        "`createdAtEpochMillis` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+                )
+                createSyncTriggers(db, SyncTrigger("custom_categories", "id", "CUSTOM_CATEGORY"))
+            }
+        }
+
         /**
          * Migrations install this infrastructure for upgraded databases, while
          * the Room callback invokes it for both fresh and restored databases.
@@ -304,6 +318,7 @@ abstract class PocketMindDatabase : RoomDatabase() {
                 SyncTrigger("loan_profiles", "accountId", "LOAN_PROFILE"),
                 SyncTrigger("loan_payments", "id", "LOAN_PAYMENT"),
                 SyncTrigger("budgets", "id", "BUDGET"),
+                SyncTrigger("custom_categories", "id", "CUSTOM_CATEGORY"),
             ).forEach { trigger ->
                 if (tableExists(database, trigger.table)) {
                     createSyncTriggers(database, trigger)

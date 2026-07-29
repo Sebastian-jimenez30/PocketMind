@@ -21,10 +21,15 @@ import com.pocketmind.shared.domain.usecase.ObserveDashboardSummaryUseCase
 import com.pocketmind.shared.domain.usecase.GetFinancialAccountUseCase
 import com.pocketmind.shared.domain.usecase.GetTransactionUseCase
 import com.pocketmind.data.repository.RoomBudgetRepository
+import com.pocketmind.data.repository.RoomCustomCategoryRepository
 import com.pocketmind.shared.domain.repository.BudgetRepository
+import com.pocketmind.shared.domain.repository.CustomCategoryRepository
 import com.pocketmind.shared.domain.usecase.CreateBudgetUseCase
 import com.pocketmind.shared.domain.usecase.DeleteBudgetUseCase
+import com.pocketmind.shared.domain.usecase.DeleteCustomCategoryUseCase
 import com.pocketmind.shared.domain.usecase.ObserveBudgetSummariesUseCase
+import com.pocketmind.shared.domain.usecase.ObserveCustomCategoriesUseCase
+import com.pocketmind.shared.domain.usecase.SaveCustomCategoryUseCase
 import com.pocketmind.shared.domain.usecase.UpdateBudgetUseCase
 import com.pocketmind.shared.domain.usecase.ObserveActiveFinancialAccountsUseCase
 import com.pocketmind.shared.domain.usecase.CreditCardPaymentDateCalculator
@@ -76,6 +81,12 @@ abstract class RepositoryModule {
     abstract fun bindBudgetRepository(
         implementation: RoomBudgetRepository,
     ): BudgetRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindCustomCategoryRepository(
+        implementation: RoomCustomCategoryRepository,
+    ): CustomCategoryRepository
 
     @Binds
     @Singleton
@@ -165,5 +176,21 @@ abstract class RepositoryModule {
         fun provideDeleteBudgetUseCase(
             budgetRepository: BudgetRepository,
         ): DeleteBudgetUseCase = DeleteBudgetUseCase(budgetRepository)
+
+        @Provides
+        fun provideObserveCustomCategoriesUseCase(
+            repository: CustomCategoryRepository,
+        ): ObserveCustomCategoriesUseCase = ObserveCustomCategoriesUseCase(repository)
+
+        @Provides
+        fun provideSaveCustomCategoryUseCase(
+            repository: CustomCategoryRepository,
+        ): SaveCustomCategoryUseCase = SaveCustomCategoryUseCase(repository)
+
+        @Provides
+        fun provideDeleteCustomCategoryUseCase(
+            repository: CustomCategoryRepository,
+        ): DeleteCustomCategoryUseCase = DeleteCustomCategoryUseCase(repository)
     }
 }
+

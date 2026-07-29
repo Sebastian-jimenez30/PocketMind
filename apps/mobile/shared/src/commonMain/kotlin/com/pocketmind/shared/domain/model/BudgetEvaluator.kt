@@ -15,7 +15,7 @@ fun evaluateBudget(
     previousPeriodSpent: Money? = null,
 ): BudgetProgress {
     val validTransactions = transactions.filter { tx ->
-        tx.categoryId == budget.categoryId.name &&
+        tx.categoryId == budget.categoryId &&
             tx.occurredAtEpochMillis in budget.startDateEpochMillis..budget.endDateEpochMillis &&
             tx.status != TransactionStatus.IGNORED &&
             tx.amount.currency == budget.maxAmount.currency

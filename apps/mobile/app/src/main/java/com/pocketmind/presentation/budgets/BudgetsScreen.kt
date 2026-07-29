@@ -50,10 +50,13 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pocketmind.R
+import com.pocketmind.presentation.common.DynamicCategorySelector
+import com.pocketmind.presentation.common.categoryLabel
 import com.pocketmind.shared.domain.model.BudgetPeriodType
 import com.pocketmind.shared.domain.model.BudgetProgress
 import com.pocketmind.shared.domain.model.BudgetStatus
 import com.pocketmind.shared.domain.model.CurrencyCode
+import com.pocketmind.shared.domain.model.CustomCategory
 import com.pocketmind.shared.domain.model.Money
 import com.pocketmind.shared.domain.model.TransactionCategoryId
 import com.pocketmind.ui.components.PocketContextTopBar
@@ -73,6 +76,9 @@ fun BudgetsRoute(
         onBack = onBack,
         onCreateBudget = viewModel::createBudget,
         onDeleteBudget = viewModel::deleteBudget,
+        onCreateCustomCategory = viewModel::createCustomCategory,
+        onUpdateCustomCategory = viewModel::updateCustomCategory,
+        onDeleteCustomCategory = viewModel::deleteCustomCategory,
     )
 }
 
@@ -81,11 +87,15 @@ fun BudgetsRoute(
 fun BudgetsScreen(
     state: BudgetsUiState,
     onBack: () -> Unit,
-    onCreateBudget: (String, TransactionCategoryId, Long, CurrencyCode, BudgetPeriodType, Boolean) -> Unit,
+    onCreateBudget: (String, String, Long, CurrencyCode, BudgetPeriodType, Boolean) -> Unit,
     onDeleteBudget: (String) -> Unit,
+    onCreateCustomCategory: (String, (String) -> Unit) -> Unit = { _, _ -> },
+    onUpdateCustomCategory: (String, String) -> Unit = { _, _ -> },
+    onDeleteCustomCategory: (String) -> Unit = {},
 ) {
     var isCreating by remember { mutableStateOf(false) }
     var budgetToDelete by remember { mutableStateOf<BudgetProgress?>(null) }
+
 
     Box(
         modifier = Modifier
@@ -142,6 +152,7 @@ fun BudgetsScreen(
                     items(state.progressList, key = { it.budget.id }) { progress ->
                         BudgetCard(
                             progress = progress,
+                            customCategories = state.customCategories,
                             onDelete = { budgetToDelete = progress },
                         )
                     }
@@ -174,6 +185,10 @@ fun BudgetsScreen(
                     onCreateBudget(name, category, amount, CurrencyCode.COP, period, true)
                     isCreating = false
                 },
+                customCategories = state.customCategories,
+                onCreateCustomCategory = onCreateCustomCategory,
+                onUpdateCustomCategory = onUpdateCustomCategory,
+                onDeleteCustomCategory = onDeleteCustomCategory,
             )
         }
     }
@@ -205,6 +220,7 @@ fun BudgetsScreen(
 @Composable
 private fun BudgetCard(
     progress: BudgetProgress,
+    customCategories: List<CustomCategory> = emptyList(),
     onDelete: () -> Unit,
 ) {
     val budget = progress.budget
@@ -240,9 +256,10 @@ private fun BudgetCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = "${categoryLabel(budget.categoryId)} • ${periodLabel(budget.periodType)}",
+                        text = "${categoryLabel(budget.categoryId, customCategories)} • ${periodLabel(budget.periodType)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+
                     )
                 }
                 IconButton(onClick = onDelete) {
@@ -306,16 +323,17 @@ private fun BudgetCard(
 @Composable
 private fun CreateBudgetSheet(
     onDismiss: () -> Unit,
-    onCreate: (String, TransactionCategoryId, Long, BudgetPeriodType) -> Unit,
+    onCreate: (String, String, Long, BudgetPeriodType) -> Unit,
+    customCategories: List<CustomCategory> = emptyList(),
+    onCreateCustomCategory: (String, (String) -> Unit) -> Unit = { _, _ -> },
+    onUpdateCustomCategory: (String, String) -> Unit = { _, _ -> },
+    onDeleteCustomCategory: (String) -> Unit = {},
 ) {
     var name by remember { mutableStateOf("") }
     var amountText by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf(TransactionCategoryId.FOOD) }
+    var selectedCategoryId by remember { mutableStateOf(TransactionCategoryId.FOOD.name) }
     var selectedPeriod by remember { mutableStateOf(BudgetPeriodType.MONTHLY) }
 
-    val categories = remember {
-        TransactionCategoryId.entries
-    }
     val periods = remember {
         listOf(BudgetPeriodType.MONTHLY, BudgetPeriodType.WEEKLY, BudgetPeriodType.BIWEEKLY)
     }
@@ -355,17 +373,14 @@ private fun CreateBudgetSheet(
                 text = stringResource(R.string.budgets_category_label),
                 style = MaterialTheme.typography.labelLarge,
             )
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(PocketSpacing.sm),
-            ) {
-                items(categories) { category ->
-                    FilterChip(
-                        selected = selectedCategory == category,
-                        onClick = { selectedCategory = category },
-                        label = { Text(categoryLabel(category)) },
-                    )
-                }
-            }
+            DynamicCategorySelector(
+                selectedCategoryId = selectedCategoryId,
+                onSelectCategory = { selectedCategoryId = it },
+                customCategories = customCategories,
+                onCreateCustomCategory = onCreateCustomCategory,
+                onUpdateCustomCategory = onUpdateCustomCategory,
+                onDeleteCustomCategory = onDeleteCustomCategory,
+            )
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(PocketSpacing.xs)) {
@@ -389,7 +404,7 @@ private fun CreateBudgetSheet(
             text = stringResource(R.string.budgets_create_button),
             onClick = {
                 val amount = (amountText.toLongOrNull() ?: 0L)
-                onCreate(name.trim(), selectedCategory, amount, selectedPeriod)
+                onCreate(name.trim(), selectedCategoryId, amount, selectedPeriod)
             },
             enabled = isValid,
             modifier = Modifier.fillMaxWidth(),
@@ -397,25 +412,6 @@ private fun CreateBudgetSheet(
     }
 }
 
-@Composable
-private fun categoryLabel(category: TransactionCategoryId): String = stringResource(
-    when (category) {
-        TransactionCategoryId.SALARY -> R.string.category_salary
-        TransactionCategoryId.FREELANCE -> R.string.category_freelance
-        TransactionCategoryId.TRANSFER -> R.string.category_transfer
-        TransactionCategoryId.FOOD -> R.string.category_food
-        TransactionCategoryId.TRANSPORT -> R.string.category_transport
-        TransactionCategoryId.HOME -> R.string.category_home
-        TransactionCategoryId.HEALTH -> R.string.category_health
-        TransactionCategoryId.EDUCATION -> R.string.category_education
-        TransactionCategoryId.ENTERTAINMENT -> R.string.category_entertainment
-        TransactionCategoryId.SHOPPING -> R.string.category_shopping
-        TransactionCategoryId.SERVICES -> R.string.category_services
-        TransactionCategoryId.DEBT_PAYMENT -> R.string.category_debt_payment
-        TransactionCategoryId.SAVINGS -> R.string.category_savings
-        TransactionCategoryId.OTHER -> R.string.category_other
-    },
-)
 
 @Composable
 private fun periodLabel(period: BudgetPeriodType): String = stringResource(

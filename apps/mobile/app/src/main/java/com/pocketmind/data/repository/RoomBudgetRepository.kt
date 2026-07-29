@@ -32,7 +32,7 @@ class RoomBudgetRepository @Inject constructor(
 private fun BudgetEntity.toDomain() = Budget(
     id = id,
     name = name,
-    categoryId = TransactionCategoryId.valueOf(categoryId),
+    categoryId = categoryId,
     maxAmount = Money(maxAmountMinorUnits, CurrencyCode.valueOf(currency)),
     periodType = BudgetPeriodType.valueOf(periodType),
     startDateEpochMillis = startDateEpochMillis,
@@ -45,7 +45,7 @@ private fun BudgetEntity.toDomain() = Budget(
 private fun Budget.toEntity() = BudgetEntity(
     id = id,
     name = name,
-    categoryId = categoryId.name,
+    categoryId = categoryId,
     maxAmountMinorUnits = maxAmount.minorUnits,
     currency = maxAmount.currency.name,
     periodType = periodType.name,
@@ -55,3 +55,4 @@ private fun Budget.toEntity() = BudgetEntity(
     status = status.name,
     notificationThresholdPercent = notificationThresholdPercent,
 )
+

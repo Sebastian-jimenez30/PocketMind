@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.stateIn
 data class TransactionsUiState(
     val items: List<TransactionListItem> = emptyList(),
     val accounts: List<com.pocketmind.shared.domain.model.FinancialAccount> = emptyList(),
+    val customCategories: List<com.pocketmind.shared.domain.model.CustomCategory> = emptyList(),
     val isLoading: Boolean = true,
 )
 
@@ -28,11 +29,13 @@ data class TransactionListItem(
 class TransactionsViewModel @Inject constructor(
     transactionRepository: TransactionRepository,
     observeAccounts: ObserveActiveFinancialAccountsUseCase,
+    observeCustomCategories: com.pocketmind.shared.domain.usecase.ObserveCustomCategoriesUseCase,
 ) : ViewModel() {
     val uiState: StateFlow<TransactionsUiState> = combine(
         transactionRepository.observeAll(),
         observeAccounts(),
-    ) { transactions, accounts ->
+        observeCustomCategories(),
+    ) { transactions, accounts, customCategories ->
         val accountNames = accounts.associate { it.id to it.name }
         TransactionsUiState(
             items = transactions.map { transaction ->
@@ -43,6 +46,7 @@ class TransactionsViewModel @Inject constructor(
                 )
             },
             accounts = accounts,
+            customCategories = customCategories,
             isLoading = false,
         )
     }.stateIn(
@@ -51,3 +55,4 @@ class TransactionsViewModel @Inject constructor(
         initialValue = TransactionsUiState(),
     )
 }
+

@@ -180,6 +180,28 @@ class PocketMindDatabaseMigrationTest {
         migrated.close()
     }
 
+    @Test
+    fun migration7To8_createsCustomCategoriesTable() {
+        val initial = helper.createDatabase("migration-custom-cat-test", 7)
+        initial.close()
+
+        val migrated = helper.runMigrationsAndValidate(
+            "migration-custom-cat-test",
+            8,
+            true,
+            PocketMindDatabase.MIGRATION_7_8,
+        )
+
+        assertEquals(
+            1,
+            migrated.singleLong(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'custom_categories'",
+            ),
+        )
+        migrated.close()
+    }
+
+
     private fun SupportSQLiteDatabase.singleLong(query: String): Long =
         this.query(query).use { cursor ->
             check(cursor.moveToFirst())

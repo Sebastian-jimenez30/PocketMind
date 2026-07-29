@@ -6,15 +6,19 @@ import androidx.lifecycle.viewModelScope
 import com.pocketmind.presentation.common.toUserMessage
 import com.pocketmind.shared.domain.command.FinancialCommand
 import com.pocketmind.shared.domain.command.FinancialCommandResult
+import com.pocketmind.shared.domain.model.CustomCategory
 import com.pocketmind.shared.domain.model.FinancialAccount
 import com.pocketmind.shared.domain.model.FinancialAccountType
 import com.pocketmind.shared.domain.model.Money
 import com.pocketmind.shared.domain.model.TransactionCategoryId
 import com.pocketmind.shared.domain.model.TransactionSource
 import com.pocketmind.shared.domain.model.TransactionType
+import com.pocketmind.shared.domain.usecase.DeleteCustomCategoryUseCase
 import com.pocketmind.shared.domain.usecase.ExecuteFinancialCommandUseCase
 import com.pocketmind.shared.domain.usecase.GetTransactionUseCase
 import com.pocketmind.shared.domain.usecase.ObserveActiveFinancialAccountsUseCase
+import com.pocketmind.shared.domain.usecase.ObserveCustomCategoriesUseCase
+import com.pocketmind.shared.domain.usecase.SaveCustomCategoryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.util.UUID
 import java.time.Instant
@@ -33,7 +37,8 @@ data class TransactionEditorUiState(
     val accountId: String = "",
     val type: TransactionType = TransactionType.EXPENSE,
     val amount: String = "",
-    val category: TransactionCategoryId = TransactionCategoryId.OTHER,
+    val categoryId: String = TransactionCategoryId.FOOD.name,
+    val customCategories: List<CustomCategory> = emptyList(),
     val merchant: String = "",
     val note: String = "",
     val date: String = LocalDate.now().toDisplayDate(),
@@ -48,6 +53,9 @@ data class TransactionEditorUiState(
 class TransactionEditorViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     observeAccounts: ObserveActiveFinancialAccountsUseCase,
+    observeCustomCategoriesUseCase: ObserveCustomCategoriesUseCase,
+    private val saveCustomCategoryUseCase: SaveCustomCategoryUseCase,
+    private val deleteCustomCategoryUseCase: DeleteCustomCategoryUseCase,
     private val getTransaction: GetTransactionUseCase,
     private val executeFinancialCommand: ExecuteFinancialCommandUseCase,
 ) : ViewModel() {
@@ -60,20 +68,29 @@ class TransactionEditorViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            observeCustomCategoriesUseCase().collect { categories ->
+                _uiState.update { it.copy(customCategories = categories) }
+            }
+        }
+
+        viewModelScope.launch {
             observeAccounts().collect { accounts ->
                 val manualAccounts = accounts.filter {
                     it.type != FinancialAccountType.CREDIT_CARD &&
                         it.type != FinancialAccountType.SAVINGS &&
                         it.type != FinancialAccountType.LOAN
                 }
-                _uiState.update { state ->
-                    state.copy(
+                val currentAcc = _uiState.value.accountId
+                val selected = manualAccounts.firstOrNull { it.id == currentAcc } ?: manualAccounts.firstOrNull()
+                _uiState.update {
+                    it.copy(
                         accounts = manualAccounts,
-                        accountId = state.accountId.ifBlank { manualAccounts.firstOrNull()?.id.orEmpty() },
+                        accountId = selected?.id ?: "",
                     )
                 }
             }
         }
+
         initialId?.let { id ->
             viewModelScope.launch {
                 getTransaction(id)?.let { transaction ->
@@ -82,7 +99,7 @@ class TransactionEditorViewModel @Inject constructor(
                             accountId = transaction.accountId,
                             type = transaction.type,
                             amount = transaction.amount.minorUnits.toString(),
-                            category = transaction.categoryId?.let(TransactionCategoryId::valueOf) ?: TransactionCategoryId.OTHER,
+                            categoryId = transaction.categoryId ?: TransactionCategoryId.FOOD.name,
                             merchant = transaction.merchant.orEmpty(),
                             note = transaction.note.orEmpty(),
                             date = transaction.occurredAtEpochMillis.toDisplayDate(),
@@ -119,7 +136,7 @@ class TransactionEditorViewModel @Inject constructor(
                     amount = Money(amount, product.currency),
                     occurredAtEpochMillis = occurredAt,
                     source = TransactionSource.MANUAL,
-                    categoryId = state.category.name,
+                    categoryId = state.categoryId,
                     merchant = state.merchant,
                     note = state.note,
                 )
@@ -131,7 +148,7 @@ class TransactionEditorViewModel @Inject constructor(
                         amount = Money(amount, product.currency),
                         occurredAtEpochMillis = occurredAt,
                         source = TransactionSource.MANUAL,
-                        categoryId = state.category.name,
+                        categoryId = state.categoryId,
                         merchant = state.merchant,
                         note = state.note,
                     )
@@ -141,7 +158,7 @@ class TransactionEditorViewModel @Inject constructor(
                         amount = Money(amount, product.currency),
                         occurredAtEpochMillis = occurredAt,
                         source = TransactionSource.MANUAL,
-                        categoryId = state.category.name,
+                        categoryId = state.categoryId,
                         merchant = state.merchant,
                         note = state.note,
                     )
@@ -191,6 +208,42 @@ class TransactionEditorViewModel @Inject constructor(
                 }
             }.onFailure {
                 _uiState.update { it.copy(isSaving = false, error = "No pudimos eliminar el movimiento.") }
+            }
+        }
+    }
+
+    fun createCustomCategory(name: String, onCreated: (String) -> Unit = {}) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            val newCategory = CustomCategory(
+                id = UUID.randomUUID().toString(),
+                name = trimmed,
+                createdAtEpochMillis = System.currentTimeMillis(),
+            )
+            saveCustomCategoryUseCase(newCategory)
+            _uiState.update { state ->
+                val current = state.customCategories
+                if (current.any { it.id == newCategory.id }) state else state.copy(customCategories = current + newCategory)
+            }
+            onCreated(newCategory.id)
+        }
+    }
+
+    fun updateCustomCategory(id: String, newName: String) {
+        val trimmed = newName.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            val existing = _uiState.value.customCategories.find { it.id == id } ?: return@launch
+            saveCustomCategoryUseCase(existing.copy(name = trimmed))
+        }
+    }
+
+    fun deleteCustomCategory(id: String) {
+        viewModelScope.launch {
+            deleteCustomCategoryUseCase(id)
+            if (_uiState.value.categoryId == id) {
+                _uiState.update { it.copy(categoryId = TransactionCategoryId.FOOD.name) }
             }
         }
     }
