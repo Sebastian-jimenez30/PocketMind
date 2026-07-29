@@ -331,8 +331,10 @@ permiten popups cuadrados ni cuadrículas para opciones de longitud variable.
 
 Selector compacto para dos o tres opciones breves y simétricas. El texto no cambia al seleccionar: se
 mantiene estable y se diferencia con borde índigo de 2 dp y fondo translúcido
-`primaryContainer`. Los tipos de producto, categorías y demás colecciones se
-muestran en un menú de campo en vez de una cuadrícula o nube de chips.
+`primaryContainer`. Las colecciones extensas o de longitud variable se muestran
+en un menú de campo. Las categorías de movimientos son la excepción: usan un
+carrusel horizontal de opciones con icono, etiqueta estable, borde, fondo y
+marca de selección, porque deben reconocerse con rapidez sin desplegar una lista.
 
 Incluye label persistente, valor, helper/error, leading/trailing action y
 accesibilidad. El placeholder no reemplaza la etiqueta.
@@ -394,11 +396,16 @@ No mostrar simultáneamente todas las capacidades futuras.
 - edición y corrección accesibles;
 - estado automático identificable sin ruido visual.
 
-El registro manual es una sola pantalla dinámica. Primero muestra Operación y
-Producto; después presenta únicamente los campos necesarios para esa operación.
+El registro manual es una sola pantalla dinámica. Primero agrupa la intención en
+Gasto, Ingreso o Transferencia y después permite elegir el tipo específico. Las
+categorías aparecen como un carrusel horizontal identificable mediante icono,
+texto y estado seleccionado. El producto y los campos siguientes cambian dentro
+de la misma pantalla y solo presentan los datos necesarios para la elección.
 Cambiar la opción no abre un segundo formulario ni conserva campos irrelevantes.
-Las tasas, fechas de corte y fechas de pago pertenecen al producto y nunca se
-solicitan nuevamente al registrar una compra o un pago.
+El comercio no es obligatorio ni tiene campo propio; una descripción opcional
+recoge cualquier contexto adicional. Las tasas, fechas de corte y fechas de pago
+pertenecen al producto y nunca se solicitan nuevamente al registrar una compra o
+un pago.
 
 ### 10.4 Análisis
 
