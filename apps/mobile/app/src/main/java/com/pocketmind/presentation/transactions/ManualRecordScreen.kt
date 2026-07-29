@@ -1,28 +1,50 @@
 package com.pocketmind.presentation.transactions
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AccountBalanceWallet
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.DirectionsCar
+import androidx.compose.material.icons.rounded.Fastfood
+import androidx.compose.material.icons.rounded.HealthAndSafety
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.LocalMovies
+import androidx.compose.material.icons.rounded.MoreHoriz
+import androidx.compose.material.icons.rounded.Payments
+import androidx.compose.material.icons.rounded.ReceiptLong
+import androidx.compose.material.icons.rounded.Savings
+import androidx.compose.material.icons.rounded.School
+import androidx.compose.material.icons.rounded.ShoppingBag
+import androidx.compose.material.icons.rounded.Work
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,8 +54,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.SavedStateHandle
@@ -55,6 +81,7 @@ import com.pocketmind.shared.domain.usecase.ExecuteFinancialCommandUseCase
 import com.pocketmind.shared.domain.usecase.ManualFinanceUseCases
 import com.pocketmind.shared.domain.usecase.ObserveActiveFinancialAccountsUseCase
 import com.pocketmind.ui.components.PocketMessage
+import com.pocketmind.ui.components.PocketChoiceChip
 import com.pocketmind.ui.components.PocketContextTopBar
 import com.pocketmind.ui.components.PocketPrimaryButton
 import com.pocketmind.ui.components.pocketBringIntoViewOnFocus
@@ -71,21 +98,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-enum class ManualRecordType {
-    INCOME,
-    EXPENSE,
-    CARD_PURCHASE,
-    CARD_PAYMENT,
-    SAVINGS_DEPOSIT,
-    SAVINGS_WITHDRAWAL,
-    LOAN_PAYMENT,
-}
-
 data class ManualRecordUiState(
     val operation: ManualRecordType = ManualRecordType.EXPENSE,
     val products: List<FinancialAccount> = emptyList(),
     val productId: String = "",
-    val merchant: String = "",
     val category: TransactionCategoryId = TransactionCategoryId.SHOPPING,
     val amount: String = "",
     val installments: String = "1",
@@ -123,7 +139,7 @@ class ManualRecordViewModel @Inject constructor(
                 val firstLoad = _uiState.value.products.isEmpty()
                 _uiState.update { state ->
                     val selectedIsCompatible = products.any {
-                        it.id == state.productId && it.isCompatibleWith(state.operation)
+                        it.id == state.productId && it.type.isCompatibleWith(state.operation)
                     }
                     state.copy(
                         products = products,
@@ -147,6 +163,10 @@ class ManualRecordViewModel @Inject constructor(
         }
     }
 
+    fun selectGroup(group: ManualRecordGroup) {
+        selectOperation(group.defaultOperation())
+    }
+
     fun selectProduct(productId: String) {
         _uiState.update { it.copy(productId = productId, amount = "", sourceProductId = "", error = null) }
         prefillSuggestedAmount()
@@ -166,8 +186,8 @@ class ManualRecordViewModel @Inject constructor(
             product == null -> return showError("No encontramos el producto seleccionado.")
             amount == null -> return showError("Agrega un valor mayor que cero.")
             occurredAt == null -> return showError("Usa una fecha válida en formato dd/mm/aaaa.")
-            state.operation == ManualRecordType.CARD_PURCHASE && state.merchant.isBlank() ->
-                return showError("Escribe el comercio de la compra.")
+            state.operation.requiresRelatedProduct() && state.sourceProductId.isBlank() ->
+                return showError("Elige el producto de destino.")
         }
 
         viewModelScope.launch {
@@ -244,7 +264,7 @@ private fun ManualRecordUiState.toCommand(
         occurredAtEpochMillis = occurredAtEpochMillis,
         source = TransactionSource.MANUAL,
         categoryId = category.name,
-        merchant = merchant,
+        merchant = null,
         note = note,
     )
     ManualRecordType.EXPENSE -> FinancialCommand.RecordExpense(
@@ -254,13 +274,23 @@ private fun ManualRecordUiState.toCommand(
         occurredAtEpochMillis = occurredAtEpochMillis,
         source = TransactionSource.MANUAL,
         categoryId = category.name,
-        merchant = merchant,
+        merchant = null,
+        note = note,
+    )
+    ManualRecordType.TRANSFER -> FinancialCommand.Transfer(
+        commandId = commandId,
+        sourceProductId = productId,
+        destinationProductId = sourceProductId,
+        amount = amount,
+        occurredAtEpochMillis = occurredAtEpochMillis,
+        source = TransactionSource.MANUAL,
+        categoryId = TransactionCategoryId.TRANSFER.name,
         note = note,
     )
     ManualRecordType.CARD_PURCHASE -> FinancialCommand.RecordCardPurchase(
         commandId = commandId,
         cardId = productId,
-        merchant = merchant,
+        merchant = "Compra con tarjeta",
         principal = amount,
         installmentCount = installments.toIntOrNull() ?: 0,
         purchasedAtEpochMillis = occurredAtEpochMillis,
@@ -320,6 +350,7 @@ fun ManualRecordRoute(
     }
     ManualRecordScreen(
         state = state,
+        onSelectGroup = viewModel::selectGroup,
         onSelectOperation = viewModel::selectOperation,
         onSelectProduct = viewModel::selectProduct,
         onUpdate = viewModel::update,
@@ -332,13 +363,14 @@ fun ManualRecordRoute(
 @Composable
 private fun ManualRecordScreen(
     state: ManualRecordUiState,
+    onSelectGroup: (ManualRecordGroup) -> Unit,
     onSelectOperation: (ManualRecordType) -> Unit,
     onSelectProduct: (String) -> Unit,
     onUpdate: ((ManualRecordUiState) -> ManualRecordUiState) -> Unit,
     onSave: () -> Unit,
     onBack: () -> Unit,
 ) {
-    val compatibleProducts = state.products.filter { it.isCompatibleWith(state.operation) }
+    val compatibleProducts = state.products.filter { it.type.isCompatibleWith(state.operation) }
     val sourceProducts = state.products.filter {
         it.id != state.productId &&
             it.type != FinancialAccountType.CREDIT_CARD &&
@@ -357,14 +389,26 @@ private fun ManualRecordScreen(
                 .padding(horizontal = PocketSpacing.lg, vertical = PocketSpacing.md),
             verticalArrangement = Arrangement.spacedBy(PocketSpacing.md),
         ) {
-            SelectionDropdown(
-                label = stringResource(R.string.manual_record_operation),
-                selected = stringResource(state.operation.labelRes()),
-                options = ManualRecordType.entries.map { it.name to stringResource(it.labelRes()) },
-                onSelect = { onSelectOperation(ManualRecordType.valueOf(it)) },
+            MovementGroupSelector(
+                selected = state.operation.group,
+                onSelect = onSelectGroup,
             )
             SelectionDropdown(
-                label = stringResource(R.string.manual_record_product),
+                label = stringResource(R.string.manual_record_type),
+                selectedId = state.operation.name,
+                selected = stringResource(state.operation.labelRes()),
+                options = state.operation.group.operations()
+                    .map { it.name to stringResource(it.labelRes()) },
+                onSelect = { onSelectOperation(ManualRecordType.valueOf(it)) },
+            )
+            CategoryCarousel(
+                categories = state.operation.categories(),
+                selected = state.category,
+                onSelect = { category -> onUpdate { it.copy(category = category) } },
+            )
+            SelectionDropdown(
+                label = stringResource(state.operation.primaryProductLabelRes()),
+                selectedId = state.productId,
                 selected = compatibleProducts.firstOrNull { it.id == state.productId }?.name
                     ?: stringResource(R.string.manual_record_choose_product),
                 options = compatibleProducts.map { it.id to it.name },
@@ -374,32 +418,6 @@ private fun ManualRecordScreen(
                 PocketMessage(stringResource(R.string.manual_record_no_products), isError = false)
             }
 
-            if (state.operation.showsMerchant()) {
-                FormField(
-                    value = state.merchant,
-                    onValueChange = { value -> onUpdate { it.copy(merchant = value) } },
-                    label = stringResource(
-                        if (state.operation == ManualRecordType.CARD_PURCHASE) {
-                            R.string.manual_action_merchant
-                        } else {
-                            R.string.transaction_editor_merchant
-                        },
-                    ),
-                    placeholder = stringResource(
-                        if (state.operation == ManualRecordType.CARD_PURCHASE) {
-                            R.string.manual_action_merchant_example
-                        } else {
-                            R.string.transaction_editor_merchant_example
-                        },
-                    ),
-                )
-            }
-            if (state.operation.showsCategory()) {
-                CategoryDropdown(
-                    selected = state.category,
-                    onSelect = { category -> onUpdate { it.copy(category = category) } },
-                )
-            }
             FormField(
                 value = state.amount,
                 onValueChange = { value -> onUpdate { it.copy(amount = value.filter(Char::isDigit)) } },
@@ -427,20 +445,23 @@ private fun ManualRecordScreen(
             )
             if (state.operation.showsSourceProduct()) {
                 SelectionDropdown(
-                    label = stringResource(
-                        if (
-                            state.operation == ManualRecordType.CARD_PAYMENT ||
-                            state.operation == ManualRecordType.LOAN_PAYMENT
-                        ) {
-                            R.string.manual_action_source
-                        } else {
-                            R.string.manual_action_savings_source
-                        },
-                    ),
+                    label = stringResource(state.operation.relatedProductLabelRes()),
+                    selectedId = state.sourceProductId,
                     selected = sourceProducts.firstOrNull { it.id == state.sourceProductId }?.name
-                        ?: stringResource(R.string.manual_action_no_source),
-                    options = listOf("" to stringResource(R.string.manual_action_no_source)) +
-                        sourceProducts.map { it.id to it.name },
+                        ?: stringResource(
+                            if (state.operation.requiresRelatedProduct()) {
+                                R.string.manual_record_choose_destination
+                            } else {
+                                R.string.manual_action_no_source
+                            },
+                        ),
+                    options = (
+                        if (state.operation.requiresRelatedProduct()) {
+                            emptyList()
+                        } else {
+                            listOf("" to stringResource(R.string.manual_action_no_source))
+                        }
+                    ) + sourceProducts.map { it.id to it.name },
                     onSelect = { id -> onUpdate { it.copy(sourceProductId = id) } },
                 )
             }
@@ -467,71 +488,181 @@ private fun ManualRecordScreen(
 @Composable
 private fun SelectionDropdown(
     label: String,
+    selectedId: String,
     selected: String,
     options: List<Pair<String, String>>,
     onSelect: (String) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
-        OutlinedTextField(
-            value = selected,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text(label) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-            modifier = Modifier.fillMaxWidth()
-                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
-            shape = RoundedCornerShape(16.dp),
+    Column(verticalArrangement = Arrangement.spacedBy(PocketSpacing.xs)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            shape = RoundedCornerShape(16.dp),
+        ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
+                shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp)
+                        .padding(horizontal = PocketSpacing.md, vertical = PocketSpacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = selected,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded)
+                }
+            }
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = MaterialTheme.colorScheme.surface,
+            ) {
+                options.forEach { (id, text) ->
+                    DropdownMenuItem(
+                        text = { Text(text) },
+                        trailingIcon = {
+                            if (id == selectedId) {
+                                Icon(
+                                    imageVector = Icons.Rounded.CheckCircle,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        },
+                        onClick = {
+                            onSelect(id)
+                            expanded = false
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MovementGroupSelector(
+    selected: ManualRecordGroup,
+    onSelect: (ManualRecordGroup) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(PocketSpacing.xs)) {
+        Text(
+            text = stringResource(R.string.manual_record_movement),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(PocketSpacing.xs),
         ) {
-            options.forEach { (id, text) ->
-                DropdownMenuItem(
-                    text = { Text(text) },
-                    onClick = {
-                        onSelect(id)
-                        expanded = false
-                    },
+            ManualRecordGroup.entries.forEach { group ->
+                PocketChoiceChip(
+                    label = stringResource(group.labelRes()),
+                    selected = selected == group,
+                    onClick = { onSelect(group) },
+                    modifier = Modifier.weight(1f),
                 )
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CategoryDropdown(
+private fun CategoryCarousel(
+    categories: List<TransactionCategoryId>,
     selected: TransactionCategoryId,
     onSelect: (TransactionCategoryId) -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
-        OutlinedTextField(
-            value = stringResource(selected.labelRes()),
-            onValueChange = {},
-            readOnly = true,
-            label = { Text(stringResource(R.string.transaction_editor_category)) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-            modifier = Modifier.fillMaxWidth()
-                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
-            shape = RoundedCornerShape(16.dp),
+    Column(verticalArrangement = Arrangement.spacedBy(PocketSpacing.xs)) {
+        Text(
+            text = stringResource(R.string.transaction_editor_category),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            shape = RoundedCornerShape(16.dp),
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(PocketSpacing.xs),
         ) {
-            TransactionCategoryId.entries.forEach { category ->
-                DropdownMenuItem(
-                    text = { Text(stringResource(category.labelRes())) },
-                    onClick = {
-                        onSelect(category)
-                        expanded = false
+            items(categories, key = TransactionCategoryId::name) { category ->
+                val isSelected = selected == category
+                Surface(
+                    modifier = Modifier
+                        .widthIn(min = 104.dp)
+                        .heightIn(min = 88.dp)
+                        .selectable(
+                            selected = isSelected,
+                            onClick = { onSelect(category) },
+                            role = Role.RadioButton,
+                        ),
+                    shape = RoundedCornerShape(18.dp),
+                    color = if (isSelected) {
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f)
+                    } else {
+                        MaterialTheme.colorScheme.surface
                     },
-                )
+                    border = BorderStroke(
+                        width = if (isSelected) 2.dp else 1.dp,
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.outline
+                        },
+                    ),
+                ) {
+                    Box(
+                        modifier = Modifier.padding(
+                            horizontal = PocketSpacing.md,
+                            vertical = PocketSpacing.sm,
+                        ),
+                    ) {
+                        Column(
+                            modifier = Modifier.align(Alignment.Center),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(PocketSpacing.xs),
+                        ) {
+                            Icon(
+                                imageVector = category.icon(),
+                                contentDescription = null,
+                                tint = if (isSelected) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            )
+                            Text(
+                                text = stringResource(category.labelRes()),
+                                style = MaterialTheme.typography.labelMedium,
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                            )
+                        }
+                        if (isSelected) {
+                            Icon(
+                                imageVector = Icons.Rounded.CheckCircle,
+                                contentDescription = stringResource(R.string.manual_record_selected),
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .size(18.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -553,54 +684,60 @@ private fun FormField(
         placeholder = { Text(placeholder) },
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         singleLine = singleLine,
-        minLines = if (singleLine) 1 else 3,
+        minLines = if (singleLine) 1 else 2,
+        maxLines = if (singleLine) 1 else 3,
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth().pocketBringIntoViewOnFocus(),
     )
 }
 
-private fun FinancialAccount.isCompatibleWith(operation: ManualRecordType): Boolean = when (operation) {
-    ManualRecordType.INCOME, ManualRecordType.EXPENSE ->
-        type == FinancialAccountType.BANK_ACCOUNT || type == FinancialAccountType.CASH
-    ManualRecordType.CARD_PURCHASE, ManualRecordType.CARD_PAYMENT ->
-        type == FinancialAccountType.CREDIT_CARD
-    ManualRecordType.SAVINGS_DEPOSIT, ManualRecordType.SAVINGS_WITHDRAWAL ->
-        type == FinancialAccountType.SAVINGS
-    ManualRecordType.LOAN_PAYMENT -> type == FinancialAccountType.LOAN
-}
-
-private fun ManualRecordType.defaultCategory(): TransactionCategoryId = when (this) {
-    ManualRecordType.INCOME -> TransactionCategoryId.SALARY
-    ManualRecordType.EXPENSE, ManualRecordType.CARD_PURCHASE -> TransactionCategoryId.SHOPPING
-    ManualRecordType.CARD_PAYMENT, ManualRecordType.LOAN_PAYMENT -> TransactionCategoryId.DEBT_PAYMENT
-    ManualRecordType.SAVINGS_DEPOSIT, ManualRecordType.SAVINGS_WITHDRAWAL ->
-        TransactionCategoryId.SAVINGS
-}
-
-private fun ManualRecordType.showsMerchant(): Boolean =
-    this == ManualRecordType.INCOME ||
-        this == ManualRecordType.EXPENSE ||
-        this == ManualRecordType.CARD_PURCHASE
-
-private fun ManualRecordType.showsCategory(): Boolean =
-    this == ManualRecordType.INCOME ||
-        this == ManualRecordType.EXPENSE ||
-        this == ManualRecordType.CARD_PURCHASE
-
 private fun ManualRecordType.showsSourceProduct(): Boolean =
-    this == ManualRecordType.CARD_PAYMENT ||
+    this == ManualRecordType.TRANSFER ||
+        this == ManualRecordType.CARD_PAYMENT ||
         this == ManualRecordType.SAVINGS_DEPOSIT ||
         this == ManualRecordType.SAVINGS_WITHDRAWAL ||
         this == ManualRecordType.LOAN_PAYMENT
 
+private fun ManualRecordGroup.labelRes(): Int = when (this) {
+    ManualRecordGroup.EXPENSE -> R.string.transactions_expense
+    ManualRecordGroup.INCOME -> R.string.transactions_income
+    ManualRecordGroup.TRANSFER -> R.string.manual_record_transfer_group
+}
+
 private fun ManualRecordType.labelRes(): Int = when (this) {
     ManualRecordType.INCOME -> R.string.transactions_income
     ManualRecordType.EXPENSE -> R.string.transactions_expense
+    ManualRecordType.TRANSFER -> R.string.manual_record_own_transfer
     ManualRecordType.CARD_PURCHASE -> R.string.manual_record_card_purchase
     ManualRecordType.CARD_PAYMENT -> R.string.manual_record_card_payment
     ManualRecordType.SAVINGS_DEPOSIT -> R.string.manual_record_savings_deposit
     ManualRecordType.SAVINGS_WITHDRAWAL -> R.string.manual_record_savings_withdrawal
     ManualRecordType.LOAN_PAYMENT -> R.string.manual_record_loan_payment
+}
+
+private fun ManualRecordType.primaryProductLabelRes(): Int = when (this) {
+    ManualRecordType.TRANSFER -> R.string.manual_record_origin
+    ManualRecordType.CARD_PURCHASE,
+    ManualRecordType.CARD_PAYMENT,
+    -> R.string.manual_record_card
+    ManualRecordType.SAVINGS_DEPOSIT,
+    ManualRecordType.SAVINGS_WITHDRAWAL,
+    -> R.string.manual_record_savings
+    ManualRecordType.LOAN_PAYMENT -> R.string.manual_record_loan
+    ManualRecordType.INCOME,
+    ManualRecordType.EXPENSE,
+    -> R.string.manual_record_product
+}
+
+private fun ManualRecordType.relatedProductLabelRes(): Int = when (this) {
+    ManualRecordType.TRANSFER,
+    ManualRecordType.SAVINGS_WITHDRAWAL,
+    -> R.string.manual_record_destination
+    ManualRecordType.SAVINGS_DEPOSIT -> R.string.manual_record_origin
+    ManualRecordType.CARD_PAYMENT,
+    ManualRecordType.LOAN_PAYMENT,
+    -> R.string.manual_action_source
+    else -> R.string.manual_record_product
 }
 
 private fun TransactionCategoryId.labelRes(): Int = when (this) {
@@ -618,6 +755,23 @@ private fun TransactionCategoryId.labelRes(): Int = when (this) {
     TransactionCategoryId.DEBT_PAYMENT -> R.string.category_debt_payment
     TransactionCategoryId.SAVINGS -> R.string.category_savings
     TransactionCategoryId.OTHER -> R.string.category_other
+}
+
+private fun TransactionCategoryId.icon(): ImageVector = when (this) {
+    TransactionCategoryId.SALARY -> Icons.Rounded.Payments
+    TransactionCategoryId.FREELANCE -> Icons.Rounded.Work
+    TransactionCategoryId.TRANSFER -> Icons.Rounded.AccountBalanceWallet
+    TransactionCategoryId.FOOD -> Icons.Rounded.Fastfood
+    TransactionCategoryId.TRANSPORT -> Icons.Rounded.DirectionsCar
+    TransactionCategoryId.HOME -> Icons.Rounded.Home
+    TransactionCategoryId.HEALTH -> Icons.Rounded.HealthAndSafety
+    TransactionCategoryId.EDUCATION -> Icons.Rounded.School
+    TransactionCategoryId.ENTERTAINMENT -> Icons.Rounded.LocalMovies
+    TransactionCategoryId.SHOPPING -> Icons.Rounded.ShoppingBag
+    TransactionCategoryId.SERVICES -> Icons.Rounded.ReceiptLong
+    TransactionCategoryId.DEBT_PAYMENT -> Icons.Rounded.ReceiptLong
+    TransactionCategoryId.SAVINGS -> Icons.Rounded.Savings
+    TransactionCategoryId.OTHER -> Icons.Rounded.MoreHoriz
 }
 
 private fun String.dateOnly(): String = filter { it.isDigit() || it == '/' }.take(10)
