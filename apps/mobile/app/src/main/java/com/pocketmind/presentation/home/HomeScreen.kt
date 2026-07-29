@@ -69,9 +69,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -469,7 +466,7 @@ private fun ProductsSection(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = stringResource(R.string.home_action_products),
+                text = stringResource(R.string.home_section_products),
                 style = MaterialTheme.typography.titleLarge,
             )
             TextButton(onClick = onManageAccounts) {
@@ -849,7 +846,7 @@ private fun QuickActionsSheet(
             )
             QuickActionSheetRow(
                 icon = Icons.Rounded.AccountBalanceWallet,
-                label = stringResource(R.string.home_fab_action_products),
+                label = stringResource(R.string.home_action_products),
                 onClick = onManageAccounts,
             )
             QuickActionSheetRow(
