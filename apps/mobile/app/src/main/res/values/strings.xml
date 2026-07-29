@@ -61,6 +61,17 @@
     <string name="nav_analysis">Análisis</string>
     <string name="nav_profile">Perfil</string>
 
+    <string name="home_section_products">Mis productos</string>
+    <string name="home_section_budgets">Presupuestos</string>
+    <string name="home_budgets_empty">No hay presupuestos activos en este momento.</string>
+    <string name="home_see_all">Ver todos</string>
+    <string name="home_fab_action_record">Registrar movimiento</string>
+    <string name="home_fab_action_expense">Nuevo gasto</string>
+    <string name="home_fab_action_income">Nuevo ingreso</string>
+    <string name="home_fab_action_products">Gestionar productos</string>
+    <string name="home_fab_action_budgets">Ver presupuestos</string>
+    <string name="home_fab_action_assistant">Asistente IA PocketMind</string>
+
     <string name="profile_title">Perfil</string>
     <string name="profile_back">Volver</string>
     <string name="profile_default_name">Tu perfil</string>

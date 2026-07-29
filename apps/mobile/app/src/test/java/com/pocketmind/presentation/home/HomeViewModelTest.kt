@@ -15,7 +15,13 @@ import com.pocketmind.shared.domain.model.LoanProfile
 import com.pocketmind.shared.domain.repository.FinancialAccountRepository
 import com.pocketmind.shared.domain.repository.ManualFinanceRepository
 import com.pocketmind.shared.domain.repository.TransactionRepository
+import com.pocketmind.shared.domain.model.Budget
+import com.pocketmind.shared.domain.model.CustomCategory
+import com.pocketmind.shared.domain.repository.BudgetRepository
+import com.pocketmind.shared.domain.repository.CustomCategoryRepository
 import com.pocketmind.shared.domain.usecase.ObserveActiveFinancialAccountsUseCase
+import com.pocketmind.shared.domain.usecase.ObserveBudgetSummariesUseCase
+import com.pocketmind.shared.domain.usecase.ObserveCustomCategoriesUseCase
 import com.pocketmind.shared.domain.usecase.ManualFinanceUseCases
 import kotlinx.coroutines.flow.emptyFlow
 import org.junit.Assert.assertEquals
@@ -33,6 +39,18 @@ class HomeViewModelTest {
             override fun observeAll() = emptyFlow<List<FinancialTransaction>>()
             override suspend fun getById(id: String): FinancialTransaction? = null
             override suspend fun save(transaction: FinancialTransaction) = Unit
+            override suspend fun delete(id: String) = Unit
+        }
+        val budgetsRepo = object : BudgetRepository {
+            override fun observeAll() = emptyFlow<List<Budget>>()
+            override suspend fun getById(id: String): Budget? = null
+            override suspend fun save(budget: Budget) = Unit
+            override suspend fun delete(id: String) = Unit
+        }
+        val categoriesRepo = object : CustomCategoryRepository {
+            override fun observeAll() = emptyFlow<List<CustomCategory>>()
+            override suspend fun getById(id: String): CustomCategory? = null
+            override suspend fun save(category: CustomCategory) = Unit
             override suspend fun delete(id: String) = Unit
         }
         val manualFinance = object : ManualFinanceRepository {
@@ -88,6 +106,8 @@ class HomeViewModelTest {
                 override suspend fun changePassword(password: String) = Unit
                 override suspend fun signOut() = Unit
             },
+            ObserveBudgetSummariesUseCase(budgetsRepo, transactions),
+            ObserveCustomCategoriesUseCase(categoriesRepo),
         )
 
         assertEquals(HomeUiState.Loading, viewModel.uiState.value)

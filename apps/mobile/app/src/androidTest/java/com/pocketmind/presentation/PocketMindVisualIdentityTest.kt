@@ -66,7 +66,6 @@ class PocketMindVisualIdentityTest {
         }
 
         composeRule.onNodeWithText("Panorama").assertIsDisplayed()
-        composeRule.onNodeWithText("Acciones").assertIsDisplayed()
         composeRule.onNodeWithTag(PocketMindTestTags.HOME_CONTENT)
             .performScrollToNode(hasText("Productos"))
         composeRule.onNodeWithText("Productos").assertIsDisplayed()
