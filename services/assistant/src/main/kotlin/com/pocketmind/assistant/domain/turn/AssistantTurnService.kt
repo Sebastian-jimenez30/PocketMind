@@ -205,7 +205,37 @@ class AssistantTurnService(
         } else {
             null
         }
-        val reply = when (resolution) {
+        val additionalResolutions = decision.additionalDecisions
+            .take(MAX_ACTIONS_PER_TURN - 1)
+            .mapIndexed { idx, additional ->
+                resolveProposal(additional, readService, "$turnId-$idx")
+            }
+        val additionalDrafts = additionalResolutions.mapIndexedNotNull { idx, addRes ->
+            when (addRes) {
+                is Resolution.Proposal -> {
+                    val key = idempotencyKey("$turnId-$idx")
+                    val addDraft = memoryRepository.getDraftByIdempotencyKey(
+                        session,
+                        key,
+                    ) ?: memoryRepository.createDraft(
+                        session,
+                        NewCommandDraft(
+                            id = stableUuid("draft:$turnId-$idx"),
+                            conversationId = conversationId,
+                            commandType = addRes.commandType,
+                            commandPayload = addRes.commandPayload,
+                            commandSchemaVersion = CURRENT_FINANCIAL_COMMAND_SCHEMA_VERSION,
+                            idempotencyKey = key,
+                            financialStateVersion = addRes.financialStateVersion,
+                            expiresAt = clock.instant().plus(DRAFT_TTL),
+                        ),
+                    )
+                    addRes.toPreview(addDraft)
+                }
+                else -> null
+            }
+        }
+        val baseReply = when (resolution) {
             is Resolution.Clarification -> resolution.message
             is Resolution.Conversation -> resolution.message
             is Resolution.Unsupported -> resolution.message
@@ -213,6 +243,23 @@ class AssistantTurnService(
                 "tus finanzas y ayudarte con movimientos, productos, tarjetas, " +
                 "ahorros o préstamos."
             is Resolution.Proposal -> proposalReply(resolution)
+        }
+        val unresolvedAdditional = additionalResolutions
+            .filterIsInstance<Resolution.Clarification>()
+            .map(Resolution.Clarification::message)
+            .distinct()
+        val movementCount = (if (resolution is Resolution.Proposal) 1 else 0) +
+            additionalDrafts.size
+        val reply = buildString {
+            if (movementCount > 1) {
+                append("Interpreté $movementCount movimientos y los registraré por separado.")
+            } else {
+                append(baseReply)
+            }
+            if (unresolvedAdditional.isNotEmpty()) {
+                append(" ")
+                append(unresolvedAdditional.joinToString(" "))
+            }
         }
         val assistantMessage = memoryRepository.appendMessage(
             session,
@@ -245,6 +292,7 @@ class AssistantTurnService(
             } else {
                 null
             },
+            additionalDrafts = additionalDrafts,
         )
     }
 
@@ -258,6 +306,7 @@ class AssistantTurnService(
         is AssistantProposalResolution.Clarification ->
             Resolution.Clarification(result.message)
         is AssistantProposalResolution.Proposal -> Resolution.Proposal(
+            commandId = result.command.commandId,
             commandType = result.command.commandType,
             commandPayload = Json.parseToJsonElement(
                 FinancialCommandCodec.encode(result.command),
@@ -294,10 +343,18 @@ class AssistantTurnService(
             session,
             idempotencyKey(userMessage.turnId),
         )
+        val additionalDrafts = (0 until MAX_ACTIONS_PER_TURN - 1)
+            .mapNotNull { index ->
+                memoryRepository.getDraftByIdempotencyKey(
+                    session,
+                    idempotencyKey("${userMessage.turnId}-$index"),
+                )
+            }
+            .mapNotNull { stored -> previewFromStoredDraft(session, stored) }
         return AssistantTurnResponse(
             conversationId = userMessage.conversationId,
             turnId = userMessage.turnId,
-            status = if (draft == null) {
+            status = if (draft == null && additionalDrafts.isEmpty()) {
                 AssistantTurnStatus.CLARIFICATION
             } else {
                 AssistantTurnStatus.PROPOSAL
@@ -306,6 +363,7 @@ class AssistantTurnService(
             userMessage = userMessage.toTransport(),
             assistantMessage = assistantMessage.toTransport(),
             draft = draft?.let { previewFromStoredDraft(session, it) },
+            additionalDrafts = additionalDrafts,
         )
     }
 
@@ -323,6 +381,7 @@ class AssistantTurnService(
         val primaryName = values.primaryProductName ?: primary?.name ?: return null
         return AssistantDraftPreview(
             id = draft.id,
+            commandId = command.commandId,
             version = draft.version,
             commandType = draft.commandType,
             amountMinorUnits = values.amount?.minorUnits,
@@ -344,32 +403,19 @@ class AssistantTurnService(
     }
 
     private fun proposalReply(value: Resolution.Proposal): String = when (value.commandType) {
-        "record_income" ->
-            "Preparé un ingreso en ${value.primary.name}. Revísalo antes de guardarlo."
-        "record_expense" ->
-            "Preparé un gasto en ${value.primary.name}. Revísalo antes de guardarlo."
-        "transfer" ->
-            "Preparé una transferencia de ${value.primary.name} a " +
-                "${value.destination?.name}. Revísala antes de guardarla."
-        "create_product" ->
-            "Preparé el nuevo producto ${value.primary.name}. Revisa su configuración."
-        "update_product" ->
-            "Preparé los cambios de ${value.primary.name}. Revísalos antes de guardar."
-        "archive_product" ->
-            "Preparé el archivo de ${value.primary.name}. Revísalo antes de continuar."
-        "record_card_purchase" ->
-            "Preparé la compra con ${value.primary.name}. Revisa el valor y las cuotas."
-        "record_card_payment" ->
-            "Preparé el pago de ${value.primary.name}. Revísalo antes de guardar."
-        "record_savings_movement" ->
-            "Preparé el movimiento de ${value.primary.name}. Revísalo antes de guardar."
-        "record_loan_payment" ->
-            "Preparé el pago de ${value.primary.name}. Revísalo antes de guardar."
-        "update_transaction" ->
-            "Preparé la corrección del movimiento. Revísala antes de guardar."
-        "delete_transaction" ->
-            "Preparé la eliminación del movimiento. Revísala antes de continuar."
-        else -> "Preparé una propuesta. Revísala antes de guardarla."
+        "record_income" -> "Registraré este ingreso en ${value.primary.name}:"
+        "record_expense" -> "Registraré este gasto en ${value.primary.name}:"
+        "transfer" -> "Registraré este movimiento de ${value.primary.name} a ${value.destination?.name}:"
+        "record_card_purchase" -> "Registraré esta compra con ${value.primary.name}:"
+        "record_card_payment" -> "Registraré este pago de ${value.primary.name}:"
+        "record_savings_movement" -> "Registraré este movimiento de ${value.primary.name}:"
+        "record_loan_payment" -> "Registraré este pago de ${value.primary.name}:"
+        "create_product" -> "Preparé el nuevo producto ${value.primary.name}:"
+        "update_product" -> "Preparé la actualización de ${value.primary.name}:"
+        "archive_product" -> "Preparé el archivo de ${value.primary.name}:"
+        "update_transaction" -> "Preparé la actualización del movimiento:"
+        "delete_transaction" -> "Preparé la eliminación del movimiento:"
+        else -> "Preparé esta acción:"
     }
 
     private fun clarificationFor(fields: List<String>): String {
@@ -389,6 +435,7 @@ class AssistantTurnService(
         draft: AssistantCommandDraft,
     ): AssistantDraftPreview = AssistantDraftPreview(
         id = draft.id,
+        commandId = commandId,
         version = draft.version,
         commandType = commandType,
         amountMinorUnits = amountMinorUnits,
@@ -413,6 +460,7 @@ class AssistantTurnService(
         data class Conversation(val message: String) : Resolution
         data class Unsupported(val message: String?) : Resolution
         data class Proposal(
+            val commandId: String,
             val commandType: String,
             val commandPayload: JsonObject,
             val financialStateVersion: Long,
@@ -598,6 +646,7 @@ class AssistantTurnService(
     private companion object {
         const val HISTORY_LIMIT = 80
         const val TITLE_LIMIT = 80
+        const val MAX_ACTIONS_PER_TURN = 5
         val DRAFT_TTL: Duration = Duration.ofMinutes(15)
     }
 }

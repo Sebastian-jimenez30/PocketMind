@@ -67,6 +67,7 @@ import com.pocketmind.shared.domain.model.Money
 import com.pocketmind.shared.domain.model.TransactionCategoryId
 import com.pocketmind.shared.domain.model.TransactionSource
 import com.pocketmind.shared.domain.model.TransactionType
+import com.pocketmind.shared.domain.command.recordedMovementCommandId
 import com.pocketmind.ui.components.PocketPrimaryButton
 import com.pocketmind.ui.components.PocketContextTopBar
 import com.pocketmind.ui.components.pocketBringIntoViewOnFocus
@@ -82,12 +83,20 @@ import java.util.Date
 fun TransactionsRoute(
     onCreate: () -> Unit,
     onEdit: (String) -> Unit,
+    onEditAssistant: (commandId: String, transactionId: String) -> Unit,
     onManageAccounts: () -> Unit,
     onBack: () -> Unit,
     viewModel: TransactionsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    TransactionsScreen(state, onCreate, onEdit, onManageAccounts, onBack)
+    TransactionsScreen(
+        state,
+        onCreate,
+        onEdit,
+        onEditAssistant,
+        onManageAccounts,
+        onBack,
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -96,6 +105,7 @@ fun TransactionsScreen(
     state: TransactionsUiState,
     onCreate: () -> Unit,
     onEdit: (String) -> Unit,
+    onEditAssistant: (commandId: String, transactionId: String) -> Unit,
     onManageAccounts: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -277,7 +287,12 @@ fun TransactionsScreen(
             when {
                 state.isLoading -> LoadingState()
                 state.items.isEmpty() -> EmptyTransactions(onCreate, onManageAccounts)
-                else -> TransactionsList(filtered, onEdit, state.customCategories)
+                else -> TransactionsList(
+                    filtered,
+                    onEdit,
+                    onEditAssistant,
+                    state.customCategories,
+                )
             }
         }
     }
@@ -320,6 +335,7 @@ private fun EmptyTransactions(onCreate: () -> Unit, onManageAccounts: () -> Unit
 private fun TransactionsList(
     items: List<TransactionListItem>,
     onEdit: (String) -> Unit,
+    onEditAssistant: (commandId: String, transactionId: String) -> Unit,
     customCategories: List<com.pocketmind.shared.domain.model.CustomCategory> = emptyList(),
 ) {
     LazyColumn(
@@ -333,7 +349,7 @@ private fun TransactionsList(
                 Text(day, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = PocketSpacing.xs))
             }
             items(dayItems, key = { it.transaction.id }) { item ->
-                TransactionRow(item, onEdit, customCategories)
+                TransactionRow(item, onEdit, onEditAssistant, customCategories)
             }
         }
     }
@@ -382,18 +398,37 @@ private fun FilterDropdown(
 private fun TransactionRow(
     item: TransactionListItem,
     onEdit: (String) -> Unit,
+    onEditAssistant: (commandId: String, transactionId: String) -> Unit,
     customCategories: List<com.pocketmind.shared.domain.model.CustomCategory> = emptyList(),
 ) {
     val transaction = item.transaction
     val isIncome = transaction.type == TransactionType.INCOME
     val isTransfer = transaction.type == TransactionType.TRANSFER
-    val editable = !transaction.id.startsWith("purchase-") &&
+    val manuallyEditable = !transaction.id.startsWith("purchase-") &&
         !transaction.id.startsWith("card-payment-") &&
-        !transaction.id.startsWith("savings-")
+        !transaction.id.startsWith("savings-") &&
+        !transaction.id.startsWith("loan-payment-")
+    val assistantEditable = transaction.source == TransactionSource.ASSISTANT_TEXT
+    val editable = manuallyEditable || assistantEditable
     Card(
         modifier = Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
-            .then(if (editable) Modifier.clickable { onEdit(transaction.id) } else Modifier),
+            .then(
+                if (editable) {
+                    Modifier.clickable {
+                        if (assistantEditable) {
+                            onEditAssistant(
+                                recordedMovementCommandId(transaction.id),
+                                transaction.id,
+                            )
+                        } else {
+                            onEdit(transaction.id)
+                        }
+                    }
+                } else {
+                    Modifier
+                },
+            ),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
@@ -429,7 +464,11 @@ private fun TransactionRow(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Text(stringResource(R.string.transactions_source_manual), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    text = stringResource(transaction.source.labelResource()),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
             Text(
                 text = if (isTransfer) amountTextNeutral(transaction.amount) else amountText(transaction.amount, isIncome),
@@ -446,6 +485,15 @@ private fun TransactionRow(
             }
         }
     }
+}
+
+private fun TransactionSource.labelResource(): Int = when (this) {
+    TransactionSource.MANUAL -> R.string.transactions_source_manual
+    TransactionSource.ASSISTANT_TEXT -> R.string.transactions_source_assistant
+    TransactionSource.BANK_NOTIFICATION -> R.string.transactions_source_notification
+    TransactionSource.VOICE -> R.string.transactions_source_voice
+    TransactionSource.RECEIPT_OCR -> R.string.transactions_source_receipt
+    TransactionSource.IMPORT -> R.string.transactions_source_import
 }
 
 @Composable
@@ -482,6 +530,10 @@ private fun TransactionsPreview() = PocketMindTheme {
             ),
             isLoading = false,
         ),
-        onCreate = {}, onEdit = {}, onManageAccounts = {}, onBack = {},
+        onCreate = {},
+        onEdit = {},
+        onEditAssistant = { _, _ -> },
+        onManageAccounts = {},
+        onBack = {},
     )
 }

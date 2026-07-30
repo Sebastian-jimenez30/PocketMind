@@ -208,6 +208,37 @@ class AssistantProposalResolverTest {
     }
 
     @Test
+    fun `omitted product resolves automatically when only one is compatible`() = runTest {
+        val result = resolver.resolve(
+            decision = proposal(
+                intent = AssistantFinancialIntent.RECORD_EXPENSE,
+                amountMinorUnits = 5_000,
+                merchant = "Tienda",
+            ),
+            readService = FinancialReadService(
+                contextRepository = FinancialContextRepository {
+                    snapshot().copy(
+                        accounts = listOf(BANK),
+                        creditCardProfiles = emptyList(),
+                        savingsProfiles = emptyList(),
+                        loanProfiles = emptyList(),
+                    )
+                },
+                memoryRepository = ReadOnlyMemoryRepository(),
+                session = TEST_SESSION,
+                clock = TEST_CLOCK,
+            ),
+            commandId = "single-compatible-product",
+        )
+
+        val command = assertIs<FinancialCommand.RecordExpense>(
+            assertIs<AssistantProposalResolution.Proposal>(result).command,
+        )
+        assertEquals(BANK.id, command.productId)
+        assertEquals(5_000L, command.amount.minorUnits)
+    }
+
+    @Test
     fun `savings deposit preserves its funding product`() = runTest {
         val result = resolver.resolve(
             decision = proposal(

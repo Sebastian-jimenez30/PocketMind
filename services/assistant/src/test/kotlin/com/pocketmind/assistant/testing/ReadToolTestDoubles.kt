@@ -74,9 +74,15 @@ class ReadOnlyMemoryRepository(
         idempotencyKey: String,
     ): AssistantCommandDraft? = unsupported()
 
-    override suspend fun reviseProposedDraft(
+    override suspend fun getDraftByCommandId(
+        session: AuthenticatedUser,
+        commandId: String,
+    ): AssistantCommandDraft? = unsupported()
+
+    override suspend fun reviseDraft(
         session: AuthenticatedUser,
         draftId: String,
+        expectedState: com.pocketmind.assistant.domain.memory.DraftState,
         expectedVersion: Long,
         revision: ProposedDraftRevision,
     ): AssistantCommandDraft = unsupported()

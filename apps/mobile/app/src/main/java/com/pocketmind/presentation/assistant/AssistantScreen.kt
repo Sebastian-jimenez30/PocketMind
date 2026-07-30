@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,6 +38,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -66,6 +68,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pocketmind.R
 import com.pocketmind.shared.assistant.AssistantDraftPreview
 import com.pocketmind.shared.domain.command.FinancialCommand
+import com.pocketmind.shared.domain.model.CustomCategory
+import com.pocketmind.shared.domain.model.TransactionCategoryId
+import com.pocketmind.presentation.common.categoryLabel
 import com.pocketmind.ui.components.PocketContextTopBar
 import com.pocketmind.ui.components.pocketBringIntoViewOnFocus
 import com.pocketmind.ui.theme.PocketSpacing
@@ -357,8 +362,17 @@ private fun DraftInlineEditor(
                         products = editor.products,
                         selectedId = editor.productId,
                         fallbackName = editor.draft.preview.primaryProductName,
+                        label = stringResource(R.string.transaction_editor_account),
+                        allowEmpty = false,
                         onSelect = { productId ->
-                            onUpdate { it.copy(productId = productId) }
+                            onUpdate {
+                                it.copy(
+                                    productId = productId,
+                                    relatedProductId = it.relatedProductId
+                                        .takeUnless { relatedId -> relatedId == productId }
+                                        .orEmpty(),
+                                )
+                            }
                         },
                     )
                 }
@@ -378,6 +392,18 @@ private fun DraftInlineEditor(
                     )
                 }
             }
+            if (editor.command.supportsRelatedProductSelection()) {
+                EditorProductSelector(
+                    products = editor.relatedProducts.filter { it.id != editor.productId },
+                    selectedId = editor.relatedProductId,
+                    fallbackName = "",
+                    label = stringResource(editor.command.relatedProductLabel()),
+                    allowEmpty = editor.command.relatedProductIsOptional(),
+                    onSelect = { productId ->
+                        onUpdate { it.copy(relatedProductId = productId) }
+                    },
+                )
+            }
             if (editor.command.supportsAmountEditing()) {
                 EditorField(
                     value = editor.amount,
@@ -394,6 +420,25 @@ private fun DraftInlineEditor(
                     label = stringResource(R.string.manual_action_merchant),
                     onValueChange = { value ->
                         onUpdate { it.copy(merchant = value) }
+                    },
+                )
+            }
+            if (editor.command.supportsCategoryEditing()) {
+                EditorCategorySelector(
+                    selectedCategoryId = editor.categoryId,
+                    customCategories = editor.customCategories,
+                    coreCategories = editor.command.editableCategories(),
+                    onSelect = { categoryId ->
+                        onUpdate { it.copy(categoryId = categoryId) }
+                    },
+                )
+            }
+            if (editor.command.supportsNoteEditing()) {
+                EditorField(
+                    value = editor.note,
+                    label = stringResource(R.string.transaction_editor_note),
+                    onValueChange = { value ->
+                        onUpdate { it.copy(note = value) }
                     },
                 )
             }
@@ -453,11 +498,44 @@ private fun DraftInlineEditor(
 }
 
 @Composable
+private fun EditorCategorySelector(
+    selectedCategoryId: String,
+    customCategories: List<CustomCategory>,
+    coreCategories: List<TransactionCategoryId>,
+    onSelect: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(PocketSpacing.xs)) {
+        Text(
+            text = stringResource(R.string.transaction_editor_category),
+            style = MaterialTheme.typography.labelLarge,
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(PocketSpacing.sm)) {
+            items(customCategories, key = CustomCategory::id) { category ->
+                FilterChip(
+                    selected = selectedCategoryId == category.id,
+                    onClick = { onSelect(category.id) },
+                    label = { Text(category.name) },
+                )
+            }
+            items(coreCategories, key = { it.name }) { category ->
+                FilterChip(
+                    selected = selectedCategoryId == category.name,
+                    onClick = { onSelect(category.name) },
+                    label = { Text(categoryLabel(category.name, customCategories)) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
 @OptIn(ExperimentalMaterial3Api::class)
 private fun EditorProductSelector(
     products: List<com.pocketmind.shared.domain.model.FinancialAccount>,
     selectedId: String,
     fallbackName: String,
+    label: String,
+    allowEmpty: Boolean,
     onSelect: (String) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -471,7 +549,7 @@ private fun EditorProductSelector(
             value = selectedName,
             onValueChange = {},
             readOnly = true,
-            label = { Text(stringResource(R.string.transaction_editor_account)) },
+            label = { Text(label) },
             trailingIcon = {
                 ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
             },
@@ -489,6 +567,15 @@ private fun EditorProductSelector(
             onDismissRequest = { expanded = false },
             shape = RoundedCornerShape(16.dp),
         ) {
+            if (allowEmpty) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.manual_action_no_source)) },
+                    onClick = {
+                        onSelect("")
+                        expanded = false
+                    },
+                )
+            }
             products.forEach { product ->
                 DropdownMenuItem(
                     text = { Text(product.name) },
@@ -678,6 +765,21 @@ private fun DraftReviewCard(
                         }
                     }
                 }
+                AssistantDraftUiState.COMPLETED -> {
+                    if (draft.isReversibleMovement) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                        ) {
+                            TextButton(onClick = onCancel, enabled = actionsEnabled) {
+                                Text(stringResource(R.string.assistant_cancel))
+                            }
+                            TextButton(onClick = onEdit, enabled = actionsEnabled) {
+                                Text(stringResource(R.string.assistant_edit))
+                            }
+                        }
+                    }
+                }
                 AssistantDraftUiState.PROCESSING -> {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(PocketSpacing.sm),
@@ -696,10 +798,20 @@ private fun DraftReviewCard(
                         Text(stringResource(R.string.assistant_verify))
                     }
                 }
-                AssistantDraftUiState.COMPLETED,
-                AssistantDraftUiState.CANCELLED,
-                AssistantDraftUiState.FAILED,
-                -> Unit
+                AssistantDraftUiState.FAILED -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        TextButton(onClick = onCancel, enabled = actionsEnabled) {
+                            Text(stringResource(R.string.assistant_cancel))
+                        }
+                        TextButton(onClick = onEdit, enabled = actionsEnabled) {
+                            Text(stringResource(R.string.assistant_edit))
+                        }
+                    }
+                }
+                AssistantDraftUiState.CANCELLED -> Unit
             }
         }
     }
@@ -881,6 +993,67 @@ private fun FinancialCommand.supportsMerchantEditing(): Boolean =
         this is FinancialCommand.RecordExpense ||
         this is FinancialCommand.Transfer ||
         this is FinancialCommand.RecordCardPurchase ||
+        this is FinancialCommand.UpdateTransaction
+
+private fun FinancialCommand.supportsCategoryEditing(): Boolean =
+    this is FinancialCommand.RecordIncome ||
+        this is FinancialCommand.RecordExpense ||
+        this is FinancialCommand.Transfer ||
+        this is FinancialCommand.RecordCardPurchase ||
+        this is FinancialCommand.UpdateTransaction
+
+private fun FinancialCommand.editableCategories(): List<TransactionCategoryId> = when (this) {
+    is FinancialCommand.RecordIncome ->
+        listOf(
+            TransactionCategoryId.SALARY,
+            TransactionCategoryId.FREELANCE,
+            TransactionCategoryId.TRANSFER,
+            TransactionCategoryId.OTHER,
+        )
+    is FinancialCommand.Transfer ->
+        listOf(TransactionCategoryId.TRANSFER, TransactionCategoryId.OTHER)
+    else -> TransactionCategoryId.entries.filterNot {
+        it == TransactionCategoryId.SALARY ||
+            it == TransactionCategoryId.FREELANCE ||
+            it == TransactionCategoryId.TRANSFER
+    }
+}
+
+private fun FinancialCommand.supportsRelatedProductSelection(): Boolean =
+    this is FinancialCommand.Transfer ||
+        this is FinancialCommand.RecordCardPayment ||
+        this is FinancialCommand.RecordLoanPayment ||
+        (
+            this is FinancialCommand.RecordSavingsMovement &&
+                movementType !=
+                com.pocketmind.shared.domain.model.SavingsMovementType.RATE_CHANGE
+        )
+
+private fun FinancialCommand.relatedProductIsOptional(): Boolean =
+    this !is FinancialCommand.Transfer
+
+private fun FinancialCommand.relatedProductLabel(): Int = when (this) {
+    is FinancialCommand.Transfer -> R.string.manual_record_destination
+    is FinancialCommand.RecordSavingsMovement ->
+        if (
+            movementType ==
+            com.pocketmind.shared.domain.model.SavingsMovementType.WITHDRAWAL
+        ) {
+            R.string.manual_record_destination
+        } else {
+            R.string.manual_action_source
+        }
+    else -> R.string.manual_action_source
+}
+
+private fun FinancialCommand.supportsNoteEditing(): Boolean =
+    this is FinancialCommand.RecordIncome ||
+        this is FinancialCommand.RecordExpense ||
+        this is FinancialCommand.Transfer ||
+        this is FinancialCommand.RecordCardPurchase ||
+        this is FinancialCommand.RecordCardPayment ||
+        this is FinancialCommand.RecordSavingsMovement ||
+        this is FinancialCommand.RecordLoanPayment ||
         this is FinancialCommand.UpdateTransaction
 
 private fun FinancialCommand.supportsRateEditing(): Boolean = when (this) {

@@ -54,9 +54,15 @@ interface AssistantMemoryRepository {
         idempotencyKey: String,
     ): AssistantCommandDraft?
 
-    suspend fun reviseProposedDraft(
+    suspend fun getDraftByCommandId(
+        session: AuthenticatedUser,
+        commandId: String,
+    ): AssistantCommandDraft?
+
+    suspend fun reviseDraft(
         session: AuthenticatedUser,
         draftId: String,
+        expectedState: DraftState,
         expectedVersion: Long,
         revision: ProposedDraftRevision,
     ): AssistantCommandDraft

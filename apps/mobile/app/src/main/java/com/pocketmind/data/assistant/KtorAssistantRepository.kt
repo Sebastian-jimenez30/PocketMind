@@ -54,6 +54,14 @@ class KtorAssistantRepository @Inject constructor(
             }.body()
         }
 
+    override suspend fun getDraftByCommandId(
+        commandId: String,
+    ): AssistantCommandDraft = authenticatedRequest { baseUrl, accessToken ->
+        client.get("$baseUrl/v1/assistant/drafts/by-command/$commandId") {
+            bearerAuth(accessToken)
+        }.body()
+    }
+
     override suspend fun confirmDraft(
         draftId: String,
         expectedVersion: Long,
@@ -68,13 +76,20 @@ class KtorAssistantRepository @Inject constructor(
     override suspend fun reviseDraft(
         draftId: String,
         expectedVersion: Long,
+        expectedState: AssistantDraftState,
         commandPayload: kotlinx.serialization.json.JsonObject,
     ): AssistantCommandDraft = try {
         authenticatedRequest { baseUrl, accessToken ->
             client.post("$baseUrl/v1/assistant/drafts/$draftId/revise") {
                 bearerAuth(accessToken)
                 contentType(ContentType.Application.Json)
-                setBody(AssistantDraftRevisionRequest(expectedVersion, commandPayload))
+                setBody(
+                    AssistantDraftRevisionRequest(
+                        expectedVersion = expectedVersion,
+                        expectedState = expectedState,
+                        commandPayload = commandPayload,
+                    ),
+                )
             }.body()
         }
     } catch (failure: AssistantRequestException) {

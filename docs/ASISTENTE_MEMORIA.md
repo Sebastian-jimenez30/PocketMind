@@ -22,7 +22,9 @@ Implementación de referencia:
 4. Todas las filas incluyen `user_id` y RLS.
 5. Las relaciones hijas usan `(id, user_id)` para impedir referencias cruzadas.
 6. Los mensajes y eventos son append-only.
-7. Un comando financiero solo existe como borrador hasta la confirmación.
+7. El servicio solo interpreta y crea borradores. El cliente puede confirmar
+   automáticamente movimientos reversibles; otras acciones requieren
+   confirmación explícita.
 8. Los cambios de estado usan control optimista con `version`.
 9. Los checkpoints pertenecen a una conversación y expiran.
 10. Los cuerpos, mensajes, JWT y estados financieros no aparecen en logs.
@@ -54,6 +56,8 @@ stateDiagram-v2
     confirmed --> failed: app reportó fallo
     confirmed --> cancelled: cancelar
     confirmed --> expired: vencer
+    completed --> proposed: editar movimiento guardado
+    completed --> cancelled: cancelar y revertir
     completed --> [*]
     failed --> [*]
     cancelled --> [*]
@@ -61,9 +65,22 @@ stateDiagram-v2
 ```
 
 PostgreSQL rechaza cualquier transición diferente. El contenido del comando
-solo puede editarse mientras el estado anterior y el nuevo sean `proposed`.
+puede editarse mientras está `proposed` o al reabrir explícitamente un
+movimiento `completed`; esta reapertura limpia su resultado anterior y renueva
+su vencimiento.
 Completar exige `execution_result`; fallar exige `error_code`. Cada inserción o
 actualización genera un evento en la misma transacción.
+
+Los efectos de un movimiento autoguardado usan identificadores deterministas.
+Editar elimina esos efectos locales, revisa el mismo borrador y vuelve a
+ejecutarlo. Cancelar elimina el movimiento de Room y sus registros vinculados;
+los triggers de outbox propagan la reversión a Supabase. Un mensaje con varias
+acciones crea borradores independientes y Android los procesa en secuencia para
+que editar o cancelar uno no altere los demás.
+El historial recupera el `command_id` desde cualquier fila contable y abre el
+mismo borrador remoto; así las correcciones de tarjetas, ahorros y préstamos
+siguen las reglas de dominio en lugar de modificar únicamente el registro
+visible.
 
 El backend filtra por `state` y `version` en el `PATCH`. Una respuesta vacía
 significa conflicto: otro dispositivo modificó el borrador o ya no está en el

@@ -697,6 +697,19 @@ internal class AssistantProposalResolver(
     ): ProductRequirement.Ready {
         val normalized = reference.normalized()
         if (normalized == null) {
+            val compatibleProducts = listProducts(includeArchived = false)
+                .products
+                .filter { product ->
+                    allowedTypes.isEmpty() ||
+                        FinancialAccountType.valueOf(product.type) in allowedTypes
+                }
+            compatibleProducts.singleOrNull()?.let { onlyProduct ->
+                return requireProduct(
+                    reference = onlyProduct.id,
+                    allowedTypes = allowedTypes,
+                    missingMessage = missingMessage,
+                )
+            }
             throw ProposalClarificationException(missingMessage)
         }
         return when (val resolution = resolveProductDetails(normalized, allowedTypes)) {

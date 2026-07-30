@@ -456,6 +456,17 @@ usan confirmación explícita. La biometría invoca la experiencia nativa.
   deterministas; no convierte la corrección en otro prompt para el modelo.
 - Cancelar retira de inmediato la propuesta visible y nunca presenta un estado
   de guardado.
+- Los movimientos reversibles interpretados con datos suficientes se guardan
+  automáticamente. Cada tarjeta conserva las acciones Editar y Cancelar después
+  del guardado; no se obliga al usuario a confirmar la interpretación correcta.
+- Al abrir un movimiento del asistente desde el historial se reutilizan esas
+  mismas acciones y el comando financiero original. La interfaz nunca corrige
+  solo una cifra visual dejando desactualizados saldos, cuotas o rendimientos.
+- Si un mensaje contiene varias acciones, se muestra una tarjeta independiente
+  por movimiento, en el mismo orden del mensaje. El progreso es secuencial y
+  cada resultado se puede editar o cancelar sin afectar los demás.
+- Las acciones que no pueden revertirse con seguridad mantienen confirmación
+  explícita y explican por qué necesitan intervención.
 
 ## 11. Voz y contenido
 
