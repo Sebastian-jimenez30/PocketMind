@@ -77,6 +77,16 @@ ejecutarlo. Cancelar elimina el movimiento de Room y sus registros vinculados;
 los triggers de outbox propagan la reversión a Supabase. Un mensaje con varias
 acciones crea borradores independientes y Android los procesa en secuencia para
 que editar o cancelar uno no altere los demás.
+El autoguardado no depende de una sincronización previa: confirma el borrador,
+ejecuta primero en Room y solicita la sincronización del outbox en segundo
+plano. Una falla remota nunca convierte el movimiento en un formulario manual
+ni muestra un botón de guardado.
+En un turno múltiple Android trabaja en dos fases: primero confirma todos los
+borradores contra la misma fotografía financiera y después ejecuta cada comando
+en Room, respetando el orden del mensaje. La sincronización se solicita una sola
+vez al terminar el lote. Nunca se confirma ni sincroniza un borrador después de
+ejecutar otro del mismo turno, porque el primer movimiento cambiaría la versión
+financiera y podría invalidar incorrectamente los movimientos restantes.
 El historial recupera el `command_id` desde cualquier fila contable y abre el
 mismo borrador remoto; así las correcciones de tarjetas, ahorros y préstamos
 siguen las reglas de dominio en lugar de modificar únicamente el registro

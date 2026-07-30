@@ -252,50 +252,54 @@ class AssistantViewModel @Inject constructor(
     fun confirmDraft(draft: AssistantUiDraft) {
         if (!beginDraftAction(draft.preview.id)) return
         viewModelScope.launch {
-            confirmAndExecuteDraft(draft, synchronizeBeforeConfirm = true)
+            confirmAndExecuteDraft(draft, syncAfterExecution = true)
         }
     }
 
     private suspend fun saveDraftsSequentially(drafts: List<AssistantUiDraft>) {
         if (drafts.isEmpty()) return
-        try {
-            synchronizeFinancialState()
-        } catch (failure: Exception) {
-            drafts.forEach { draft ->
-                updateDraft(draft.preview.id) {
-                    it.copy(
-                        state = AssistantDraftUiState.PROPOSED,
-                        message = failure.safeMessage(),
-                    )
-                }
-            }
-            return
-        }
+        val confirmedDrafts = mutableListOf<AssistantCommandDraft>()
         drafts.forEach { draft ->
             if (beginDraftAction(draft.preview.id)) {
-                confirmAndExecuteDraft(
-                    draft = draft,
-                    synchronizeBeforeConfirm = false,
+                val confirmed = confirmDraftForExecution(draft)
+                if (confirmed != null) {
+                    confirmedDrafts += confirmed
+                    mutableState.update { it.copy(activeDraftId = null) }
+                }
+            }
+        }
+        confirmedDrafts.forEach { confirmed ->
+            if (beginDraftAction(confirmed.id)) {
+                savedStateHandle[PENDING_EXECUTION_DRAFT_ID] = confirmed.id
+                executeConfirmedDraft(
+                    confirmed,
+                    syncAfterExecution = false,
                 )
             }
         }
+        if (confirmedDrafts.isNotEmpty()) requestBackgroundSync()
     }
 
     private suspend fun confirmAndExecuteDraft(
         draft: AssistantUiDraft,
-        synchronizeBeforeConfirm: Boolean,
+        syncAfterExecution: Boolean,
     ) {
+        val confirmed = confirmDraftForExecution(draft) ?: return
+        savedStateHandle[PENDING_EXECUTION_DRAFT_ID] = confirmed.id
+        executeConfirmedDraft(confirmed, syncAfterExecution)
+    }
+
+    private suspend fun confirmDraftForExecution(
+        draft: AssistantUiDraft,
+    ): AssistantCommandDraft? {
         updateDraft(draft.preview.id) {
             it.copy(state = AssistantDraftUiState.PROCESSING, message = null)
         }
-        try {
-            if (synchronizeBeforeConfirm) synchronizeFinancialState()
-            val confirmed = repository.confirmDraft(
+        return try {
+            repository.confirmDraft(
                 draftId = draft.preview.id,
                 expectedVersion = draft.preview.version,
             )
-            savedStateHandle[PENDING_EXECUTION_DRAFT_ID] = confirmed.id
-            executeConfirmedDraft(confirmed)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Exception) {
@@ -303,10 +307,7 @@ class AssistantViewModel @Inject constructor(
                 repository.getDraft(draft.preview.id)
             }.getOrNull()
             when (recovered?.state) {
-                AssistantDraftState.CONFIRMED -> {
-                    savedStateHandle[PENDING_EXECUTION_DRAFT_ID] = recovered.id
-                    executeConfirmedDraft(recovered)
-                }
+                AssistantDraftState.CONFIRMED -> recovered
                 AssistantDraftState.COMPLETED -> {
                     savedStateHandle.remove<String>(PENDING_EXECUTION_DRAFT_ID)
                     finishDraftAction(
@@ -314,6 +315,7 @@ class AssistantViewModel @Inject constructor(
                         AssistantDraftUiState.COMPLETED,
                         "Movimiento guardado.",
                     )
+                    null
                 }
                 AssistantDraftState.CANCELLED,
                 AssistantDraftState.EXPIRED,
@@ -324,6 +326,7 @@ class AssistantViewModel @Inject constructor(
                         AssistantDraftUiState.CANCELLED,
                         failure.safeMessage(),
                     )
+                    null
                 }
                 else -> {
                     finishDraftAction(
@@ -331,6 +334,7 @@ class AssistantViewModel @Inject constructor(
                         state = AssistantDraftUiState.PROPOSED,
                         message = failure.safeMessage(),
                     )
+                    null
                 }
             }
         }
@@ -509,7 +513,7 @@ class AssistantViewModel @Inject constructor(
                 if (beginDraftAction(updatedDraft.preview.id)) {
                     confirmAndExecuteDraft(
                         updatedDraft,
-                        synchronizeBeforeConfirm = false,
+                        syncAfterExecution = true,
                     )
                 }
             } catch (failure: Exception) {
@@ -546,8 +550,7 @@ class AssistantViewModel @Inject constructor(
                 val draft = repository.getDraft(draftId)
                 when (draft.state) {
                     AssistantDraftState.CONFIRMED -> {
-                        synchronizeFinancialState()
-                        executeConfirmedDraft(draft)
+                        executeConfirmedDraft(draft, syncAfterExecution = true)
                     }
                     AssistantDraftState.COMPLETED -> {
                         savedStateHandle.remove<String>(PENDING_EXECUTION_DRAFT_ID)
@@ -586,7 +589,10 @@ class AssistantViewModel @Inject constructor(
         }
     }
 
-    private suspend fun executeConfirmedDraft(draft: AssistantCommandDraft) {
+    private suspend fun executeConfirmedDraft(
+        draft: AssistantCommandDraft,
+        syncAfterExecution: Boolean,
+    ) {
         val command = FinancialCommandCodec.decode(draft.commandPayload.toString())
             .getOrElse {
                 runCatching {
@@ -618,6 +624,7 @@ class AssistantViewModel @Inject constructor(
         }
         when (result) {
             is FinancialCommandResult.Success -> {
+                if (syncAfterExecution) requestBackgroundSync()
                 try {
                     repository.completeDraft(
                         draftId = draft.id,
@@ -669,13 +676,9 @@ class AssistantViewModel @Inject constructor(
         }
     }
 
-    private suspend fun synchronizeFinancialState() {
-        syncCoordinator.syncCurrentSession().getOrElse { failure ->
-            throw AssistantRequestException(
-                publicMessage =
-                    "No pudimos sincronizar tus productos. Revisa tu conexión antes de guardar.",
-                cause = failure,
-            )
+    private fun requestBackgroundSync() {
+        viewModelScope.launch {
+            syncCoordinator.syncCurrentSession()
         }
     }
 
@@ -734,7 +737,7 @@ class AssistantViewModel @Inject constructor(
                     AssistantUiMessage(
                         id = "${response.assistantMessage.id}-add-$idx",
                         role = "assistant",
-                        content = "También interpreté:",
+                        content = "También registré:",
                         draft = AssistantUiDraft(preview),
                     )
                 }

@@ -635,7 +635,13 @@ private fun DraftReviewCard(
             verticalArrangement = Arrangement.spacedBy(PocketSpacing.xs),
         ) {
             Text(
-                text = stringResource(R.string.assistant_review),
+                text = stringResource(
+                    if (draft.isReversibleMovement) {
+                        R.string.assistant_movement
+                    } else {
+                        R.string.assistant_review
+                    },
+                ),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -721,8 +727,15 @@ private fun DraftReviewCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Text(
-                text = draft.message ?: stringResource(
+            val statusText = when {
+                draft.isReversibleMovement &&
+                    draft.state == AssistantDraftUiState.PROCESSING -> null
+                draft.isReversibleMovement &&
+                    draft.state == AssistantDraftUiState.COMPLETED -> null
+                draft.isReversibleMovement &&
+                    draft.state == AssistantDraftUiState.PROPOSED &&
+                    draft.message == null -> null
+                else -> draft.message ?: stringResource(
                     when (draft.state) {
                         AssistantDraftUiState.PROPOSED,
                         AssistantDraftUiState.PROCESSING,
@@ -736,27 +749,48 @@ private fun DraftReviewCard(
                         AssistantDraftUiState.COMPLETION_PENDING ->
                             R.string.assistant_draft_completion_pending
                     },
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = when (draft.state) {
-                    AssistantDraftUiState.COMPLETED -> MaterialTheme.colorScheme.secondary
-                    AssistantDraftUiState.FAILED -> MaterialTheme.colorScheme.error
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
+                )
+            }
+            statusText?.let { value ->
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = when (draft.state) {
+                        AssistantDraftUiState.FAILED ->
+                            MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
             when (draft.state) {
                 AssistantDraftUiState.PROPOSED -> {
-                    Button(
-                        onClick = onConfirm,
-                        enabled = actionsEnabled,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.assistant_confirm))
+                    if (!draft.isReversibleMovement) {
+                        Button(
+                            onClick = onConfirm,
+                            enabled = actionsEnabled,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.assistant_confirm))
+                        }
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        if (draft.isReversibleMovement) {
+                            IconButton(
+                                onClick = onConfirm,
+                                enabled = actionsEnabled,
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Refresh,
+                                    contentDescription = stringResource(
+                                        R.string.assistant_retry,
+                                    ),
+                                )
+                            }
+                        }
                         TextButton(onClick = onCancel, enabled = actionsEnabled) {
                             Text(stringResource(R.string.assistant_cancel))
                         }
@@ -780,15 +814,7 @@ private fun DraftReviewCard(
                         }
                     }
                 }
-                AssistantDraftUiState.PROCESSING -> {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(PocketSpacing.sm),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        CircularProgressIndicator()
-                        Text(stringResource(R.string.assistant_saving))
-                    }
-                }
+                AssistantDraftUiState.PROCESSING -> Unit
                 AssistantDraftUiState.COMPLETION_PENDING -> {
                     Button(
                         onClick = onRetry,
