@@ -1,6 +1,7 @@
 package com.pocketmind.assistant.domain.turn
 
 import com.pocketmind.assistant.agent.chat.AssistantDecisionAction
+import com.pocketmind.assistant.agent.chat.AssistantAdditionalDecision
 import com.pocketmind.assistant.agent.chat.AssistantInterpreterInput
 import com.pocketmind.assistant.agent.chat.AssistantInterpreterMessage
 import com.pocketmind.assistant.agent.chat.AssistantInterpreterProduct
@@ -208,7 +209,10 @@ class AssistantTurnService(
         } else {
             null
         }
-        val additionalResolutions = decision.additionalDecisions
+        val additionalResolutions = deduplicateAdditionalDecisions(
+            primary = decision,
+            additional = decision.additionalDecisions,
+        )
             .take(MAX_ACTIONS_PER_TURN - 1)
             .mapIndexed { idx, additional ->
                 resolveProposal(
@@ -264,7 +268,7 @@ class AssistantTurnService(
             additionalDrafts.size
         val reply = buildString {
             if (movementCount > 1) {
-                append("Interpreté $movementCount movimientos y los registraré por separado.")
+                append("Registré $movementCount movimientos por separado.")
             } else {
                 append(baseReply)
             }
@@ -415,13 +419,13 @@ class AssistantTurnService(
     }
 
     private fun proposalReply(value: Resolution.Proposal): String = when (value.commandType) {
-        "record_income" -> "Registraré este ingreso en ${value.primary.name}:"
-        "record_expense" -> "Registraré este gasto en ${value.primary.name}:"
-        "transfer" -> "Registraré este movimiento de ${value.primary.name} a ${value.destination?.name}:"
-        "record_card_purchase" -> "Registraré esta compra con ${value.primary.name}:"
-        "record_card_payment" -> "Registraré este pago de ${value.primary.name}:"
-        "record_savings_movement" -> "Registraré este movimiento de ${value.primary.name}:"
-        "record_loan_payment" -> "Registraré este pago de ${value.primary.name}:"
+        "record_income" -> "Registré este ingreso en ${value.primary.name}:"
+        "record_expense" -> "Registré este gasto en ${value.primary.name}:"
+        "transfer" -> "Registré este movimiento de ${value.primary.name} a ${value.destination?.name}:"
+        "record_card_purchase" -> "Registré esta compra con ${value.primary.name}:"
+        "record_card_payment" -> "Registré este pago de ${value.primary.name}:"
+        "record_savings_movement" -> "Registré este movimiento de ${value.primary.name}:"
+        "record_loan_payment" -> "Registré este pago de ${value.primary.name}:"
         "create_product" -> "Preparé el nuevo producto ${value.primary.name}:"
         "update_product" -> "Preparé la actualización de ${value.primary.name}:"
         "archive_product" -> "Preparé el archivo de ${value.primary.name}:"
@@ -698,3 +702,51 @@ private fun FinancialProductConfiguration.openedAtOrNow(now: Long): Long = when 
 
 private fun String?.normalizedOptional(): String? =
     this?.trim()?.takeIf(String::isNotEmpty)
+
+internal fun deduplicateAdditionalDecisions(
+    primary: AssistantModelDecision,
+    additional: List<AssistantAdditionalDecision>,
+): List<AssistantAdditionalDecision> {
+    val seenSources = mutableSetOf<String>()
+    val seenFallbacks = mutableSetOf(primary.semanticFingerprint())
+    primary.sourceText.normalizedDeduplicationText()?.let(seenSources::add)
+
+    return additional.filter { candidate ->
+        val model = candidate.toModelDecision()
+        val source = model.sourceText.normalizedDeduplicationText()
+        val fingerprint = model.semanticFingerprint()
+        val isDuplicate = if (source != null) {
+            !seenSources.add(source)
+        } else {
+            fingerprint in seenFallbacks
+        }
+        seenFallbacks += fingerprint
+        !isDuplicate
+    }
+}
+
+private fun AssistantModelDecision.semanticFingerprint(): String = listOf(
+    action.name,
+    intent?.name,
+    amountMinorUnits,
+    currency,
+    primaryProductReference.normalizedDeduplicationText(),
+    destinationProductReference.normalizedDeduplicationText(),
+    sourceProductReference.normalizedDeduplicationText(),
+    categoryId,
+    merchant.normalizedDeduplicationText(),
+    productName.normalizedDeduplicationText(),
+    productType,
+    installmentCount,
+    paymentType,
+    savingsMovementType,
+    transactionId,
+).joinToString("|")
+
+private fun String?.normalizedDeduplicationText(): String? =
+    this
+        ?.lowercase()
+        ?.replace(Regex("[^\\p{L}\\p{N}]+"), " ")
+        ?.trim()
+        ?.replace(Regex("\\s+"), " ")
+        ?.takeIf(String::isNotEmpty)

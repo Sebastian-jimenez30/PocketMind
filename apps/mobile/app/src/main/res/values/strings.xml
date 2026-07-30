@@ -374,6 +374,7 @@
     <string name="assistant_thinking">Analizando…</string>
     <string name="assistant_message_failed">No se envió.</string>
     <string name="assistant_review">Revisión</string>
+    <string name="assistant_movement">Movimiento</string>
     <string name="assistant_not_saved">Aún no está guardado.</string>
     <string name="assistant_confirm">Guardar movimiento</string>
     <string name="assistant_edit">Editar</string>

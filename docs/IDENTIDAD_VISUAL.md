@@ -459,6 +459,12 @@ usan confirmación explícita. La biometría invoca la experiencia nativa.
 - Los movimientos reversibles interpretados con datos suficientes se guardan
   automáticamente. Cada tarjeta conserva las acciones Editar y Cancelar después
   del guardado; no se obliga al usuario a confirmar la interpretación correcta.
+- Una tarjeta de movimiento reversible nunca muestra “Guardar movimiento”. Si
+  una dependencia transitoria impide ejecutarlo, conserva Editar y Cancelar y
+  ofrece únicamente un icono discreto de reintento.
+- El procesamiento interno no se representa con “Guardando”, spinners ni
+  mensajes de sincronización. La tarjeta se presenta como `Movimiento`; solo
+  comunica estado cuando existe un error que requiere atención.
 - Al abrir un movimiento del asistente desde el historial se reutilizan esas
   mismas acciones y el comando financiero original. La interfaz nunca corrige
   solo una cifra visual dejando desactualizados saldos, cuotas o rendimientos.

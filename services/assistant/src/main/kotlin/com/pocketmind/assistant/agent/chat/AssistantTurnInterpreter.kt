@@ -129,6 +129,7 @@ data class AssistantPromotionalRatePeriod(
 data class AssistantAdditionalDecision(
     val action: AssistantDecisionAction,
     val reply: String? = null,
+    val sourceText: String? = null,
     val intent: AssistantFinancialIntent? = null,
     val amountMinorUnits: Long? = null,
     val currency: String? = null,
@@ -173,6 +174,7 @@ data class AssistantAdditionalDecision(
 data class AssistantModelDecision(
     val action: AssistantDecisionAction,
     val reply: String? = null,
+    val sourceText: String? = null,
     val intent: AssistantFinancialIntent? = null,
     val amountMinorUnits: Long? = null,
     val currency: String? = null,
@@ -214,6 +216,7 @@ internal fun AssistantAdditionalDecision.toModelDecision(): AssistantModelDecisi
     AssistantModelDecision(
         action = action,
         reply = reply,
+        sourceText = sourceText,
         intent = intent,
         amountMinorUnits = amountMinorUnits,
         currency = currency,
@@ -365,6 +368,10 @@ class KoogAssistantTurnInterpreter(
             todas las que puedas resolver (máximo 5 en total), usa PROPOSE en
             cada acción financiera y no anides additionalDecisions dentro de
             otra decisión adicional.
+            Para cada acción copia en sourceText el fragmento mínimo y literal
+            del mensaje que la originó. Un mismo fragmento solo puede producir
+            una acción: no dupliques una compra, ingreso o movimiento para
+            completar la lista.
             Crear un producto con su saldo o deuda inicial sí es una sola acción.
 
             Interpretación financiera:

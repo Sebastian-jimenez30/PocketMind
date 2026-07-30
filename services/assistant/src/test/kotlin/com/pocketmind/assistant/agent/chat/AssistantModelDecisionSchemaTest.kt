@@ -30,6 +30,7 @@ class AssistantModelDecisionSchemaTest {
 
         assertEquals(properties, required)
         assertTrue("reply" in required)
+        assertTrue("sourceText" in required)
         assertTrue("intent" in required)
         assertTrue("promotionalRatePeriods" in required)
         assertTrue("paymentType" in required)
@@ -131,6 +132,7 @@ class AssistantModelDecisionSchemaTest {
                         intent = AssistantFinancialIntent.RECORD_EXPENSE,
                         amountMinorUnits = 5_000,
                         merchant = "Tienda",
+                        sourceText = "pagué 5000 en la tienda",
                     ),
                 ),
             ),
@@ -138,5 +140,6 @@ class AssistantModelDecisionSchemaTest {
 
         assertContains(encoded, "\"additionalDecisions\":[")
         assertContains(encoded, "\"intent\":\"record_expense\"")
+        assertContains(encoded, "\"sourceText\":\"pagué 5000")
     }
 }
