@@ -29,6 +29,7 @@ import androidx.compose.material.icons.rounded.Fastfood
 import androidx.compose.material.icons.rounded.HealthAndSafety
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LocalMovies
+import androidx.compose.material.icons.rounded.Label
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Payments
 import androidx.compose.material.icons.rounded.ReceiptLong
@@ -68,6 +69,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.pocketmind.R
 import com.pocketmind.presentation.common.toUserMessage
+import com.pocketmind.shared.domain.model.CustomCategory
 import com.pocketmind.shared.domain.command.FinancialCommand
 import com.pocketmind.shared.domain.command.FinancialCommandResult
 import com.pocketmind.shared.domain.model.FinancialAccount
@@ -80,6 +82,7 @@ import com.pocketmind.shared.domain.model.calculateCreditCardOverview
 import com.pocketmind.shared.domain.usecase.ExecuteFinancialCommandUseCase
 import com.pocketmind.shared.domain.usecase.ManualFinanceUseCases
 import com.pocketmind.shared.domain.usecase.ObserveActiveFinancialAccountsUseCase
+import com.pocketmind.shared.domain.usecase.ObserveCustomCategoriesUseCase
 import com.pocketmind.ui.components.PocketMessage
 import com.pocketmind.ui.components.PocketChoiceChip
 import com.pocketmind.ui.components.PocketContextTopBar
@@ -102,7 +105,8 @@ data class ManualRecordUiState(
     val operation: ManualRecordType = ManualRecordType.EXPENSE,
     val products: List<FinancialAccount> = emptyList(),
     val productId: String = "",
-    val category: TransactionCategoryId = TransactionCategoryId.SHOPPING,
+    val categoryId: String = TransactionCategoryId.SHOPPING.name,
+    val customCategories: List<CustomCategory> = emptyList(),
     val amount: String = "",
     val installments: String = "1",
     val date: String = todayText(),
@@ -117,6 +121,7 @@ data class ManualRecordUiState(
 class ManualRecordViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val observeProducts: ObserveActiveFinancialAccountsUseCase,
+    private val observeCustomCategories: ObserveCustomCategoriesUseCase,
     private val manualFinance: ManualFinanceUseCases,
     private val executeFinancialCommand: ExecuteFinancialCommandUseCase,
 ) : ViewModel() {
@@ -128,7 +133,7 @@ class ManualRecordViewModel @Inject constructor(
         ManualRecordUiState(
             operation = initialOperation,
             productId = initialProductId,
-            category = initialOperation.defaultCategory(),
+            categoryId = initialOperation.defaultCategory().name,
         ),
     )
     val uiState: StateFlow<ManualRecordUiState> = _uiState.asStateFlow()
@@ -151,6 +156,19 @@ class ManualRecordViewModel @Inject constructor(
                 }
             }
         }
+        viewModelScope.launch {
+            observeCustomCategories().collect { categories ->
+                _uiState.update { state ->
+                    val validIds = categories.mapTo(mutableSetOf()) { it.id }
+                    validIds += state.operation.categories().map(TransactionCategoryId::name)
+                    state.copy(
+                        customCategories = categories,
+                        categoryId = state.categoryId.takeIf(validIds::contains)
+                            ?: state.operation.defaultCategory().name,
+                    )
+                }
+            }
+        }
     }
 
     fun selectOperation(operation: ManualRecordType) {
@@ -158,7 +176,8 @@ class ManualRecordViewModel @Inject constructor(
             ManualRecordUiState(
                 operation = operation,
                 products = it.products,
-                category = operation.defaultCategory(),
+                categoryId = operation.defaultCategory().name,
+                customCategories = it.customCategories,
             )
         }
     }
@@ -263,7 +282,7 @@ private fun ManualRecordUiState.toCommand(
         amount = amount,
         occurredAtEpochMillis = occurredAtEpochMillis,
         source = TransactionSource.MANUAL,
-        categoryId = category.name,
+        categoryId = categoryId,
         merchant = null,
         note = note,
     )
@@ -273,7 +292,7 @@ private fun ManualRecordUiState.toCommand(
         amount = amount,
         occurredAtEpochMillis = occurredAtEpochMillis,
         source = TransactionSource.MANUAL,
-        categoryId = category.name,
+        categoryId = categoryId,
         merchant = null,
         note = note,
     )
@@ -295,7 +314,7 @@ private fun ManualRecordUiState.toCommand(
         installmentCount = installments.toIntOrNull() ?: 0,
         purchasedAtEpochMillis = occurredAtEpochMillis,
         source = TransactionSource.MANUAL,
-        categoryId = category.name,
+        categoryId = categoryId,
         note = note,
     )
     ManualRecordType.CARD_PAYMENT -> FinancialCommand.RecordCardPayment(
@@ -402,9 +421,12 @@ private fun ManualRecordScreen(
                 onSelect = { onSelectOperation(ManualRecordType.valueOf(it)) },
             )
             CategoryCarousel(
-                categories = state.operation.categories(),
-                selected = state.category,
-                onSelect = { category -> onUpdate { it.copy(category = category) } },
+                coreCategories = state.operation.categories(),
+                customCategories = state.customCategories.takeIf {
+                    state.operation.group == ManualRecordGroup.EXPENSE
+                }.orEmpty(),
+                selectedCategoryId = state.categoryId,
+                onSelect = { categoryId -> onUpdate { it.copy(categoryId = categoryId) } },
             )
             SelectionDropdown(
                 label = stringResource(state.operation.primaryProductLabelRes()),
@@ -585,9 +607,10 @@ private fun MovementGroupSelector(
 
 @Composable
 private fun CategoryCarousel(
-    categories: List<TransactionCategoryId>,
-    selected: TransactionCategoryId,
-    onSelect: (TransactionCategoryId) -> Unit,
+    coreCategories: List<TransactionCategoryId>,
+    customCategories: List<CustomCategory>,
+    selectedCategoryId: String,
+    onSelect: (String) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(PocketSpacing.xs)) {
         Text(
@@ -598,71 +621,96 @@ private fun CategoryCarousel(
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(PocketSpacing.xs),
         ) {
-            items(categories, key = TransactionCategoryId::name) { category ->
-                val isSelected = selected == category
-                Surface(
-                    modifier = Modifier
-                        .widthIn(min = 104.dp)
-                        .heightIn(min = 88.dp)
-                        .selectable(
-                            selected = isSelected,
-                            onClick = { onSelect(category) },
-                            role = Role.RadioButton,
-                        ),
-                    shape = RoundedCornerShape(18.dp),
-                    color = if (isSelected) {
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f)
+            items(customCategories, key = CustomCategory::id) { category ->
+                CategoryCarouselItem(
+                    id = category.id,
+                    label = category.name,
+                    icon = Icons.Rounded.Label,
+                    selected = selectedCategoryId == category.id,
+                    onSelect = onSelect,
+                )
+            }
+            items(coreCategories, key = TransactionCategoryId::name) { category ->
+                CategoryCarouselItem(
+                    id = category.name,
+                    label = stringResource(category.labelRes()),
+                    icon = category.icon(),
+                    selected = selectedCategoryId == category.name,
+                    onSelect = onSelect,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryCarouselItem(
+    id: String,
+    label: String,
+    icon: ImageVector,
+    selected: Boolean,
+    onSelect: (String) -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .widthIn(min = 104.dp)
+            .heightIn(min = 88.dp)
+            .selectable(
+                selected = selected,
+                onClick = { onSelect(id) },
+                role = Role.RadioButton,
+            ),
+        shape = RoundedCornerShape(18.dp),
+        color = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f)
+        } else {
+            MaterialTheme.colorScheme.surface
+        },
+        border = BorderStroke(
+            width = if (selected) 2.dp else 1.dp,
+            color = if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.outline
+            },
+        ),
+    ) {
+        Box(
+            modifier = Modifier.padding(
+                horizontal = PocketSpacing.md,
+                vertical = PocketSpacing.sm,
+            ),
+        ) {
+            Column(
+                modifier = Modifier.align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(PocketSpacing.xs),
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (selected) {
+                        MaterialTheme.colorScheme.primary
                     } else {
-                        MaterialTheme.colorScheme.surface
+                        MaterialTheme.colorScheme.onSurfaceVariant
                     },
-                    border = BorderStroke(
-                        width = if (isSelected) 2.dp else 1.dp,
-                        color = if (isSelected) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.outline
-                        },
-                    ),
-                ) {
-                    Box(
-                        modifier = Modifier.padding(
-                            horizontal = PocketSpacing.md,
-                            vertical = PocketSpacing.sm,
-                        ),
-                    ) {
-                        Column(
-                            modifier = Modifier.align(Alignment.Center),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(PocketSpacing.xs),
-                        ) {
-                            Icon(
-                                imageVector = category.icon(),
-                                contentDescription = null,
-                                tint = if (isSelected) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                            )
-                            Text(
-                                text = stringResource(category.labelRes()),
-                                style = MaterialTheme.typography.labelMedium,
-                                textAlign = TextAlign.Center,
-                                maxLines = 2,
-                            )
-                        }
-                        if (isSelected) {
-                            Icon(
-                                imageVector = Icons.Rounded.CheckCircle,
-                                contentDescription = stringResource(R.string.manual_record_selected),
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .size(18.dp),
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                    }
-                }
+                )
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                )
+            }
+            if (selected) {
+                Icon(
+                    imageVector = Icons.Rounded.CheckCircle,
+                    contentDescription = stringResource(R.string.manual_record_selected),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(18.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
             }
         }
     }

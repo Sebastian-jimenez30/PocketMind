@@ -39,6 +39,7 @@ import com.pocketmind.presentation.products.ManualActionType
 import com.pocketmind.presentation.products.ProductDetailRoute
 import com.pocketmind.presentation.analysis.AnalysisRoute
 import com.pocketmind.presentation.assistant.AssistantRoute
+import com.pocketmind.presentation.assistant.AssistantMovementEditorRoute
 import com.pocketmind.presentation.budgets.BudgetsRoute
 import com.pocketmind.presentation.savings.SavingsRoute
 import com.pocketmind.ui.components.PocketBottomNavigation
@@ -61,6 +62,8 @@ private const val ACCOUNT_EDIT_ROUTE = "account-edit/{accountId}"
 private const val PRODUCT_DETAIL_ROUTE = "product/{accountId}"
 private const val ANALYSIS_ROUTE = "analysis"
 private const val ASSISTANT_ROUTE = "assistant"
+private const val ASSISTANT_MOVEMENT_EDIT_ROUTE =
+    "movement-edit/{commandId}/{transactionId}"
 private const val ASSISTANT_PATTERN =
     "assistant?commandId={commandId}&transactionId={transactionId}"
 private const val BUDGETS_ROUTE = "budgets"
@@ -113,7 +116,8 @@ fun PocketMindApp(
         currentRoute == ANALYSIS_ROUTE -> ANALYSIS_ROUTE
         currentRoute == TRANSACTIONS_ROUTE ||
             currentRoute?.startsWith(MANUAL_RECORD_ROUTE) == true ||
-            currentRoute?.startsWith("transaction-") == true -> TRANSACTIONS_ROUTE
+            currentRoute?.startsWith("transaction-") == true ||
+            currentRoute?.startsWith("movement-edit") == true -> TRANSACTIONS_ROUTE
         else -> HOME_ROUTE
     }
 
@@ -194,13 +198,25 @@ fun PocketMindApp(
         ) {
             AssistantRoute(onBack = { navController.popBackStack() })
         }
+        composable(
+            route = ASSISTANT_MOVEMENT_EDIT_ROUTE,
+            arguments = listOf(
+                navArgument("commandId") { type = NavType.StringType },
+                navArgument("transactionId") { type = NavType.StringType },
+            ),
+        ) {
+            AssistantMovementEditorRoute(
+                onSaved = { navController.popBackStack() },
+                onBack = { navController.popBackStack() },
+            )
+        }
         composable(TRANSACTIONS_ROUTE) {
             TransactionsRoute(
                 onCreate = { navController.navigate(MANUAL_RECORD_ROUTE) },
                 onEdit = { id -> navController.navigate("transaction-edit/$id") },
                 onEditAssistant = { commandId, transactionId ->
                     navController.navigate(
-                        "$ASSISTANT_ROUTE?commandId=$commandId&transactionId=$transactionId",
+                        "movement-edit/$commandId/$transactionId",
                     )
                 },
                 onManageAccounts = { navController.navigate(ACCOUNTS_ROUTE) },

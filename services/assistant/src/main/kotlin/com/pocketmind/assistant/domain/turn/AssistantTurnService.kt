@@ -3,6 +3,7 @@ package com.pocketmind.assistant.domain.turn
 import com.pocketmind.assistant.agent.chat.AssistantDecisionAction
 import com.pocketmind.assistant.agent.chat.AssistantAdditionalDecision
 import com.pocketmind.assistant.agent.chat.AssistantInterpreterInput
+import com.pocketmind.assistant.agent.chat.AssistantInterpreterCategory
 import com.pocketmind.assistant.agent.chat.AssistantInterpreterMessage
 import com.pocketmind.assistant.agent.chat.AssistantInterpreterProduct
 import com.pocketmind.assistant.agent.chat.AssistantModelDecision
@@ -100,6 +101,7 @@ class AssistantTurnService(
         val history = memoryRepository.listMessages(session, conversationId, HISTORY_LIMIT)
         val readService = readServiceFactory.create(session)
         val products = readService.listProducts(includeArchived = false).products
+        val categories = readService.listCategories()
         val tools = toolRegistryFactory.create(readService)
         val interpreterProducts = products.map {
             AssistantInterpreterProduct(
@@ -124,6 +126,13 @@ class AssistantTurnService(
                 timeZoneId = request.timeZoneId,
                 currentEpochMillis = clock.millis(),
                 products = interpreterProducts,
+                categories = categories.map {
+                    AssistantInterpreterCategory(
+                        id = it.id,
+                        name = it.name,
+                        isCustom = it.isCustom,
+                    )
+                },
                 conversation = history.map {
                     AssistantInterpreterMessage(it.role.wireValue, it.content)
                 },

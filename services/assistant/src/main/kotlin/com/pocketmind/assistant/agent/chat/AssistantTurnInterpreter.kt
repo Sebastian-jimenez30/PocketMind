@@ -33,7 +33,15 @@ data class AssistantInterpreterInput(
     val timeZoneId: String,
     val currentEpochMillis: Long,
     val products: List<AssistantInterpreterProduct>,
+    val categories: List<AssistantInterpreterCategory> = emptyList(),
     val conversation: List<AssistantInterpreterMessage>,
+)
+
+@Serializable
+data class AssistantInterpreterCategory(
+    val id: String,
+    val name: String,
+    val isCustom: Boolean,
 )
 
 @Serializable
@@ -408,9 +416,28 @@ class KoogAssistantTurnInterpreter(
               pagar una deuda o aportar a un ahorro.
             - destinationProductReference es el destino de una transferencia o
               del retiro de un ahorro.
-            - categoryId solo puede ser SALARY, FREELANCE, TRANSFER, FOOD,
-              TRANSPORT, HOME, HEALTH, EDUCATION, ENTERTAINMENT, SHOPPING,
-              SERVICES, DEBT_PAYMENT, SAVINGS u OTHER.
+            - categoryId debe ser el id exacto de una categoría incluida en
+              categories. Elige la categoría cuyo nombre se asocie mejor con el
+              significado del movimiento, incluidas las categorías personales.
+              Usa OTHER únicamente cuando ninguna categoría sea razonable.
+            - Si una categoría personal coincide claramente con el concepto,
+              priorízala sobre una categoría general. Por ejemplo, si existe
+              "Domicilios", un gasto descrito como domicilio usa su id exacto
+              en vez de FOOD.
+            - categoryId es obligatorio en cada propuesta record_income,
+              record_expense, transfer, record_card_purchase y
+              update_transaction. Nunca lo dejes null ni lo omitas para esas
+              acciones. En transfer usa TRANSFER.
+            - Para gastos comunes infiere la categoría: restaurantes o comida
+              usan Alimentación; buses, taxis o gasolina usan Transporte;
+              arriendo o reparaciones usan Hogar; médicos o farmacia usan Salud;
+              estudios usan Educación; ocio usa Entretenimiento; compras de
+              bienes usan Compras; facturas o suscripciones usan Servicios.
+            - Para ingresos usa Salario o Independiente cuando el mensaje lo
+              indique; no asumas Salario para cualquier dinero recibido.
+            - merchant es el nombre breve que se mostrará en el historial.
+              Extrae del mensaje el comercio o concepto explícito, por ejemplo
+              "Almuerzo", "Netflix" o "Pago de Juan". No inventes nombres.
             - En respond, unsupported y clarify usa reply natural en español.
             - Nunca presentes una operación como guardada: solo propones un
               borrador para revisión.

@@ -54,6 +54,13 @@ data class ProductLookupResult(
 )
 
 @Serializable
+data class CategorySummary(
+    val id: String,
+    val name: String,
+    val isCustom: Boolean,
+)
+
+@Serializable
 data class CurrencyOverview(
     val currency: String,
     val liquidBalanceMinorUnits: Long,

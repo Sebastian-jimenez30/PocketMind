@@ -9,7 +9,9 @@ import com.pocketmind.shared.domain.model.FinancialProductConfiguration
 import com.pocketmind.shared.domain.model.FinancialTransaction
 import com.pocketmind.shared.domain.model.ProductReferenceResolution
 import com.pocketmind.shared.domain.model.TransactionStatus
+import com.pocketmind.shared.domain.model.TransactionCategoryId
 import com.pocketmind.shared.domain.model.TransactionType
+import java.text.Normalizer
 import com.pocketmind.shared.domain.model.calculateCreditCardOverview
 import com.pocketmind.shared.domain.model.calculateLoanOverview
 import com.pocketmind.shared.domain.model.calculateSavingsProjection
@@ -37,6 +39,33 @@ class FinancialReadService(
                 .sortedWith(compareBy(ProductSummary::isArchived, ProductSummary::name))
                 .toList(),
         )
+    }
+
+    suspend fun listCategories(): List<CategorySummary> {
+        val custom = loadContext().snapshot.customCategories
+            .sortedBy { it.name.lowercase() }
+            .map { CategorySummary(it.id, it.name, isCustom = true) }
+        return custom + TransactionCategoryId.entries.map { category ->
+            CategorySummary(
+                id = category.name,
+                name = category.spanishLabel(),
+                isCustom = false,
+            )
+        }
+    }
+
+    suspend fun resolveCategory(reference: String?): String? {
+        val requested = reference?.trim()?.takeIf(String::isNotEmpty) ?: return null
+        val categories = listCategories()
+        return categories.firstOrNull { it.id == requested }?.id
+            ?: categories
+                .filter { it.id.equals(requested, ignoreCase = true) }
+                .singleOrNull()
+                ?.id
+            ?: categories
+                .filter { it.name.normalizedCategoryText() == requested.normalizedCategoryText() }
+                .singleOrNull()
+                ?.id
     }
 
     suspend fun getProduct(
@@ -466,6 +495,28 @@ class FinancialReadService(
         private const val DATA_MISSING_PROFILE = "missing_profile"
     }
 }
+
+private fun TransactionCategoryId.spanishLabel(): String = when (this) {
+    TransactionCategoryId.SALARY -> "Salario"
+    TransactionCategoryId.FREELANCE -> "Independiente"
+    TransactionCategoryId.TRANSFER -> "Transferencia"
+    TransactionCategoryId.FOOD -> "Alimentación"
+    TransactionCategoryId.TRANSPORT -> "Transporte"
+    TransactionCategoryId.HOME -> "Hogar"
+    TransactionCategoryId.HEALTH -> "Salud"
+    TransactionCategoryId.EDUCATION -> "Educación"
+    TransactionCategoryId.ENTERTAINMENT -> "Entretenimiento"
+    TransactionCategoryId.SHOPPING -> "Compras"
+    TransactionCategoryId.SERVICES -> "Servicios"
+    TransactionCategoryId.DEBT_PAYMENT -> "Pago de deuda"
+    TransactionCategoryId.SAVINGS -> "Ahorro"
+    TransactionCategoryId.OTHER -> "Otro"
+}
+
+private fun String.normalizedCategoryText(): String = Normalizer
+    .normalize(trim(), Normalizer.Form.NFD)
+    .replace("\\p{M}+".toRegex(), "")
+    .lowercase()
 
 sealed interface ProductDetailsResolution {
     data class Resolved(

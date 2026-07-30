@@ -33,6 +33,8 @@ retrocompatible de registros v1 mediante valores predeterminados. El payload no 
 | `SAVINGS_MOVEMENT` | Propiedades v1 más `calculationRuleVersion: Int` |
 | `LOAN_PROFILE` | Propiedades v1 más `scheduleRuleVersion: Int` |
 | `LOAN_PAYMENT` | Propiedades v1 más `paymentType: String`, `calculationRuleVersion: Int` |
+| `CUSTOM_CATEGORY` | `id: String`, `name: String`, `createdAtEpochMillis: Long` |
+| `BUDGET` | `id: String`, `name: String`, `categoryId: String`, `maxAmountMinorUnits: Long`, `currency: String`, `periodType: String`, `startDateEpochMillis: Long`, `endDateEpochMillis: Long`, `isRecurring: Boolean`, `status: String`, `notificationThresholdPercent: Int` |
 
 `entity_id` debe ser igual a `id`, o a `accountId` en los perfiles de tarjeta,
 ahorro y préstamo. Para `FINANCIAL_SETUP` siempre es `"1"`.
@@ -62,7 +64,9 @@ En push y aplicación local:
 
 1. productos `ACCOUNT`;
 2. perfiles de producto;
-3. movimientos y pagos dependientes.
+3. categorías personales `CUSTOM_CATEGORY`;
+4. presupuestos `BUDGET`;
+5. movimientos y pagos dependientes.
 
 Para tombstones el orden es inverso. Aunque Supabase almacena sobres sin claves
 foráneas entre payloads, respetar el orden evita violaciones de claves foráneas

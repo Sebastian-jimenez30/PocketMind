@@ -198,6 +198,10 @@ class FinanceSyncEngine @Inject constructor(
                 syncDao.getLoanProfile(id)?.let { json.encodeToJsonElement(it) }
             SyncEntityType.LOAN_PAYMENT ->
                 syncDao.getLoanPayment(id)?.let { json.encodeToJsonElement(it) }
+            SyncEntityType.CUSTOM_CATEGORY ->
+                syncDao.getCustomCategory(id)?.let { json.encodeToJsonElement(it) }
+            SyncEntityType.BUDGET ->
+                syncDao.getBudget(id)?.let { json.encodeToJsonElement(it) }
         }
 
     private suspend fun applySnapshot(snapshot: List<RemoteFinanceRecord>) {
@@ -218,6 +222,8 @@ class FinanceSyncEngine @Inject constructor(
         syncDao.upsertCreditCardProfiles(decodeList(active, SyncEntityType.CREDIT_CARD_PROFILE))
         syncDao.upsertSavingsProfiles(decodeList(active, SyncEntityType.SAVINGS_PROFILE))
         syncDao.upsertLoanProfiles(decodeList(active, SyncEntityType.LOAN_PROFILE))
+        syncDao.upsertCustomCategories(decodeList(active, SyncEntityType.CUSTOM_CATEGORY))
+        syncDao.upsertBudgets(decodeList(active, SyncEntityType.BUDGET))
         syncDao.upsertTransactions(decodeList(active, SyncEntityType.TRANSACTION))
         syncDao.upsertInstallmentPurchases(decodeList(active, SyncEntityType.INSTALLMENT_PURCHASE))
         syncDao.upsertCreditCardPayments(decodeList(active, SyncEntityType.CREDIT_CARD_PAYMENT))
@@ -252,6 +258,8 @@ class FinanceSyncEngine @Inject constructor(
         syncDao.enqueueCreditCardProfiles(now)
         syncDao.enqueueSavingsProfiles(now)
         syncDao.enqueueLoanProfiles(now)
+        syncDao.enqueueCustomCategories(now)
+        syncDao.enqueueBudgets(now)
         syncDao.enqueueTransactions(now)
         syncDao.enqueueInstallmentPurchases(now)
         syncDao.enqueueCreditCardPayments(now)
@@ -261,6 +269,8 @@ class FinanceSyncEngine @Inject constructor(
 
     private suspend fun clearFinanceData() {
         syncDao.clearLoanPayments()
+        syncDao.clearBudgets()
+        syncDao.clearCustomCategories()
         syncDao.clearSavingsMovements()
         syncDao.clearCreditCardPayments()
         syncDao.clearInstallmentPurchases()

@@ -100,7 +100,7 @@ class TransactionEditorViewModel @Inject constructor(
                             accountId = transaction.accountId,
                             type = transaction.type,
                             amount = transaction.amount.minorUnits.toString(),
-                            categoryId = transaction.categoryId ?: TransactionCategoryId.FOOD.name,
+                            categoryId = transaction.categoryId.editableCategoryId(),
                             merchant = transaction.merchant.orEmpty(),
                             note = transaction.note.orEmpty(),
                             date = transaction.occurredAtEpochMillis.toDisplayDate(),
@@ -245,11 +245,17 @@ class TransactionEditorViewModel @Inject constructor(
         viewModelScope.launch {
             deleteCustomCategoryUseCase(id)
             if (_uiState.value.categoryId == id) {
-                _uiState.update { it.copy(categoryId = TransactionCategoryId.FOOD.name) }
+                _uiState.update {
+                    it.copy(categoryId = TransactionCategoryId.OTHER.name)
+                }
             }
         }
     }
 }
+
+internal fun String?.editableCategoryId(): String =
+    this?.trim()?.takeIf(String::isNotEmpty)
+        ?: TransactionCategoryId.OTHER.name
 
 private fun String.hasLinkedProduct(): Boolean =
     startsWith("purchase-") || startsWith("card-payment-") ||

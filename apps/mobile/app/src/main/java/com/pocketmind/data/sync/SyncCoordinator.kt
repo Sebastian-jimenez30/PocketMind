@@ -61,6 +61,13 @@ class SyncCoordinator @Inject constructor(
         engine.synchronize(user.id).getOrThrow()
     }
 
+    suspend fun syncPendingChangesIfNeeded(): Result<Unit> =
+        if (engine.hasPendingChanges()) {
+            syncCurrentSession()
+        } else {
+            Result.success(Unit)
+        }
+
     suspend fun syncInBackground(): Result<Unit> {
         val userId = supabase.auth.currentUserOrNull()?.id ?: return Result.success(Unit)
         return engine.synchronize(userId)

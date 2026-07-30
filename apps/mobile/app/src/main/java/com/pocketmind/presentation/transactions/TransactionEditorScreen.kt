@@ -123,6 +123,7 @@ fun TransactionEditorScreen(
                     selectedCategoryId = state.categoryId,
                     onSelectCategory = { id -> onUpdate { it.copy(categoryId = id) } },
                     customCategories = state.customCategories,
+                    allowedCoreCategories = state.type.editorCategories(),
                     onCreateCustomCategory = onCreateCustomCategory,
                     onUpdateCustomCategory = onUpdateCustomCategory,
                     onDeleteCustomCategory = onDeleteCustomCategory,
@@ -180,6 +181,29 @@ fun TransactionEditorScreen(
         }
     }
 }
+
+private fun TransactionType.editorCategories(): List<TransactionCategoryId> =
+    when (this) {
+        TransactionType.INCOME -> listOf(
+            TransactionCategoryId.SALARY,
+            TransactionCategoryId.FREELANCE,
+            TransactionCategoryId.OTHER,
+        )
+        TransactionType.EXPENSE -> listOf(
+            TransactionCategoryId.FOOD,
+            TransactionCategoryId.TRANSPORT,
+            TransactionCategoryId.HOME,
+            TransactionCategoryId.HEALTH,
+            TransactionCategoryId.EDUCATION,
+            TransactionCategoryId.ENTERTAINMENT,
+            TransactionCategoryId.SHOPPING,
+            TransactionCategoryId.SERVICES,
+            TransactionCategoryId.DEBT_PAYMENT,
+            TransactionCategoryId.SAVINGS,
+            TransactionCategoryId.OTHER,
+        )
+        TransactionType.TRANSFER -> listOf(TransactionCategoryId.TRANSFER)
+    }
 
 @Composable
 private fun EditorHeader(editing: Boolean, onBack: () -> Unit) {

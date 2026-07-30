@@ -18,6 +18,22 @@ class SyncChangeOrderingTest {
     }
 
     @Test
+    fun customCategoriesAreUploadedBeforeBudgetsAndCategorizedTransactions() {
+        val ordered = orderSyncChanges(
+            listOf(
+                change("TRANSACTION", "movement", "UPSERT"),
+                change("BUDGET", "budget", "UPSERT"),
+                change("CUSTOM_CATEGORY", "category", "UPSERT"),
+            ),
+        )
+
+        assertEquals(
+            listOf("CUSTOM_CATEGORY", "BUDGET", "TRANSACTION"),
+            ordered.map { it.entityType },
+        )
+    }
+
+    @Test
     fun deletesPlaceDependentMovementsBeforeParentProducts() {
         val ordered = orderSyncChanges(
             listOf(
