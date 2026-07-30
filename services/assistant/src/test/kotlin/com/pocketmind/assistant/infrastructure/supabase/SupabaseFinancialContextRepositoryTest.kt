@@ -43,6 +43,19 @@ class SupabaseFinancialContextRepositoryTest {
                     [
                       {
                         "user_id":"$USER_ID",
+                        "entity_type":"CUSTOM_CATEGORY",
+                        "entity_id":"category-pets",
+                        "schema_version":2,
+                        "payload":{
+                          "id":"category-pets",
+                          "name":"Mascotas",
+                          "createdAtEpochMillis":800
+                        },
+                        "is_deleted":false,
+                        "updated_at_epoch_millis":1050
+                      },
+                      {
+                        "user_id":"$USER_ID",
                         "entity_type":"ACCOUNT",
                         "entity_id":"bank-1",
                         "schema_version":2,
@@ -96,6 +109,7 @@ class SupabaseFinancialContextRepositoryTest {
         assertEquals("Cuenta Bancolombia", snapshot.accounts.single().name)
         assertEquals(listOf("principal"), snapshot.accounts.single().aliases)
         assertEquals(1, snapshot.transactions.size)
+        assertEquals("Mascotas", snapshot.customCategories.single().name)
         assertEquals(1_100L, snapshot.latestRemoteUpdateEpochMillis)
         assertTrue(snapshot.stateVersion > 0)
         client.close()

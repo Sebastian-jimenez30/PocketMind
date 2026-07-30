@@ -79,6 +79,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pocketmind.R
 import com.pocketmind.presentation.common.categoryLabel
+import com.pocketmind.presentation.common.transactionDisplayName
 import com.pocketmind.shared.domain.model.BudgetProgress
 import com.pocketmind.shared.domain.model.CurrencyCode
 import com.pocketmind.shared.domain.model.CustomCategory
@@ -343,6 +344,7 @@ private fun DashboardContent(
         item {
             RecentMovementsCard(
                 transactions = recentTransactions,
+                customCategories = customCategories,
                 amountsVisible = amountsVisible,
                 onOpenTransactions = onOpenTransactions,
             )
@@ -641,6 +643,7 @@ private fun BudgetsSlimRow(
 @Composable
 private fun RecentMovementsCard(
     transactions: List<FinancialTransaction>,
+    customCategories: List<CustomCategory>,
     amountsVisible: Boolean,
     onOpenTransactions: () -> Unit,
 ) {
@@ -708,7 +711,7 @@ private fun RecentMovementsCard(
                         )
                         Spacer(Modifier.width(PocketSpacing.sm))
                         Text(
-                            text = transaction.merchant.orEmpty().ifBlank { transaction.note.orEmpty() },
+                            text = transactionDisplayName(transaction, customCategories),
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.bodyMedium,
                             maxLines = 1,

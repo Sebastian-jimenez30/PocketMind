@@ -12,6 +12,7 @@ import com.pocketmind.assistant.domain.finance.FinancialReadService
 import com.pocketmind.assistant.testing.ReadOnlyMemoryRepository
 import com.pocketmind.shared.domain.command.FinancialCommand
 import com.pocketmind.shared.domain.model.CreditCardProfile
+import com.pocketmind.shared.domain.model.CustomCategory
 import com.pocketmind.shared.domain.model.CurrencyCode
 import com.pocketmind.shared.domain.model.FinancialAccount
 import com.pocketmind.shared.domain.model.FinancialAccountType
@@ -208,6 +209,26 @@ class AssistantProposalResolverTest {
     }
 
     @Test
+    fun `custom category selected by the model is preserved in the command`() = runTest {
+        val result = resolver.resolve(
+            decision = proposal(
+                intent = AssistantFinancialIntent.RECORD_EXPENSE,
+                primaryProductReference = BANK.id,
+                amountMinorUnits = 35_000,
+                merchant = "Veterinaria",
+                categoryId = CUSTOM_CATEGORY.name,
+            ),
+            readService = readService(),
+            commandId = "custom-category-expense",
+        )
+
+        val command = assertIs<FinancialCommand.RecordExpense>(
+            assertIs<AssistantProposalResolution.Proposal>(result).command,
+        )
+        assertEquals(CUSTOM_CATEGORY.id, command.categoryId)
+    }
+
+    @Test
     fun `omitted product resolves automatically when only one is compatible`() = runTest {
         val result = resolver.resolve(
             decision = proposal(
@@ -346,6 +367,7 @@ private fun proposal(
     savingsMovementType: String? = null,
     transactionId: String? = null,
     transactionType: String? = null,
+    categoryId: String? = null,
 ): AssistantModelDecision = AssistantModelDecision(
     action = AssistantDecisionAction.PROPOSE,
     intent = intent,
@@ -365,6 +387,7 @@ private fun proposal(
     savingsMovementType = savingsMovementType,
     transactionId = transactionId,
     transactionType = transactionType,
+    categoryId = categoryId,
 )
 
 private fun snapshot(): FinancialContextSnapshot = FinancialContextSnapshot(
@@ -412,6 +435,7 @@ private fun snapshot(): FinancialContextSnapshot = FinancialContextSnapshot(
         ),
     ),
     loanPayments = emptyList(),
+    customCategories = listOf(CUSTOM_CATEGORY),
 )
 
 private fun account(
@@ -462,6 +486,11 @@ private val TRANSACTION = FinancialTransaction(
     note = "Compra semanal",
     source = TransactionSource.MANUAL,
     status = TransactionStatus.POSTED,
+)
+private val CUSTOM_CATEGORY = CustomCategory(
+    id = "category-pets",
+    name = "Mascotas",
+    createdAtEpochMillis = NOW - DAY_MILLIS,
 )
 private val TEST_SESSION = AuthenticatedUser(
     userId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",

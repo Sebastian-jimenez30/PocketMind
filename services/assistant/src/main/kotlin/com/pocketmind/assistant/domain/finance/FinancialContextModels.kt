@@ -2,6 +2,7 @@ package com.pocketmind.assistant.domain.finance
 
 import com.pocketmind.shared.domain.model.CreditCardPayment
 import com.pocketmind.shared.domain.model.CreditCardProfile
+import com.pocketmind.shared.domain.model.CustomCategory
 import com.pocketmind.shared.domain.model.Debt
 import com.pocketmind.shared.domain.model.FinancialAccount
 import com.pocketmind.shared.domain.model.FinancialTransaction
@@ -40,6 +41,7 @@ data class FinancialContextSnapshot(
     val savingsMovements: List<SavingsMovement>,
     val loanProfiles: List<LoanProfile>,
     val loanPayments: List<LoanPayment>,
+    val customCategories: List<CustomCategory> = emptyList(),
 )
 
 enum class FinancialContextProblem {

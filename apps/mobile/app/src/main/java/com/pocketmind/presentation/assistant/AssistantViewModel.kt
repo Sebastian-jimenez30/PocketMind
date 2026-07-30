@@ -713,6 +713,7 @@ class AssistantViewModel @Inject constructor(
         }
         viewModelScope.launch {
             try {
+                syncCoordinator.syncPendingChangesIfNeeded().getOrThrow()
                 val response = repository.sendTurn(
                     AssistantTurnRequest(
                         conversationId = savedStateHandle[CONVERSATION_ID],

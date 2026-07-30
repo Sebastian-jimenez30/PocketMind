@@ -72,6 +72,7 @@ import com.pocketmind.shared.domain.model.CustomCategory
 import com.pocketmind.shared.domain.model.TransactionCategoryId
 import com.pocketmind.presentation.common.categoryLabel
 import com.pocketmind.ui.components.PocketContextTopBar
+import com.pocketmind.ui.components.PocketMessage
 import com.pocketmind.ui.components.pocketBringIntoViewOnFocus
 import com.pocketmind.ui.theme.PocketSpacing
 import java.text.NumberFormat
@@ -97,6 +98,90 @@ fun AssistantRoute(
         onSaveDraftEditor = viewModel::saveDraftEditor,
         onCloseDraftEditor = viewModel::closeDraftEditor,
     )
+}
+
+@Composable
+fun AssistantMovementEditorRoute(
+    onSaved: () -> Unit,
+    onBack: () -> Unit,
+    viewModel: AssistantViewModel = hiltViewModel(),
+) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    var editorWasLoaded by remember { mutableStateOf(false) }
+    LaunchedEffect(state.draftEditor != null) {
+        if (state.draftEditor != null) editorWasLoaded = true
+    }
+    val completed = state.messages
+        .firstNotNullOfOrNull { it.draft }
+        ?.state == AssistantDraftUiState.COMPLETED
+    val historyDraft = state.messages.firstNotNullOfOrNull { it.draft }
+    LaunchedEffect(editorWasLoaded, state.draftEditor, state.activeDraftId, completed) {
+        if (
+            editorWasLoaded &&
+            state.draftEditor == null &&
+            state.activeDraftId == null &&
+            completed
+        ) {
+            onSaved()
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .imePadding(),
+    ) {
+        PocketContextTopBar(
+            title = stringResource(R.string.transaction_editor_edit_title),
+            onBack = onBack,
+            backContentDescription = stringResource(R.string.transactions_back),
+        )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(PocketSpacing.lg),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            when {
+                state.draftEditor != null -> DraftInlineEditor(
+                    editor = requireNotNull(state.draftEditor),
+                    enabled = state.activeDraftId == null,
+                    onUpdate = viewModel::updateDraftEditor,
+                    onSave = viewModel::saveDraftEditor,
+                    onClose = onBack,
+                    showHeading = false,
+                )
+                state.errorMessage != null ->
+                    PocketMessage(requireNotNull(state.errorMessage), isError = true)
+                historyDraft != null &&
+                    historyDraft.state != AssistantDraftUiState.PROCESSING -> Column(
+                    verticalArrangement = Arrangement.spacedBy(PocketSpacing.md),
+                ) {
+                    PocketMessage(
+                        historyDraft.message
+                            ?: stringResource(R.string.assistant_draft_completion_pending),
+                        isError = true,
+                    )
+                    Button(
+                        onClick = {
+                            if (historyDraft.state == AssistantDraftUiState.PROPOSED) {
+                                viewModel.confirmDraft(historyDraft)
+                            } else {
+                                viewModel.retryDraftCompletion(historyDraft)
+                            }
+                        },
+                        enabled = state.activeDraftId == null,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.assistant_retry))
+                    }
+                }
+                else -> CircularProgressIndicator()
+            }
+        }
+    }
 }
 
 @Composable
@@ -335,6 +420,7 @@ private fun DraftInlineEditor(
     onUpdate: ((AssistantDraftEditorState) -> AssistantDraftEditorState) -> Unit,
     onSave: () -> Unit,
     onClose: () -> Unit,
+    showHeading: Boolean = true,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -351,11 +437,13 @@ private fun DraftInlineEditor(
             modifier = Modifier.padding(PocketSpacing.md),
             verticalArrangement = Arrangement.spacedBy(PocketSpacing.sm),
         ) {
-            Text(
-                text = stringResource(R.string.assistant_edit_title),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            if (showHeading) {
+                Text(
+                    text = stringResource(R.string.assistant_edit_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
             when {
                 editor.command.supportsProductSelection() -> {
                     EditorProductSelector(

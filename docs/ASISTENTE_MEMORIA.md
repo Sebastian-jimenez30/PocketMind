@@ -88,9 +88,19 @@ vez al terminar el lote. Nunca se confirma ni sincroniza un borrador después de
 ejecutar otro del mismo turno, porque el primer movimiento cambiaría la versión
 financiera y podría invalidar incorrectamente los movimientos restantes.
 El historial recupera el `command_id` desde cualquier fila contable y abre el
-mismo borrador remoto; así las correcciones de tarjetas, ahorros y préstamos
-siguen las reglas de dominio en lugar de modificar únicamente el registro
-visible.
+mismo borrador remoto en un editor determinista independiente del chat; así las
+correcciones de tarjetas, ahorros y préstamos siguen las reglas de dominio en
+lugar de modificar únicamente el registro visible.
+
+El intérprete recibe el catálogo sincronizado de categorías base y personales.
+El modelo elige el identificador cuya etiqueta mejor represente el mensaje y el
+servicio lo valida contra la fotografía financiera. `OTHER` es solo el respaldo
+cuando no existe una asociación razonable. Las categorías personales son una
+entidad del outbox y se sincronizan antes que los movimientos que las referencian.
+Antes de enviar un turno nuevo, Android vacía la outbox pendiente para que el
+servicio interprete productos y categorías recién creados. Si esa sincronización
+falla, el turno no se envía con un contexto remoto obsoleto: el mensaje conserva
+la opción de reintentar y Perfil muestra el error por encima del contador.
 
 El backend filtra por `state` y `version` en el `PATCH`. Una respuesta vacía
 significa conflicto: otro dispositivo modificó el borrador o ya no está en el

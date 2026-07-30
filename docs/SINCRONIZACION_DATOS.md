@@ -8,8 +8,8 @@ vinculante está en
 
 | Componente | Estado |
 |---|---|
-| Room 5 y migración 4→5 | Implementado; pendiente de ejecución manual en dispositivo |
-| Outbox transaccional para 14 tipos | Implementada |
+| Room 8 y migraciones hasta 8 | Implementado; pendiente de ejecución manual en dispositivo |
+| Outbox transaccional para 16 tipos | Implementada |
 | Adopción segura de datos anteriores | Implementada |
 | Push idempotente y tombstones | Implementado |
 | Pull y aplicación atómica | Implementado |
@@ -31,7 +31,9 @@ vinculante está en
 - perfiles de tarjeta, ahorro y préstamo;
 - compras a cuotas;
 - pagos de tarjeta y préstamo;
-- movimientos de ahorro.
+- movimientos de ahorro;
+- categorías personales;
+- presupuestos.
 
 Agregar una entidad requiere:
 
@@ -103,7 +105,9 @@ Nunca editar manualmente `user_id`, `entity_type` o `entity_id` en producción.
 
 ## Diagnóstico
 
-- “Pendientes” con red: tocar Sincronización en Perfil y revisar el mensaje.
+- “Pendientes” con red: tocar Sincronización en Perfil y revisar el error
+  mostrado antes del contador. Un tipo local registrado por triggers también
+  debe existir en `SyncEntityType`; de lo contrario bloqueará la outbox.
 - Inicio en otro dispositivo sin datos: confirmar que usa la misma cuenta y que
   la migración remota está aplicada.
 - Error al abrir una instalación actualizada: ejecutar la prueba Room 4→5 y

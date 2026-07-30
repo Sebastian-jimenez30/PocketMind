@@ -4,8 +4,10 @@ import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.Upsert
 import com.pocketmind.data.local.entity.AccountEntity
+import com.pocketmind.data.local.entity.BudgetEntity
 import com.pocketmind.data.local.entity.CreditCardPaymentEntity
 import com.pocketmind.data.local.entity.CreditCardProfileEntity
+import com.pocketmind.data.local.entity.CustomCategoryEntity
 import com.pocketmind.data.local.entity.DebtEntity
 import com.pocketmind.data.local.entity.FinancialSetupEntity
 import com.pocketmind.data.local.entity.IncomeSourceEntity
@@ -82,7 +84,9 @@ interface SyncDao {
             "(SELECT COUNT(*) FROM credit_card_profiles) + (SELECT COUNT(*) FROM installment_purchases) + " +
             "(SELECT COUNT(*) FROM credit_card_payments) + (SELECT COUNT(*) FROM savings_profiles) + " +
             "(SELECT COUNT(*) FROM savings_movements) + (SELECT COUNT(*) FROM loan_profiles) + " +
-            "(SELECT COUNT(*) FROM loan_payments) + (SELECT COUNT(*) FROM financial_setup)",
+            "(SELECT COUNT(*) FROM loan_payments) + (SELECT COUNT(*) FROM custom_categories) + " +
+            "(SELECT COUNT(*) FROM budgets) + " +
+            "(SELECT COUNT(*) FROM financial_setup)",
     )
     suspend fun localRecordCount(): Int
 
@@ -184,6 +188,20 @@ interface SyncDao {
     )
     suspend fun enqueueLoanPayments(queuedAt: Long)
 
+    @Query(
+        "INSERT OR REPLACE INTO sync_outbox " +
+            "(entityType, entityId, operation, queuedAtEpochMillis, attemptCount, lastError) " +
+            "SELECT 'CUSTOM_CATEGORY', id, 'UPSERT', :queuedAt, 0, NULL FROM custom_categories",
+    )
+    suspend fun enqueueCustomCategories(queuedAt: Long)
+
+    @Query(
+        "INSERT OR REPLACE INTO sync_outbox " +
+            "(entityType, entityId, operation, queuedAtEpochMillis, attemptCount, lastError) " +
+            "SELECT 'BUDGET', id, 'UPSERT', :queuedAt, 0, NULL FROM budgets",
+    )
+    suspend fun enqueueBudgets(queuedAt: Long)
+
     @Query("SELECT * FROM financial_setup WHERE id = 1")
     suspend fun getFinancialSetup(): FinancialSetupEntity?
     @Query("SELECT * FROM accounts WHERE id = :id") suspend fun getAccount(id: String): AccountEntity?
@@ -199,6 +217,8 @@ interface SyncDao {
     @Query("SELECT * FROM savings_movements WHERE id = :id") suspend fun getSavingsMovement(id: String): SavingsMovementEntity?
     @Query("SELECT * FROM loan_profiles WHERE accountId = :id") suspend fun getLoanProfile(id: String): LoanProfileEntity?
     @Query("SELECT * FROM loan_payments WHERE id = :id") suspend fun getLoanPayment(id: String): LoanPaymentEntity?
+    @Query("SELECT * FROM custom_categories WHERE id = :id") suspend fun getCustomCategory(id: String): CustomCategoryEntity?
+    @Query("SELECT * FROM budgets WHERE id = :id") suspend fun getBudget(id: String): BudgetEntity?
 
     @Upsert suspend fun upsertFinancialSetup(item: FinancialSetupEntity)
     @Upsert suspend fun upsertAccounts(items: List<AccountEntity>)
@@ -214,7 +234,11 @@ interface SyncDao {
     @Upsert suspend fun upsertSavingsMovements(items: List<SavingsMovementEntity>)
     @Upsert suspend fun upsertLoanProfiles(items: List<LoanProfileEntity>)
     @Upsert suspend fun upsertLoanPayments(items: List<LoanPaymentEntity>)
+    @Upsert suspend fun upsertCustomCategories(items: List<CustomCategoryEntity>)
+    @Upsert suspend fun upsertBudgets(items: List<BudgetEntity>)
 
+    @Query("DELETE FROM budgets") suspend fun clearBudgets()
+    @Query("DELETE FROM custom_categories") suspend fun clearCustomCategories()
     @Query("DELETE FROM loan_payments") suspend fun clearLoanPayments()
     @Query("DELETE FROM savings_movements") suspend fun clearSavingsMovements()
     @Query("DELETE FROM credit_card_payments") suspend fun clearCreditCardPayments()

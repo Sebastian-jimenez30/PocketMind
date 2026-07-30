@@ -401,6 +401,9 @@ Gasto, Ingreso o Transferencia y después permite elegir el tipo específico. La
 categorías aparecen como un carrusel horizontal identificable mediante icono,
 texto y estado seleccionado. El producto y los campos siguientes cambian dentro
 de la misma pantalla y solo presentan los datos necesarios para la elección.
+Las categorías personales creadas desde Presupuestos forman parte del mismo
+catálogo y aparecen primero en el carrusel de gastos. Inicio, Movimientos,
+Análisis y Presupuestos resuelven siempre el mismo identificador y nombre.
 Cambiar la opción no abre un segundo formulario ni conserva campos irrelevantes.
 El comercio no es obligatorio ni tiene campo propio; una descripción opcional
 recoge cualquier contexto adicional. Las tasas, fechas de corte y fechas de pago
@@ -465,9 +468,12 @@ usan confirmación explícita. La biometría invoca la experiencia nativa.
 - El procesamiento interno no se representa con “Guardando”, spinners ni
   mensajes de sincronización. La tarjeta se presenta como `Movimiento`; solo
   comunica estado cuando existe un error que requiere atención.
-- Al abrir un movimiento del asistente desde el historial se reutilizan esas
-  mismas acciones y el comando financiero original. La interfaz nunca corrige
-  solo una cifra visual dejando desactualizados saldos, cuotas o rendimientos.
+- La edición dentro del chat existe únicamente durante la creación. Al abrir un
+  movimiento del asistente desde el historial se muestra un editor determinista
+  independiente, con Movimientos activo en la navegación inferior y sin
+  conversación visible. El editor reutiliza el comando financiero original; la
+  interfaz nunca corrige solo una cifra visual dejando desactualizados saldos,
+  cuotas o rendimientos.
 - Si un mensaje contiene varias acciones, se muestra una tarjeta independiente
   por movimiento, en el mismo orden del mensaje. El progreso es secuencial y
   cada resultado se puede editar o cancelar sin afectar los demás.
@@ -569,6 +575,8 @@ marca, contenido y capacidades disponibles.
 ## 15. Reglas técnicas
 
 - No hardcodear colores, tipografía, radios, espaciados ni textos en pantallas.
+- Toda fila de movimiento muestra un nombre: comercio, concepto o nota y, como
+  respaldo, el nombre de su categoría. Nunca se deja un título vacío.
 - Centralizar tokens y componentes reutilizables.
 - Mantener estado y eventos fuera de componentes puramente visuales.
 - Crear previews de estados clave.

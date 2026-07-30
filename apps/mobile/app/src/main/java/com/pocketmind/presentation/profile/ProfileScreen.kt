@@ -579,11 +579,11 @@ private fun ProfilePreview() {
 @Composable
 private fun profileSyncDescription(state: ProfileUiState): String = when {
     state.isSyncing -> stringResource(R.string.profile_sync_syncing)
+    state.syncError != null -> state.syncError
     state.pendingSyncChanges > 0 -> stringResource(
         R.string.profile_sync_pending,
         state.pendingSyncChanges,
     )
-    state.syncError != null -> state.syncError
     state.initialSyncCompleted -> stringResource(R.string.profile_sync_ready)
     else -> stringResource(R.string.profile_sync_never)
 }

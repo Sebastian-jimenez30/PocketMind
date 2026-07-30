@@ -86,9 +86,10 @@ internal class AssistantProposalResolver(
             ?: return clarification("La moneda indicada no coincide con ${primary.account.name}.")
         val occurredAt = decision.validDateOrNow()
             ?: return clarification("¿En qué fecha ocurrió el movimiento?")
-        val category = decision.validCategory()
-            ?: if (decision.categoryId == null) null else {
-                return clarification("No reconocí la categoría. ¿Cuál quieres usar?")
+        val category = service.resolveCategory(decision.categoryId)
+            ?: when (intent) {
+                AssistantFinancialIntent.TRANSFER -> TransactionCategoryId.TRANSFER.name
+                else -> TransactionCategoryId.OTHER.name
             }
         val destination = if (intent == AssistantFinancialIntent.TRANSFER) {
             service.requireProduct(
@@ -133,7 +134,7 @@ internal class AssistantProposalResolver(
                 money,
                 occurredAt,
                 TransactionSource.ASSISTANT_TEXT,
-                category ?: TransactionCategoryId.TRANSFER.name,
+                category,
                 decision.merchant.normalized(),
                 decision.note.normalized(),
             )
@@ -313,10 +314,8 @@ internal class AssistantProposalResolver(
         }
         val occurredAt = decision.validDateOrNow()
             ?: return clarification("¿En qué fecha hiciste la compra?")
-        val category = decision.validCategory()
-            ?: if (decision.categoryId == null) null else {
-                return clarification("No reconocí la categoría de la compra.")
-            }
+        val category = service.resolveCategory(decision.categoryId)
+            ?: TransactionCategoryId.OTHER.name
         val command = FinancialCommand.RecordCardPurchase(
             commandId = commandId,
             cardId = card.account.id,
@@ -584,7 +583,7 @@ internal class AssistantProposalResolver(
         }
         val category = when {
             decision.clearCategory -> null
-            decision.categoryId != null -> decision.validCategory()
+            decision.categoryId != null -> service.resolveCategory(decision.categoryId)
                 ?: return clarification("No reconocí la categoría nueva.")
             else -> existing.categoryId
         }
@@ -939,11 +938,6 @@ internal class AssistantProposalResolver(
             it > 0 && it <= clock.millis() + MAX_FUTURE_SKEW.toMillis()
         }
     }
-
-    private fun AssistantModelDecision.validCategory(): String? =
-        categoryId?.trim()?.uppercase()?.let { value ->
-            TransactionCategoryId.entries.firstOrNull { it.name == value }?.name
-        }
 
     private fun ProductRequirement.Ready.toPreviewProduct(): ProposalProduct =
         account.toPreviewProduct()

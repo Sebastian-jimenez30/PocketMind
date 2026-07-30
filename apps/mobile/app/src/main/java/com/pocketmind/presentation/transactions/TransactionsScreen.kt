@@ -65,6 +65,7 @@ import com.pocketmind.shared.domain.model.CurrencyCode
 import com.pocketmind.shared.domain.model.FinancialTransaction
 import com.pocketmind.shared.domain.model.Money
 import com.pocketmind.shared.domain.model.TransactionCategoryId
+import com.pocketmind.presentation.common.transactionDisplayName
 import com.pocketmind.shared.domain.model.TransactionSource
 import com.pocketmind.shared.domain.model.TransactionType
 import com.pocketmind.shared.domain.command.recordedMovementCommandId
@@ -404,7 +405,8 @@ private fun TransactionRow(
     val transaction = item.transaction
     val isIncome = transaction.type == TransactionType.INCOME
     val isTransfer = transaction.type == TransactionType.TRANSFER
-    val manuallyEditable = !transaction.id.startsWith("purchase-") &&
+    val manuallyEditable = transaction.type != TransactionType.TRANSFER &&
+        !transaction.id.startsWith("purchase-") &&
         !transaction.id.startsWith("card-payment-") &&
         !transaction.id.startsWith("savings-") &&
         !transaction.id.startsWith("loan-payment-")
@@ -416,13 +418,13 @@ private fun TransactionRow(
             .then(
                 if (editable) {
                     Modifier.clickable {
-                        if (assistantEditable) {
+                        if (manuallyEditable) {
+                            onEdit(transaction.id)
+                        } else if (assistantEditable) {
                             onEditAssistant(
                                 recordedMovementCommandId(transaction.id),
                                 transaction.id,
                             )
-                        } else {
-                            onEdit(transaction.id)
                         }
                     }
                 } else {
@@ -454,7 +456,12 @@ private fun TransactionRow(
             )
             Spacer(Modifier.width(PocketSpacing.md))
             Column(modifier = Modifier.weight(1f)) {
-                Text(transaction.merchant.orEmpty().ifBlank { categoryLabel(transaction.categoryId, customCategories) }, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    transactionDisplayName(transaction, customCategories),
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 Text(
                     if (isTransfer) {
                         "${item.accountName} → ${item.destinationAccountName}"

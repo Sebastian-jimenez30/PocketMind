@@ -5,6 +5,7 @@ import com.pocketmind.assistant.auth.SupabaseAccessToken
 import com.pocketmind.assistant.domain.memory.AssistantProductAlias
 import com.pocketmind.assistant.testing.ReadOnlyMemoryRepository
 import com.pocketmind.shared.domain.model.CreditCardProfile
+import com.pocketmind.shared.domain.model.CustomCategory
 import com.pocketmind.shared.domain.model.CurrencyCode
 import com.pocketmind.shared.domain.model.FinancialAccount
 import com.pocketmind.shared.domain.model.FinancialAccountType
@@ -149,6 +150,24 @@ class FinancialReadServiceTest {
 
         assertFalse(default.products.any { it.id == ARCHIVED.id })
         assertTrue(complete.products.any { it.id == ARCHIVED.id })
+    }
+
+    @Test
+    fun `personal categories are listed first and resolve by human name`() = runTest {
+        val custom = CustomCategory(
+            id = "category-education",
+            name = "Cursos técnicos",
+            createdAtEpochMillis = NOW,
+        )
+        val service = readService(
+            snapshot = baseSnapshot().copy(customCategories = listOf(custom)),
+        )
+
+        val categories = service.listCategories()
+
+        assertEquals(custom.id, categories.first().id)
+        assertEquals(custom.id, service.resolveCategory("cursos tecnicos"))
+        assertEquals("FOOD", service.resolveCategory("Alimentación"))
     }
 }
 

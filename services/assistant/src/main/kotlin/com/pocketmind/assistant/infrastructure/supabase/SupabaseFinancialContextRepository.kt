@@ -9,6 +9,7 @@ import com.pocketmind.assistant.domain.finance.FinancialContextRepository
 import com.pocketmind.assistant.domain.finance.FinancialContextSnapshot
 import com.pocketmind.shared.domain.model.CreditCardPayment
 import com.pocketmind.shared.domain.model.CreditCardProfile
+import com.pocketmind.shared.domain.model.CustomCategory
 import com.pocketmind.shared.domain.model.CurrencyCode
 import com.pocketmind.shared.domain.model.Debt
 import com.pocketmind.shared.domain.model.DebtPaymentType
@@ -166,6 +167,10 @@ internal class FinancialSnapshotDecoder(
                     SyncEntityType.LOAN_PAYMENT,
                     ::decodeLoanPayment,
                 ),
+                customCategories = active.decodeList(
+                    SyncEntityType.CUSTOM_CATEGORY,
+                    ::decodeCustomCategory,
+                ),
             )
         }.getOrElse { error ->
             if (error is FinancialContextException) throw error
@@ -208,6 +213,18 @@ internal class FinancialSnapshotDecoder(
             status = payload.status.asEnum(),
             relatedAccountId = payload.relatedAccountId,
             manualRevision = payload.manualRevision,
+        )
+    }
+
+    private fun decodeCustomCategory(
+        record: RemoteFinanceRecordDto,
+    ): CustomCategory {
+        val payload = record.payload<CustomCategoryPayload>()
+        record.requireEntityId(payload.id)
+        return CustomCategory(
+            id = payload.id,
+            name = payload.name,
+            createdAtEpochMillis = payload.createdAtEpochMillis,
         )
     }
 
@@ -476,7 +493,8 @@ private enum class SyncEntityType(val wireName: String) {
     INSTALLMENT_PURCHASE("INSTALLMENT_PURCHASE"),
     CREDIT_CARD_PAYMENT("CREDIT_CARD_PAYMENT"),
     SAVINGS_MOVEMENT("SAVINGS_MOVEMENT"),
-    LOAN_PAYMENT("LOAN_PAYMENT");
+    LOAN_PAYMENT("LOAN_PAYMENT"),
+    CUSTOM_CATEGORY("CUSTOM_CATEGORY");
 
     companion object {
         fun fromWireName(value: String): SyncEntityType? =
@@ -555,6 +573,13 @@ private data class TransactionPayload(
     val status: String,
     val relatedAccountId: String? = null,
     val manualRevision: Int = 0,
+)
+
+@Serializable
+private data class CustomCategoryPayload(
+    val id: String,
+    val name: String,
+    val createdAtEpochMillis: Long,
 )
 
 @Serializable

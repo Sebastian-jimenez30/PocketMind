@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.pocketmind.R
 import com.pocketmind.ui.theme.PocketSpacing
 import com.pocketmind.shared.domain.model.CustomCategory
+import com.pocketmind.shared.domain.model.FinancialTransaction
 import com.pocketmind.shared.domain.model.RecommendedCategories
 import com.pocketmind.shared.domain.model.TransactionCategoryId
 
@@ -70,6 +71,21 @@ fun categoryLabel(
     }
     return categoryId
 }
+
+@Composable
+fun transactionDisplayName(
+    transaction: FinancialTransaction,
+    customCategories: List<CustomCategory> = emptyList(),
+): String = transaction.merchant
+    ?.trim()
+    ?.takeIf(String::isNotEmpty)
+    ?: transaction.note
+        ?.trim()
+        ?.takeIf(String::isNotEmpty)
+    ?: categoryLabel(
+        transaction.categoryId ?: TransactionCategoryId.OTHER.name,
+        customCategories,
+    )
 
 @Composable
 fun DynamicCategorySelector(
