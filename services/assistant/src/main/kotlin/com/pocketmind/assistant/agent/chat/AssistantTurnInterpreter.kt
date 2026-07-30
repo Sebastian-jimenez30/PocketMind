@@ -121,6 +121,51 @@ data class AssistantPromotionalRatePeriod(
 )
 
 /**
+ * A secondary action intentionally cannot contain more secondary actions.
+ * Keeping this contract non-recursive produces a finite OpenAI JSON Schema
+ * and prevents Koog from emitting an unresolved self-reference.
+ */
+@Serializable
+data class AssistantAdditionalDecision(
+    val action: AssistantDecisionAction,
+    val reply: String? = null,
+    val intent: AssistantFinancialIntent? = null,
+    val amountMinorUnits: Long? = null,
+    val currency: String? = null,
+    val primaryProductReference: String? = null,
+    val destinationProductReference: String? = null,
+    val sourceProductReference: String? = null,
+    val occurredAtEpochMillis: Long? = null,
+    val categoryId: String? = null,
+    val merchant: String? = null,
+    val note: String? = null,
+    val productName: String? = null,
+    val productType: String? = null,
+    val aliases: List<String> = emptyList(),
+    val creditLimitMinorUnits: Long? = null,
+    val annualRateBasisPoints: Int? = null,
+    val statementClosingDay: Int? = null,
+    val paymentDueDay: Int? = null,
+    val openingDebtInstallmentCount: Int? = null,
+    val firstPaymentAtEpochMillis: Long? = null,
+    val savingsProductType: String? = null,
+    val openedAtEpochMillis: Long? = null,
+    val maturityAtEpochMillis: Long? = null,
+    val monthlyPaymentMinorUnits: Long? = null,
+    val installmentCount: Int? = null,
+    val promotionalRatePeriods: List<AssistantPromotionalRatePeriod> = emptyList(),
+    val paymentType: String? = null,
+    val savingsMovementType: String? = null,
+    val transactionId: String? = null,
+    val transactionType: String? = null,
+    val clearMerchant: Boolean = false,
+    val clearCategory: Boolean = false,
+    val clearNote: Boolean = false,
+    val clearRelatedProduct: Boolean = false,
+    val missingFields: List<String> = emptyList(),
+)
+
+/**
  * Provider-neutral model output. Every value is validated again by
  * [com.pocketmind.assistant.domain.turn.AssistantTurnService].
  */
@@ -162,8 +207,48 @@ data class AssistantModelDecision(
     val clearNote: Boolean = false,
     val clearRelatedProduct: Boolean = false,
     val missingFields: List<String> = emptyList(),
-    val additionalDecisions: List<AssistantModelDecision> = emptyList(),
+    val additionalDecisions: List<AssistantAdditionalDecision> = emptyList(),
 )
+
+internal fun AssistantAdditionalDecision.toModelDecision(): AssistantModelDecision =
+    AssistantModelDecision(
+        action = action,
+        reply = reply,
+        intent = intent,
+        amountMinorUnits = amountMinorUnits,
+        currency = currency,
+        primaryProductReference = primaryProductReference,
+        destinationProductReference = destinationProductReference,
+        sourceProductReference = sourceProductReference,
+        occurredAtEpochMillis = occurredAtEpochMillis,
+        categoryId = categoryId,
+        merchant = merchant,
+        note = note,
+        productName = productName,
+        productType = productType,
+        aliases = aliases,
+        creditLimitMinorUnits = creditLimitMinorUnits,
+        annualRateBasisPoints = annualRateBasisPoints,
+        statementClosingDay = statementClosingDay,
+        paymentDueDay = paymentDueDay,
+        openingDebtInstallmentCount = openingDebtInstallmentCount,
+        firstPaymentAtEpochMillis = firstPaymentAtEpochMillis,
+        savingsProductType = savingsProductType,
+        openedAtEpochMillis = openedAtEpochMillis,
+        maturityAtEpochMillis = maturityAtEpochMillis,
+        monthlyPaymentMinorUnits = monthlyPaymentMinorUnits,
+        installmentCount = installmentCount,
+        promotionalRatePeriods = promotionalRatePeriods,
+        paymentType = paymentType,
+        savingsMovementType = savingsMovementType,
+        transactionId = transactionId,
+        transactionType = transactionType,
+        clearMerchant = clearMerchant,
+        clearCategory = clearCategory,
+        clearNote = clearNote,
+        clearRelatedProduct = clearRelatedProduct,
+        missingFields = missingFields,
+    )
 
 internal fun createAssistantDecisionOutputStructure(
     json: Json,

@@ -6,6 +6,7 @@ import com.pocketmind.assistant.agent.chat.AssistantInterpreterMessage
 import com.pocketmind.assistant.agent.chat.AssistantInterpreterProduct
 import com.pocketmind.assistant.agent.chat.AssistantModelDecision
 import com.pocketmind.assistant.agent.chat.AssistantTurnInterpreter
+import com.pocketmind.assistant.agent.chat.toModelDecision
 import com.pocketmind.assistant.agent.tools.AssistantReadToolRegistryFactory
 import com.pocketmind.assistant.auth.AuthenticatedUser
 import com.pocketmind.assistant.domain.finance.FinancialReadService
@@ -138,6 +139,7 @@ class AssistantTurnService(
             userMessage = userMessage,
             decision = decision,
             readService = readService,
+            interpreterProducts = interpreterProducts,
         )
     }
 
@@ -170,6 +172,7 @@ class AssistantTurnService(
         userMessage: AssistantMessage,
         decision: AssistantModelDecision,
         readService: FinancialReadService,
+        interpreterProducts: List<AssistantInterpreterProduct>,
     ): AssistantTurnResponse {
         val resolution = when (decision.action) {
             AssistantDecisionAction.RESPOND -> Resolution.Conversation(
@@ -208,7 +211,16 @@ class AssistantTurnService(
         val additionalResolutions = decision.additionalDecisions
             .take(MAX_ACTIONS_PER_TURN - 1)
             .mapIndexed { idx, additional ->
-                resolveProposal(additional, readService, "$turnId-$idx")
+                resolveProposal(
+                    additional
+                        .toModelDecision()
+                        .withSafeProductReferences(
+                            products = interpreterProducts,
+                            latestUserMessage = userMessage.content,
+                        ),
+                    readService,
+                    "$turnId-$idx",
+                )
             }
         val additionalDrafts = additionalResolutions.mapIndexedNotNull { idx, addRes ->
             when (addRes) {
